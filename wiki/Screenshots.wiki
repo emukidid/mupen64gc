@@ -10,11 +10,10 @@ Screenshots of the emulator running
 
 August 23rd
 
-[http://mupen64gc.googlecode.com/svn/web/images/Mario64%201.png Mario 64 #1]
+[http://mupen64gc.googlecode.com/svn/web/images/Mario64%201.png]
 [http://mupen64gc.googlecode.com/svn/web/images/Mario64%202.png Mario 64 #2]
 
 August 22nd
 
 [http://mupen64gc.googlecode.com/svn/web/images/Rampage.jpg Rampage: World Tour]
 [http://mupen64gc.googlecode.com/svn/web/images/MK:%20Trilogy.jpg Mortal Kombat Trilogy]
-
