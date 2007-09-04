@@ -1,5 +1,5 @@
 #summary Screenshots of the emulator running
-#labels Screenshots,N64,Gamecube
+#labels Screenshots,Featured
 
 
 == August 23rd ==
@@ -24,7 +24,6 @@ Rampage: World Tour
 Mortal Kombat Trilogy
 
 {{{--------------------------------------------}}}
-
 
 
 
