@@ -1,0 +1,13 @@
+#summary Graphics Programmer Needed
+#labels Featured
+
+We're looking for someone with some experience with OpenGL and/or GX (on the Gamecube) who would like to help out with the emulator to port a graphics plugin. Anyone interested should check out the sources for:
+
+Mupen64 Soft GFX (We're not doing software gfx, but I think it is well designed for writing a plugin from scratch)
+  I currently think that rewriting this plugin to use the GX is the best strategy because the simplicity of the plugin, and it is very well designed.  It's included in the source of Mupen64
+
+[http://www.emutalk.net/showthread.php?t=37658&page=12 Glide64] _scroll to the bottom to download_ (only the wrapper needs porting)
+
+[http://www.emutalk.net/showthread.php?t=41037&highlight=rice Rice Video] (some cool features like Hi-Res textures)
+
+
