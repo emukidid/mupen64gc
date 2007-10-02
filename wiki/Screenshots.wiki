@@ -2,6 +2,16 @@
 #labels Screenshots,Featured
 
 
+== October 2nd ==
+
+
+[http://mupen64gc.googlecode.com/svn/web/images/Mario%20Logo%20GX.jpg]
+
+Super Mario 64 (with initial hardware gfx plugin)
+
+{{{--------------------------------------------}}}
+
+
 == August 23rd ==
 
 
@@ -24,6 +34,4 @@ Rampage: World Tour
 Mortal Kombat Trilogy
 
 {{{--------------------------------------------}}}
-
-
 
