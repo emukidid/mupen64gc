@@ -1,0 +1,13 @@
+#summary Features and Optimizations to be implemented
+#labels Phase-Design
+
+= Introduction =
+
+Most of these shouldn't be major goals, but things we would like to see in the emulator, or optimizations we think would get things running better.  Try to explain features, and try to describe the optimizations if possible.
+
+
+= Checklist =
+
+* *Feature:* GUI
+* *Dev Feature:* Debug prints that collect text and display it on the FB for a few frames/seconds
+* *Optimization:* Redesign the TLB LUTs to use a small hash map so it can be moved to MRAM, freeing up ARAM for ROMs
