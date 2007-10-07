@@ -13,7 +13,7 @@ Most of these shouldn't be major goals, but things we would like to see in the e
   * *Dev Feature:* Debug prints that collect text and display it on the FB for a few frames/seconds
 
   * *Optimization:* Redesign the TLB LUTs to use a small hash map so it can be moved to MRAM, freeing up ARAM for ROMs
-r
+
   * *Optimization:* Initialize the correct video mode for each ROM region (to achieve proper FPS)
 
   * *Feature:* Rumble pak
