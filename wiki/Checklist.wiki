@@ -8,6 +8,8 @@ Most of these shouldn't be major goals, but things we would like to see in the e
 
 = Checklist =
 
-* *Feature:* GUI
-* *Dev Feature:* Debug prints that collect text and display it on the FB for a few frames/seconds
-* *Optimization:* Redesign the TLB LUTs to use a small hash map so it can be moved to MRAM, freeing up ARAM for ROMs
+  * *Feature:* GUI
+
+  * *Dev Feature:* Debug prints that collect text and display it on the FB for a few frames/seconds
+
+  * *Optimization:* Redesign the TLB LUTs to use a small hash map so it can be moved to MRAM, freeing up ARAM for ROMs
