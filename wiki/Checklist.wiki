@@ -20,6 +20,6 @@ Most of these shouldn't be major goals, but things we would like to see in the e
 
   * *Feature:* Allow for a save option to be "Do not save"
 
-  * *Feature:* Saving to Gamecube memory cards (Completed - just tidying it up before a submit *emukidid)
+  * *Feature:* Saving to Gamecube memory cards (Completed - just tidying it up before a submit *emukidid*)
 
   * *Feature:* Save states
