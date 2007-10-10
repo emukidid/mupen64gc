@@ -2,18 +2,16 @@
 #labels Phase-Requirements
 
 Listed in order of importance:
+  * *Hardware Accelerated Graphics* _WIP_
   * *Dynamic Recompilation* _It's coming_
-  * *Hardware Accelerated Graphics*
   * *Input* _done_
-  * *DVD/SD Loading* _SD loading is done_
-  * *Sound*
+  * *DVD/SD Loading* _done_
+  * *Sound* _WIP_
   * *8mb Expansion Pak Games*
   * *512mbit ROMS* _Working_
-  * *Native Saves & Save States (to SD or MC)* _Native saves to SD for now_
+  * *Native Saves & Save States (to SD or MC)* _Native saves for now_
   * *Rumble/Controller Pak Support* _Controller Pak supported_
   * *Progressive/Widescreen Resolution* _If we can do it in libOGC_
-
-
 
 
 
