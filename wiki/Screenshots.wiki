@@ -1,6 +1,14 @@
 #summary Screenshots of the emulator running
 #labels Screenshots,Featured
 
+== October 29th ==
+
+[http://mupen64gc.googlecode.com/svn/web/images/Rampage%20GX.jpg]
+
+Rampage (in hardware gfx plugin)
+
+{{{--------------------------------------------}}}
+
 
 == October 2nd ==
 
@@ -34,4 +42,3 @@ Rampage: World Tour
 Mortal Kombat Trilogy
 
 {{{--------------------------------------------}}}
-
