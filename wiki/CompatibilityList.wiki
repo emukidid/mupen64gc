@@ -3,14 +3,43 @@
 
 === Compatibility List ===
 
-*Example:*
-
-*GAME* 50% _CPU_{{{  |  }}}accurate _GFX_{{{  |  }}}choppy _AUDIO_
-  Details about the performance, any NIs?
+*Super Mario 64 (U)(E)* 10-50 _FPS_{{{  |  }}}Blending _GFX_{{{  |  }}}Choppy _AUDIO_
+  Runs rather well :)
 
   Still more details
 {{{
-
+Gives a DSI sometimes when exiting the ROM, perhaps something with ARAM fetching?
 }}}
-*GAME 2* same
-  same
+
+
+*Wave Race (U)* 10-25 _FPS_{{{  |  }}}Textures off, blending _GFX_{{{  |  }}}choppy _AUDIO_
+  A few NI's, I'll list them later.
+
+  Still more details
+{{{
+Menus run fine, bad textures and no 3D, but hangs when entering race.
+}}}
+
+*Turok dinosaur Hunter(U)* 10-20 _FPS_{{{  |  }}}Textures off, blending bad _GFX_{{{  |  }}}choppy _AUDIO_
+  A few NI's, I'll list them later.
+
+  Still more details
+{{{
+Can't see anything, but the game doesn't hang.
+}}}
+
+*Mario Kart 64(U)* 20-45 _FPS_{{{  |  }}}Textures off, blending _GFX_{{{  |  }}}choppy _AUDIO_
+  A few NI's (0xB5), and some more
+
+  Still more details
+{{{
+No 3D, textures are bad.
+}}}
+
+*Super Smash bros (U)* 20-25 _FPS_{{{  |  }}}Textures off, No 3D{{{  |  }}}choppy _AUDIO_
+  A few NI's, I'll list them later.
+
+  Still more details
+{{{
+Hangs after a few seconds of audio (probably tries to draw 3D)
+}}}
