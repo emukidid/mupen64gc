@@ -36,10 +36,40 @@ Can't see anything, but the game doesn't hang.
 No 3D, textures are bad.
 }}}
 
-*Super Smash bros (U)* 20-25 _FPS_{{{  |  }}}Textures off, No 3D{{{  |  }}}choppy _AUDIO_
+*Super Smash bros (U)* 20-25 _FPS_{{{  |  }}}Textures off, No 3D _GFX_{{{  |  }}}choppy _AUDIO_
   A few NI's, I'll list them later.
 
   Still more details
 {{{
 Hangs after a few seconds of audio (probably tries to draw 3D)
+}}}
+
+*Killer Instinct Gold (U)* 10-35 _FPS_{{{  |  }}}Textures bad _GFX_{{{  |  }}}choppy _AUDIO_
+  A few NI's, I'll list them later.
+
+  Still more details
+{{{
+Goes ingame, texture problems, 3D is fine though it does freeze randomly.
+}}}
+
+
+*Rampage (U)* 10-20 _FPS_{{{  |  }}}Good _GFX_{{{  |  }}}choppy _AUDIO_
+
+  Still more details
+{{{
+Ingame, playable.
+}}}
+
+*Mortal Kombat Trilogy (U)* 10-20 _FPS_{{{  |  }}}Textures Not working _GFX_{{{  |  }}}choppy _AUDIO_
+
+  Still more details
+{{{
+Worked fine on soft gfx, broken so far on GX.
+}}}
+
+*Mortal Kombat Sub-Zero Mythologies (U)* 10-20 _FPS_{{{  |  }}}Textures Not working _GFX_{{{  |  }}}choppy _AUDIO_
+
+  Still more details
+{{{
+Worked fine on soft gfx, broken so far on GX.
 }}}
