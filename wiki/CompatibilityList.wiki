@@ -57,3 +57,9 @@ Worked fine on soft gfx, broken so far on GX.
 {{{
 Worked fine on soft gfx, broken so far on GX.
 }}}
+
+*F-1 Pole Position (U)* 10-20 _FPS_{{{  |  }}}_GFX_: Textures Not working{{{  |  }}}_AUDIO_: Choppy
+{{{
+Textures bad, no 3D.
+A few NI's.
+}}}
