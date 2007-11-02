@@ -1,0 +1,13 @@
+#summary Compatibility List
+#labels Featured
+
+=== Compatibility List ===
+
+*Example:*
+
+*GAME* 50% _CPU_ FULL _GFX_ CHOPPY _AUDIO_
+  Details about the performance, any NIs?
+{{{
+
+}}}
+*GAME 2*
