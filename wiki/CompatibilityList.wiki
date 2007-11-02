@@ -1,0 +1,16 @@
+#summary Compatibility List
+#labels Featured
+
+=== Compatibility List ===
+
+*Example:*
+
+*GAME* 50% _CPU_{{{  |  }}}accurate _GFX_{{{  |  }}}choppy _AUDIO_
+  Details about the performance, any NIs?
+
+  Still more details
+{{{
+
+}}}
+*GAME 2* same
+  same
