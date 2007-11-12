@@ -20,6 +20,9 @@ Most of these shouldn't be major goals, but things we would like to see in the e
 
   * *Feature:* GUI (3D menu would be very cool and appropriate)
     * *Sub-Feature:* Being able to 'pause' emulation to go to menu and return
+  
+  * *Feature:* Rewrite the file browsers to be modular (ie one browser for multiple places to load from)
+  and to possibly use the new menu system.
 
   * *Feature:* Rumble pak (Completed)
     * *Sub-Feature:* Hot-swap between mempak and rumble pak
