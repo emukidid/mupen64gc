@@ -10,4 +10,8 @@ Mupen64 Soft GFX (We're not doing software gfx, but I think it is well designed 
 
 [http://www.emutalk.net/showthread.php?t=41037&highlight=rice Rice Video] (some cool features like Hi-Res textures)
 
+{{{
+}}}
 
+_*UPDATE*_
+  As most that have been paying attention to the emulator's progress have probably noticed, sepp256 has answered our call for a graphics programmer, and he has been doing a very good job porting the software gfx plugin.  However, I don't want anyone to be discouraged from helping out.  It's a big task, and I'm sure it'd be nice to have a helping hand.  Also, there's nothing wrong with someone working on a different graphics plugins; different plugins are better at different games and what not, so its always an option to have more than one plugin available for the emulator.
