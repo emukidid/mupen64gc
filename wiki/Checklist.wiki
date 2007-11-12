@@ -19,8 +19,10 @@ Most of these shouldn't be major goals, but things we would like to see in the e
   * *Optimization:* Change some RSP code to utilize the DSP
 
   * *Feature:* GUI (3D menu would be very cool and appropriate)
+    * *Sub-Feature:* Being able to 'pause' emulation to go to menu and return
 
   * *Feature:* Rumble pak (Completed)
+    * *Sub-Feature:* Hot-swap between mempak and rumble pak
 
   * *Feature:* Allow for a save option to be "Do not save"
 
