@@ -35,3 +35,5 @@ Most of these shouldn't be major goals, but things we would like to see in the e
   
   * *Feature:* MP3 support in the RSP
   
+  * *Feature:* Widescreen and 480p support
+  
