@@ -1,0 +1,95 @@
+#summary Compilation warnings and errors to fix.
+
+= Introduction =
+
+Just post whatever warnings the compiler may say which you think are effecting functions.
+
+
+= Details =
+
+*possibly harmful warnings (line references as of code in revision 129):*
+
+*gc_memory/memory.c:84:* warning: dereferencing type-punned pointer will break strict-aliasing rules
+
+*gc_memory/memory.c:3522:* warning: integer constant is too large for "long" type
+*gc_memory/memory.c:3530:* warning: integer constant is too large for "long" type
+
+*gc_memory/pif.c: In function `internal_ReadController':*
+*gc_memory/pif.c:359:* warning: the address of `controllerCommand', will always 
+evaluate as `true'
+
+*gc_memory/pif.c:366:* warning: the address of `controllerCommand', will always 
+evaluate as `true'
+
+*gc_memory/pif.c: In function `internal_ControllerCommand':*
+*gc_memory/pif.c:433:* warning: the address of `controllerCommand', will always 
+evaluate as `true'
+
+*gc_memory/pif.c:465:* warning: the address of `controllerCommand', will always 
+evaluate as `true'
+
+*r4300/ppc/MIPS-to-PPC.c: In function `convert_R':*
+*r4300/ppc/MIPS-to-PPC.c:937:* warning: comparison is always true due to limited 
+range of data type
+
+*r4300/ppc/MIPS-to-PPC.c:939:* warning: comparison is always true due to limited 
+range of data type
+
+*r4300/ppc/MIPS-to-PPC.c:957:* warning: comparison is always true due to limited 
+range of data type
+
+*r4300/ppc/MIPS-to-PPC.c:959:* warning: comparison is always true due to limited 
+range of data type
+
+*r4300/ppc/Recompile.c: At top level:*
+r4300/ppc/Recompile.c:38: warning: 'genRecompileBlock' declared `static' but 
+never defined
+
+*r4300/ppc/ppc_disasm.c: In function `trapi':*
+*r4300/ppc/ppc_disasm.c:208:* warning: suggest parentheses around assignment used
+as truth value
+
+*r4300/ppc/ppc_disasm.c: In function `cmpi':*
+r4300/ppc/ppc_disasm.c:227: warning: suggest parentheses around assignment used
+as truth value
+
+*r4300/ppc/ppc_disasm.c: In function `bc':*
+*r4300/ppc/ppc_disasm.c:308:* warning: suggest parentheses around assignment used
+as truth value
+
+*r4300/ppc/ppc_disasm.c: In function `cmp':*
+*r4300/ppc/ppc_disasm.c:421:* warning: suggest parentheses around assignment used
+as truth value
+
+*r4300/ppc/ppc_disasm.c: In function `trap':*
+*r4300/ppc/ppc_disasm.c:435:* warning: suggest parentheses around assignment used
+as truth value  
+
+
+
+
+*Note: I fixed up most of the things apart from those up there and a few more casting problems (mainly ARAM, and especially ROM_Cache functions)
+Things I didn't touch: main_gc.c and anything in the GUI/GX/SoftGFX folders. 
+This is due to those constantly being changed at the moment.*
+
+*gc_audio/audio.c:*
+static char which_buffer = 0; changed to static int which_buffer = 0;
+
+int f; changed to
+int f = 32000; //default to 32khz incase we get a bad systemtype
+
+*rsp_hle-ppc/jpeg.c:*
+added brackets around the XOR operations. such as line 467,468 etc.
+
+*rsp_hle-ppc/ucode3.c:*
+lines 204,209,234,405,617,627 fixed parenthesis
+
+*rsp_hle-ppc/ucode2.c:*
+lines 179,184,197,393,500,607,1235 fixed parenthesis
+
+*rsp_hle-ppc/ucode1.c:*
+lines 189,194,207,217,402,510,599 fixed parenthesis
+
+*Rom_Cache.h:*
+casted things in the ARQ functions (arg 5 and 6) to (unsigned int)
+
