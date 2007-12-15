@@ -9,6 +9,10 @@ Runs rather well :)
 Gives a DSI sometimes when exiting the ROM, perhaps something with ARAM fetching?
 }}}
 
+*Duke Nukem 64*
+Hangs when going ingame, menus work like so:
+[http://img99.imageshack.us/img99/7319/dukenukem3ol1.jpg]
+
 
 *Wave Race (U)* 10-25 _FPS_{{{  |  }}}_GFX_: Textures off, blending{{{  |  }}}_AUDIO_: Choppy
 {{{
@@ -23,11 +27,12 @@ Can't see anything, but the game doesn't hang.
 A few NI's, I'll list them later.
 }}}
 
-*Mario Kart 64(U)* 20-45 _FPS_{{{  |  }}}_GFX_: Textures off, blending{{{  |  }}}_AUDIO_: Choppy
-{{{
-No 3D, textures are bad.
-A few NI's (0xB5), and some more
-}}}
+*Mario Kart 64(U)* 
+Menu graphics bad:
+[http://img179.imageshack.us/img179/6262/mariokart1wf2.jpg]
+No 3D:
+[http://img81.imageshack.us/img81/69/mariokart2wa8.jpg]
+
 
 *Super Smash bros (U)* 20-25 _FPS_{{{  |  }}}_GFX_: Textures off, No 3D{{{  |  }}}_AUDIO_: Choppy
 {{{
@@ -35,17 +40,19 @@ Hangs after a few seconds of audio (probably tries to draw 3D)
 A few NI's, I'll list them later.
 }}}
 
-*Killer Instinct Gold (U)* 10-35 _FPS_{{{  |  }}}_GFX_: Textures bad{{{  |  }}}_AUDIO_: Choppy
-{{{
-Goes ingame, texture problems, 3D is fine though it does freeze randomly.
-A few NI's, I'll list them later.
-}}}
+*Killer Instinct Gold *
+Textures bad, hangs on 3d like seen here:
+[http://img512.imageshack.us/img512/378/killerinstinctfg2.jpg]
 
 
 *Rampage (U)* 10-20 _FPS_{{{  |  }}}_GFX_: Good, occasional glitches{{{  |  }}}_AUDIO_: Choppy
 {{{
 Ingame, playable.
 }}}
+
+*Rampage Universal Tour*
+bad textures otherwise playable:
+[http://img81.imageshack.us/img81/2069/rampageuniversaltourpw7.jpg]
 
 *Mortal Kombat Trilogy (U)* 10-20 _FPS_{{{  |  }}}_GFX_: Textures Not working{{{  |  }}}_AUDIO_: Choppy
 {{{
