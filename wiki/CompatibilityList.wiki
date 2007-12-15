@@ -11,6 +11,7 @@ Gives a DSI sometimes when exiting the ROM, perhaps something with ARAM fetching
 
 *Duke Nukem 64*
 Hangs when going ingame, menus work like so:
+
 [http://img99.imageshack.us/img99/7319/dukenukem3ol1.jpg]
 
 
@@ -29,9 +30,11 @@ A few NI's, I'll list them later.
 
 *Mario Kart 64(U)* 
 Menu graphics bad:
+
 [http://img179.imageshack.us/img179/6262/mariokart1wf2.jpg]
 
 No 3D:
+
 [http://img81.imageshack.us/img81/69/mariokart2wa8.jpg]
 
 
@@ -43,6 +46,7 @@ A few NI's, I'll list them later.
 
 *Killer Instinct Gold *
 Textures bad, hangs on 3d like seen here:
+
 [http://img512.imageshack.us/img512/378/killerinstinctfg2.jpg]
 
 
@@ -53,6 +57,7 @@ Ingame, playable.
 
 *Rampage Universal Tour*
 bad textures otherwise playable:
+
 [http://img81.imageshack.us/img81/2069/rampageuniversaltourpw7.jpg]
 
 *Mortal Kombat Trilogy (U)* 10-20 _FPS_{{{  |  }}}_GFX_: Textures Not working{{{  |  }}}_AUDIO_: Choppy
