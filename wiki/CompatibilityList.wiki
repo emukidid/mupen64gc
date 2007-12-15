@@ -38,17 +38,16 @@ No 3D:
 [http://img81.imageshack.us/img81/69/mariokart2wa8.jpg]
 
 
-*Super Smash bros (U)* 20-25 _FPS_{{{  |  }}}_GFX_: Textures off, No 3D{{{  |  }}}_AUDIO_: Choppy
-{{{
-Hangs after a few seconds of audio (probably tries to draw 3D)
-A few NI's, I'll list them later.
-}}}
-
 *Killer Instinct Gold *
 Textures bad, hangs on 3d like seen here:
 
 [http://img512.imageshack.us/img512/378/killerinstinctfg2.jpg]
 
+
+*Super Smash bros (U)* 20-25 _FPS_{{{  |  }}}_GFX_: Textures off, No 3D{{{  |  }}}_AUDIO_: Choppy
+{{{
+NI: 0x45 and hangs at 3d.
+}}}
 
 *Rampage (U)* 10-20 _FPS_{{{  |  }}}_GFX_: Good, occasional glitches{{{  |  }}}_AUDIO_: Choppy
 {{{
