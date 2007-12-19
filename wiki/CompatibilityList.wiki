@@ -3,46 +3,51 @@
 
 === Compatibility List ===
 
-*Super Mario 64 (U)(E)* 10-50 _FPS_{{{  |  }}}_GFX_: Blending issues{{{  |  }}}_AUDIO_: Choppy
-{{{
-Runs rather well :)
-Gives a DSI sometimes when exiting the ROM, perhaps something with ARAM fetching?
-}}}
+*Mission Impossible (U)*
 
-*Duke Nukem 64*
-Hangs when going ingame, menus work like so:
+[http://i232.photobucket.com/albums/ee231/emukidid/missionimpossible1.jpg]
+
+*Duke Nukem 64 (U)*
 
 [http://img99.imageshack.us/img99/7319/dukenukem3ol1.jpg]
 
 
-*Wave Race (U)* 10-25 _FPS_{{{  |  }}}_GFX_: Textures off, blending{{{  |  }}}_AUDIO_: Choppy
-{{{
-Menus run fine, bad textures and no 3D, but hangs when entering race.
-A few NI's, I'll list them later.
-}}}
+*Wave Race (U)*
+
+[http://i232.photobucket.com/albums/ee231/emukidid/waverace4.jpg]
 
 
-*Turok dinosaur Hunter(U)* 10-20 _FPS_{{{  |  }}}_GFX_: Textures off, blending bad{{{  |  }}}_AUDIO_: Choppy
-{{{
-Can't see anything, but the game doesn't hang.
-A few NI's, I'll list them later.
-}}}
+*Aeroguage (U)*
+
+[http://i232.photobucket.com/albums/ee231/emukidid/aeroguage1.jpg]
+
+*1080 Snowboarding*
+
+[http://i232.photobucket.com/albums/ee231/emukidid/1080snowboarding.jpg]
 
 *Mario Kart 64(U)* 
-Menu graphics bad:
 
 [http://img179.imageshack.us/img179/6262/mariokart1wf2.jpg]
 
-No 3D:
+No 3d:
 
 [http://img81.imageshack.us/img81/69/mariokart2wa8.jpg]
-
 
 *Killer Instinct Gold *
 Textures bad, hangs on 3d like seen here:
 
 [http://img512.imageshack.us/img512/378/killerinstinctfg2.jpg]
 
+*Rampage Universal Tour*
+bad textures otherwise playable:
+
+[http://img81.imageshack.us/img81/2069/rampageuniversaltourpw7.jpg]
+
+*Turok dinosaur Hunter(U)* 10-20 _FPS_{{{  |  }}}_GFX_: Textures off, blending bad{{{  |  }}}_AUDIO_: Choppy
+{{{
+Can't see anything, but the game doesn't hang.
+A few NI's, I'll list them later.
+}}}
 
 *Super Smash bros (U)* 20-25 _FPS_{{{  |  }}}_GFX_: Textures off, No 3D{{{  |  }}}_AUDIO_: Choppy
 {{{
@@ -53,11 +58,6 @@ NI: 0x45 and hangs at 3d.
 {{{
 Ingame, playable.
 }}}
-
-*Rampage Universal Tour*
-bad textures otherwise playable:
-
-[http://img81.imageshack.us/img81/2069/rampageuniversaltourpw7.jpg]
 
 *Mortal Kombat Trilogy (U)* 10-20 _FPS_{{{  |  }}}_GFX_: Textures Not working{{{  |  }}}_AUDIO_: Choppy
 {{{
@@ -74,4 +74,10 @@ Worked fine on soft gfx, broken so far on GX.
 {{{
 Textures bad, no 3D.
 A few NI's.
+}}}
+
+*Super Mario 64 (U)(E)* 10-50 _FPS_{{{  |  }}}_GFX_: Blending issues{{{  |  }}}_AUDIO_: Choppy
+{{{
+Runs rather well :)
+Gives a DSI sometimes when exiting the ROM, perhaps something with ARAM fetching?
 }}}
