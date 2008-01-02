@@ -8,7 +8,7 @@ Most of these shouldn't be major goals, but things we would like to see in the e
 
 = Checklist =
 
-  * *Dev Feature:* Debug prints that collect text and display it on the FB for a few frames/seconds
+  * *Dev Feature:* Debug prints that collect text and display it on the FB for a few frames/seconds (Good enough for now)
 
   * *Dev Feature:* Profiling different plugins or code paths
 
@@ -18,16 +18,16 @@ Most of these shouldn't be major goals, but things we would like to see in the e
   
   * *Optimization:* Change some RSP code to utilize the DSP
 
-  * *Feature:* GUI (3D menu would be very cool and appropriate)
-    * *Sub-Feature:* Being able to 'pause' emulation to go to menu and return
+  * *Feature:* GUI (3D menu would be very cool and appropriate) (Completed)
+    * *Sub-Feature:* Being able to 'pause' emulation to go to menu and return (Completed)
   
   * *Feature:* Rewrite the file browsers to be modular (ie one browser for multiple places to load from)
-  and to possibly use the new menu system.
+  and to possibly use the new menu system. (Completed)
 
   * *Feature:* Rumble pak (Completed)
-    * *Sub-Feature:* Hot-swap between mempak and rumble pak
+    * *Sub-Feature:* Hot-swap between mempak and rumble pak (Completed)
 
-  * *Feature:* Allow for a save option to be "Do not save"
+  * *Feature:* Allow for a save option to be "Do not save" (Completed, just don't save!)
 
   * *Feature:* Saving to Gamecube memory cards (Completed)
 
