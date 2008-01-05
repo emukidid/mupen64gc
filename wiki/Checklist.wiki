@@ -33,7 +33,7 @@ Most of these shouldn't be major goals, but things we would like to see in the e
 
   * *Feature:* Save states
   
-  * *Feature:* MP3 support in the RSP
+  * *Feature:* MP3 support in the RSP (May actually work, needs confirmation)
   
-  * *Feature:* Widescreen and 480p support
+  * *Feature:* Widescreen and 480p support (NTSC 480p support now)
   
