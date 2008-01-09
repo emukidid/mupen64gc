@@ -17,7 +17,11 @@ Most of these shouldn't be major goals, but things we would like to see in the e
   * *Optimization:* Initialize the correct video mode for each ROM region (to achieve proper FPS)
   
   * *Optimization:* Change some RSP code to utilize the DSP
-
+  
+  * *Optimization:* In dynarec, eliminate redundant work on adjacent interpreted instructions
+  
+  * *Optimization:* In dynarec, implement blocks' code_addr and/or jump_tables' dst_instr as offsets rather than pointers if it saves work resizing and other usage
+  
   * *Feature:* GUI (3D menu would be very cool and appropriate) (Completed)
     * *Sub-Feature:* Being able to 'pause' emulation to go to menu and return (Completed)
   
