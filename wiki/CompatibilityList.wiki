@@ -2,82 +2,26 @@
 #labels Featured
 
 === Compatibility List ===
+Not working:
+*Legend of Zelda Ocarina of Time (JUE)*
+*Legend of Zelda Majoras Mask (JUE)*
 
+Partially working:
+*Goldeneye 007 (U)*
 *Mission Impossible (U)*
-
-[http://i232.photobucket.com/albums/ee231/emukidid/missionimpossible1.jpg]
-
 *Duke Nukem 64 (U)*
-
-[http://img99.imageshack.us/img99/7319/dukenukem3ol1.jpg]
-
-
 *Wave Race (U)*
-
-[http://i232.photobucket.com/albums/ee231/emukidid/waverace4.jpg]
-
-
 *Aeroguage (U)*
-
-[http://i232.photobucket.com/albums/ee231/emukidid/aeroguage1.jpg]
-
 *1080 Snowboarding*
-
-[http://i232.photobucket.com/albums/ee231/emukidid/1080snowboarding.jpg]
-
 *Mario Kart 64(U)* 
-
-[http://img179.imageshack.us/img179/6262/mariokart1wf2.jpg]
-
-No 3d:
-
-[http://img81.imageshack.us/img81/69/mariokart2wa8.jpg]
-
 *Killer Instinct Gold *
-Textures bad, hangs on 3d like seen here:
-
-[http://img512.imageshack.us/img512/378/killerinstinctfg2.jpg]
-
 *Rampage Universal Tour*
-bad textures otherwise playable:
+*Turok dinosaur Hunter(U)*
+*Super Smash bros (U)*
+*Mortal Kombat Trilogy (U)*
+*Mortal Kombat Sub-Zero Mythologies (U)* 
+*F-1 Pole Position (U)*
 
-[http://img81.imageshack.us/img81/2069/rampageuniversaltourpw7.jpg]
-
-*Turok dinosaur Hunter(U)* 10-20 _FPS_{{{  |  }}}_GFX_: Textures off, blending bad{{{  |  }}}_AUDIO_: Choppy
-{{{
-Can't see anything, but the game doesn't hang.
-A few NI's, I'll list them later.
-}}}
-
-*Super Smash bros (U)* 20-25 _FPS_{{{  |  }}}_GFX_: Textures off, No 3D{{{  |  }}}_AUDIO_: Choppy
-{{{
-NI: 0x45 and hangs at 3d.
-}}}
-
-*Rampage (U)* 10-20 _FPS_{{{  |  }}}_GFX_: Good, occasional glitches{{{  |  }}}_AUDIO_: Choppy
-{{{
-Ingame, playable.
-}}}
-
-*Mortal Kombat Trilogy (U)* 10-20 _FPS_{{{  |  }}}_GFX_: Textures Not working{{{  |  }}}_AUDIO_: Choppy
-{{{
-Worked fine on soft gfx, broken so far on GX.
-}}}
-
-
-*Mortal Kombat Sub-Zero Mythologies (U)* 10-20 _FPS_{{{  |  }}}_GFX_: Textures Not working{{{  |  }}}_AUDIO_: Choppy
-{{{
-Worked fine on soft gfx, broken so far on GX.
-}}}
-
-*F-1 Pole Position (U)* 10-20 _FPS_{{{  |  }}}_GFX_: Textures Not working{{{  |  }}}_AUDIO_: Choppy
-{{{
-Textures bad, no 3D.
-A few NI's.
-}}}
-
-*Super Mario 64 (U)(E)* 10-50 _FPS_{{{  |  }}}_GFX_: Blending issues{{{  |  }}}_AUDIO_: Choppy
-{{{
-Runs rather well :)
-Gives a DSI sometimes when exiting the ROM, perhaps something with ARAM fetching?
-}}}
+Playable:
+*Super Mario 64 (U)(E)*
+*Rampage World Tour (U)(E)*
