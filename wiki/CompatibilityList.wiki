@@ -2,26 +2,47 @@
 #labels Featured
 
 === Compatibility List ===
+
 Not working:
+
 *Legend of Zelda Ocarina of Time (JUE)*
+
 *Legend of Zelda Majoras Mask (JUE)*
 
+
 Partially working:
+
 *Goldeneye 007 (U)*
+
 *Mission Impossible (U)*
+
 *Duke Nukem 64 (U)*
+
 *Wave Race (U)*
+
 *Aeroguage (U)*
+
 *1080 Snowboarding*
+
 *Mario Kart 64(U)* 
+
 *Killer Instinct Gold *
+
 *Rampage Universal Tour*
+
 *Turok dinosaur Hunter(U)*
+
 *Super Smash bros (U)*
+
 *Mortal Kombat Trilogy (U)*
+
 *Mortal Kombat Sub-Zero Mythologies (U)* 
+
 *F-1 Pole Position (U)*
 
+
 Playable:
+
 *Super Mario 64 (U)(E)*
+
 *Rampage World Tour (U)(E)*
