@@ -44,3 +44,10 @@ Kirby 64
 *Not Working*
 
 All Expansion PAK ROMS (for now)
+
+----
+
+_Since we have two different graphics plugins (maybe dynarec soon), want to do this?_
+|| *Game* || GX_gfx || glN64_gfx ||
+|| Mario 64 || Few texture issues || Most textures don't work ||
+|| Zelda: OoT || ? || Most textures don't work ||
