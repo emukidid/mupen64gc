@@ -3,46 +3,44 @@
 
 === Compatibility List ===
 
-Not working:
+*Playable*
 
-*Legend of Zelda Ocarina of Time (JUE)*
+Legend of Zelda Ocarina of Time
 
-*Legend of Zelda Majoras Mask (JUE)*
+Goldeneye 007
 
+Mission Impossible
 
-Partially working:
+Duke Nukem 64
 
-*Goldeneye 007 (U)*
+Wave Race
 
-*Mission Impossible (U)*
+Aeroguage
 
-*Duke Nukem 64 (U)*
+1080 Snowboarding
 
-*Wave Race (U)*
+Mario Kart 64
 
-*Aeroguage (U)*
+Killer Instinct Gold 
 
-*1080 Snowboarding*
+Rampage Universal Tour
 
-*Mario Kart 64(U)* 
+Turok dinosaur Hunter
 
-*Killer Instinct Gold *
+Super Smash bros
 
-*Rampage Universal Tour*
+Mortal Kombat Trilogy
 
-*Turok dinosaur Hunter(U)*
+Mortal Kombat Sub-Zero Mythologies
 
-*Super Smash bros (U)*
+F-1 Pole Position
 
-*Mortal Kombat Trilogy (U)*
+Super Mario 64
 
-*Mortal Kombat Sub-Zero Mythologies (U)* 
+Rampage World Tour
 
-*F-1 Pole Position (U)*
+Kirby 64
 
+*Not Working*
 
-Playable:
-
-*Super Mario 64 (U)(E)*
-
-*Rampage World Tour (U)(E)*
+All Expansion PAK ROMS (for now)
