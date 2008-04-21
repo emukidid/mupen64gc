@@ -1,0 +1,37 @@
+# Example Compatibility List
+# A title is named in angle brackets:
+# <Some Game>
+# Optional: if there's a full page for this game, link to it:
+# <Some Game=GamesPage.html>
+#
+# Once you're in a title, you can define any fields you'd like:
+# [Audio]
+# Sounds Excellent!
+# Images can be added with the !img prefix:
+# !img ImageOne.jpg ImageTwo.png
+#
+<Mario 64=Mario64.html>
+# Comment, comment, comment
+[Support]
+Works Well
+# NOT!
+[Speed]
+50-100%
+[Graphics::GX_gfx]
+Few texture issues
+[Graphics::glN64_GX]
+Some textures, artifacts
+[Graphics::soft_gfx]
+Perfect
+[Audio]
+Occasional Crackling
+[Comments]
+Almost Playable
+[Screenshots]
+!img Mario64_Splash.jpg Mario64_Castle.jpg
+
+<Rampage: World Tour>
+[Support]
+Few issues
+...
+
