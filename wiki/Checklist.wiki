@@ -10,9 +10,7 @@ Most of these shouldn't be major goals, but things we would like to see in the e
 
   * *Dev Feature:* Debug prints that collect text and display it on the FB for a few frames/seconds (Good enough for now)
 
-  * *Dev Feature:* Profiling different plugins or code paths
-
-  * *Optimization:* Redesign the TLB LUTs to use a small hash map (Completed)
+  * *Dev Feature:* Profiling different plugins or code paths (More or less done)
 
   * *Optimization:* Initialize the correct video mode for each ROM region (to achieve proper FPS)
   
@@ -22,22 +20,19 @@ Most of these shouldn't be major goals, but things we would like to see in the e
   
   * *Optimization:* In dynarec, implement blocks' code_addr and/or jump_tables' dst_instr as offsets rather than pointers if it saves work resizing and other usage
   
-  * *Feature:* GUI (3D menu would be very cool and appropriate) (Completed)
-    * *Sub-Feature:* Being able to 'pause' emulation to go to menu and return (Completed)
+  * *Optimization:* In dynarec, identify known memory address and recompile those loads/stores (maybe even stack?)
   
-  * *Feature:* Rewrite the file browsers to be modular (ie one browser for multiple places to load from)
-  and to possibly use the new menu system. (Completed)
-
-  * *Feature:* Rumble pak (Completed)
-    * *Sub-Feature:* Hot-swap between mempak and rumble pak (Completed)
-
-  * *Feature:* Allow for a save option to be "Do not save" (Completed, just don't save!)
-
-  * *Feature:* Saving to Gamecube memory cards (Completed)
+  * *Optimization:* In dynarec, try to keep track of constant values to simplify later operations on those values
+  
+  * *Optimization:* In dynarec, all accesses to r0 should be replaced with a constant 0, thus allowing r0 to be used to hold some state (eg: isGCAddr for branches)
+  
+  * *Optimization:* Reduce the size of ROM blocks to hopefully reduce thrashing on GC
 
   * *Feature:* Save states
   
-  * *Feature:* MP3 support in the RSP (May actually work, needs confirmation)
-  
   * *Feature:* Widescreen and 480p support (NTSC 480p support now)
+  
+  * *Feature:* Modular controller code which support for multiple types simultaneously (In progress) 
+  
+  * *Feature:* TCP Loading on Wii (and on GC?)
   
