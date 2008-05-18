@@ -32,7 +32,13 @@ Most of these shouldn't be major goals, but things we would like to see in the e
   
   * *Feature:* Widescreen and 480p support (NTSC 480p support now)
   
-  * *Feature:* Modular controller code which support for multiple types simultaneously (In progress) 
+  * *Feature:* Modular controller code which support for multiple types simultaneously (Mostly working, needs configuration) 
   
   * *Feature:* TCP Loading on Wii (and on GC?)
+  
+  * *Feature:* Set preferred source for ROMs/saves (rather than setting every time)
+  
+  * *Feature:* Save manager
+  
+  * *Feature:* Improved ROM browsing (icons, info, etc)
   
