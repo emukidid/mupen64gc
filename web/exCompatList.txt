@@ -15,7 +15,9 @@
 [Support]
 Works Well
 # NOT!
-[Speed]
+[Speed::GC]
+50-75%
+[Speed::Wii]
 50-100%
 [Graphics::GX_gfx]
 Few texture issues
@@ -29,9 +31,55 @@ Occasional Crackling
 Almost Playable
 [Screenshots]
 !img Mario64_Splash.jpg Mario64_Castle.jpg
+# Let's not put more than 2 per line
+ <br>
+!img OMFG_More?.png YES_MORE.bmp
 
 <Rampage: World Tour>
 [Support]
 Few issues
+[Speed]
+75%
+[Graphics]
+Good, minor glitches
+[Comments]
+I need more than one line
+# Watch out for using html tags at the beginning of a
+#   line, put a space to avoid being used as a title
+ <br>
 ...
+
+<Zelda: Ocarina of Time>
+[Support]
+Only in glN64_GX
+[Speed]
+50%
+[Graphics::glN64_GX]
+Plenty of issues
+[Comments]
+Let's get it working!
+
+<Wave Race 64>
+[Support]
+A little
+
+<007: Golden Eye>
+[Support]
+A little
+
+<Mortal Kombat: Trilogy>
+[Support]
+Only in software and glN64
+
+<Mario Kart 64>
+[Support]
+Good in software and glN64
+
+<Paper Mario>
+[Support]
+A little in glN64
+
+<Super Smash Bros>
+[Support]
+A little in glN64
 
