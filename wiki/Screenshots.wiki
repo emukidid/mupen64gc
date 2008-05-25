@@ -43,7 +43,7 @@ Super Mario 64
 
 Rampage: World Tour
 
-[http://mupen64gc.googlecode.com/svn/web/images/MK:%20Trilogy.jpg]
+[http://mupen64gc.googlecode.com/svn/web/images/MK%20Trilogy.jpg]
 
 Mortal Kombat Trilogy
 
