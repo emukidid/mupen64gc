@@ -124,8 +124,8 @@ void VI_UpdateScreen()
 		VI_GX_showDEBUG();
 		if(updateDEBUGflag)
 		{
-			while(new_fb) {}
-//				VIDEO_WaitVSync();
+			if(new_fb)
+				VIDEO_WaitVSync();
 			GX_DrawDone(); //needed?
 			GX_CopyDisp (xfb[which_fb], GX_FALSE); //TODO: Figure out where the UpdateScreen interrupts are coming from!
 			GX_DrawDone(); //Shagkur's recommendation

@@ -318,7 +318,7 @@ EXPORT void CALL ProcessDList(void)
 //	TextureCache_Init();
 //	OGL_Stop();
 //	OGL_Start();
-   VI_GX_updateDEBUG();
+	VI_GX_updateDEBUG();
 #endif // __GX__
 }
 
