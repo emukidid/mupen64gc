@@ -76,9 +76,6 @@
 	
 	.extern reg_cop1_fgr_64
 	.type	reg_cop1_fgr_64, @object
-	
-	.extern fpu_in_use
-	.type	fpu_in_use, @object
 
 	.extern lr
 	.type   lr, @object
@@ -101,6 +98,11 @@
 	.globl	_fp_handler_old
 	.type	_fp_handler_old, @object
 	_fp_handler_old:
+		.long 0
+	
+	.globl	_saved_cr
+	.type	_saved_cr, @object
+	_saved_cr:
 		.long 0
 
 /* void start(PowerPC_block*, unsigned int offset); */
@@ -129,21 +131,6 @@ start: /* The block* is passed through r3 */
 	/* } */
 .END_IF_LR_I:
 	
-.if 0 /* We now only flush a new block */
-	/* DCFlush - We flush the block to main memory so that it
-	             can be fetched by the instruction cache */
-	lwz	9, 0(3)	/* lwz code(block) */
-	lwz	8, 4(3)	/* lwz length(block) */
-	srawi	8, 8, 3	/* length*(4 bytes/instr)/32 */ 
-	addi	8, 8, 1 /* Make sure it runs once */
-	mtctr	8
-.DC_FLUSH_LOOP:
-	dcbst	0, 9
-	icbi	0, 9
-	addi	9, 9, 32
-	bdnz	.DC_FLUSH_LOOP
-.endif
-	
 	/* Make sure the instruction counter is running */
 	mfmmcr0	9
 	ori	9, 9, 2
@@ -158,6 +145,7 @@ start: /* The block* is passed through r3 */
 	andi.	9, 9, 0x7FFF
 	mtmsr	9
 	
+.if 0 /* FIXME: Toggle this back when INTERPRET_FP is disabled */
 	/* if(MSR[FP]) */
 	rlwinm	10, 9, 5, 0x1
 	cmpwi	0, 10, 0
@@ -181,6 +169,13 @@ start: /* The block* is passed through r3 */
 	lis	9, _fp_handler@ha
 	la	9, _fp_handler@l(9)
 	stw	9, 7*4(10)
+.endif
+	
+	/* Load the value for the condition registers */
+	lis	10, _saved_cr@ha
+	la	10, _saved_cr@l(10)
+	lwz	10, 0(10)
+	mtcrf 0x07, 10
 	
 	/* Load address to begin execution */
 	lwz	0, 0(3)	/* lwz code(block) */
@@ -220,28 +215,13 @@ return_from_code:
 	mfctr	9
 	stw	9, 80(10)
 	
-.if 0
-	/* TODO: Replace fpu_in_use code with restoring exception handler */
-	/* if(fpu_in_use) */
-	lis	10, fpu_in_use@ha
-	la	10, fpu_in_use@l(10)
-	lwz	0, 0(10)
-	cmpi	0, 0, 0
-	beq	0, .END_IF_FPU2
-	/* Save game regs */
-	lis	10, reg_cop1_fgr_64@ha
-	la	10, reg_cop1_fgr_64@l(10)
-	SAVE_FPR
-	/* Restore emulator regs */
-	lis	10, emu_fpr@ha
-	la	10, emu_fpr@l(10)
-	RESTORE_FPR
-	/* fpu_in_use = 0 */
-	la	0, 1(0)
-	stw	0, 0(10)
-.END_IF_FPU2:
-.endif
+	/* Save condition register */
+	mfcr	9
+	lis	10, _saved_cr@ha
+	la	10, _saved_cr@l(10)
+	stw	9, 0(10)
 	
+.if 0 /* FIXME: Toggle this back when INTERPRET_FP is disabled */
 	/* if(MSR[FP]) */
 	mfmsr	9
 	rlwinm	10, 9, 5, 0x1
@@ -263,6 +243,7 @@ return_from_code:
 	lis	9, _fp_handler_old@ha
 	lwz	9, _fp_handler_old@l(9)
 	stw	9, 7*4(10)
+.endif
 	
 	PUSH_LR
 	
@@ -311,27 +292,11 @@ decodeNInterpret:
 	stw	9, 80(10)
 	mtctr	0	/* Hold the instr in ctr for now */
 	
-.if 0
-	/* TODO: Replace this code with installing our own exception handler */
-	/* if(fpu_in_use) */
-	lis	10, fpu_in_use@ha
-	la	10, fpu_in_use@l(10)
-	lwz	0, 0(10)
-	cmpi	0, 0, 0
-	beq	0, .END_IF_FPU
-	/* Save game regs */
-	lis	10, reg_cop1_fgr_64@ha
-	la	10, reg_cop1_fgr_64@l(10)
-	SAVE_FPR
-	/* Restore emulator regs */
-	lis	10, emu_fpr@ha
-	la	10, emu_fpr@l(10)
-	RESTORE_FPR
-	/* fpu_in_use = 0 */
-	la	0, 1(0)
-	stw	0, 0(10)
-.END_IF_FPU:
-.endif
+	/* Save condition register */
+	mfcr	9
+	lis	10, _saved_cr@ha
+	la	10, _saved_cr@l(10)
+	stw	9, 0(10)
 	
 	PUSH_LR
 	
@@ -342,6 +307,7 @@ decodeNInterpret:
 	subf	8, 8, 9
 	stw	8, instructionCount@l(10)
 	
+.if 0 /* FIXME: Toggle this back when INTERPRET_FP is disabled */
 	/* if(MSR[FP]) */
 	mfmsr	9
 	rlwinm	10, 9, 5, 0x1
@@ -363,6 +329,7 @@ decodeNInterpret:
 	lis	9, _fp_handler_old@ha
 	lwz	9, _fp_handler_old@l(9)
 	stw	9, 7*4(10)
+.endif
 	
 	/* Restore emulator regs */
 	lis	10, emu_reg@ha
@@ -413,6 +380,7 @@ decodeNInterpret:
 	andi.	9, 9, 0x7FFF
 	mtmsr	9
 	
+.if 0 /* FIXME: Toggle this back when INTERPRET_FP is disabled */
 	/* if(MSR[FP]) */
 	rlwinm	10, 9, 5, 0x1
 	cmpwi	0, 10, 0
@@ -436,6 +404,13 @@ decodeNInterpret:
 	lis	9, _fp_handler@ha
 	la	9, _fp_handler@l(9)
 	stw	9, 7*4(10)
+.endif
+	
+	/* Load the value for the condition registers */
+	lis	10, _saved_cr@ha
+	la	10, _saved_cr@l(10)
+	lwz	10, 0(10)
+	mtcrf 0x07, 10
 	
 	/* Restore game state */
 	lis	10, reg@ha
@@ -451,40 +426,13 @@ decodeNInterpret:
 	
 	.size decodeNInterpret, .-decodeNInterpret
 
-
-/* void fp_restore(void); // Restore's N64 FPRs and sets fpu_in_use */	
-	.align	2
-	.globl	fp_restore
-        .type   fp_restore, @function	
-fp_restore:
-	mtctr	10
-	/* Save emulator FPRs */
-	lis	10, emu_fpr@ha
-	la	10, emu_fpr@l(10)
-	SAVE_FPR
-	/* Load N64 FPRs */
-	lis	10, reg_cop1_fgr_64@ha
-	la	10, reg_cop1_fgr_64@l(10)
-	RESTORE_FPR
-	/* Set fpu_in_use to 1 */
-	lis	10, fpu_in_use@ha
-	la	10, fpu_in_use@l(10)
-	la	0, 1(0)
-	stw	0, 0(10)
-	
-	andi.	0, 0, 0
-	mfctr	10
-	blr
-	
-	.size fp_restore, .-fp_restore
-
-
+.if 0
 /* _fp_handler: exception handler for restoring FP regs */
 	.align	2
 	.globl	_fp_handler
         .type   _fp_handler, @function	
 _fp_handler:
-/*	mtsprg4	10*/
+	mtsprg4	10
 	
 	/* Enable FP */
 	mfsrr1	10
@@ -495,10 +443,10 @@ _fp_handler:
 	la	10, reg_cop1_fgr_64@l(10)
 	RESTORE_FPR
 	
-/*	mfsprg4	10*/
+	mfsprg4	10
 	rfi
 	
 	.size _fp_handler, .-_fp_handler
-	
+.endif
 
 
