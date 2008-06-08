@@ -14,6 +14,7 @@
 #include "../../gc_memory/memory.h"
 #include "../Invalid_Code.h"
 #include "../interupt.h"
+#include "../Recomp-Cache.h"
 #include "Recompile.h"
 #include "Wrappers.h"
 
@@ -72,6 +73,21 @@ int add_jump(int old_jump, int is_j, int is_out){
 	return id;
 }
 
+int add_jump_special(int is_j){
+	int id = current_jump;
+	jump_node* jump = &jump_table[current_jump++];
+	jump->new_jump  = 0;     // This should be filled in when known
+	jump->dst_instr = dst;   // set_next hasn't happened
+	jump->type      = JUMP_TYPE_SPEC | (is_j ? JUMP_TYPE_J : 0);
+	return id;
+}
+	
+void set_jump_special(int which, int new_jump){
+	jump_node* jump = &jump_table[which];
+	if(jump->type != JUMP_TYPE_SPEC) return;
+	jump->new_jump = new_jump;
+}
+
 // Converts a sequence of MIPS instructions to a PowerPC block
 void recompile_block(PowerPC_block* ppc_block){
 	src = src_first = ppc_block->mips_code;
@@ -81,7 +97,7 @@ void recompile_block(PowerPC_block* ppc_block){
 	addr_first = ppc_block->start_address;
 	addr_last  = ppc_block->end_address;
 	current_jump = 0;
-	code_addr = ppc_block;
+	code_addr = ppc_block->code_addr;
 	
 	while(has_next_src()){
 		// Make sure the code doesn't overflow
@@ -115,7 +131,46 @@ void recompile_block(PowerPC_block* ppc_block){
 	
 	// Here we recompute jumps and branches
 	pass2(ppc_block);
+	// Set this block as valid, recompiled code
 	invalid_code_set(ppc_block->start_address>>12, 0);
+	// Set equivalent blocks as valid, recompiled code pointing to the same code
+	if(ppc_block->end_address < 0x80000000 || ppc_block->start_address >= 0xc0000000){	
+		unsigned long paddr;
+		
+		paddr = virtual_to_physical_address(ppc_block->start_address, 2);
+		invalid_code_set(paddr>>12, 0);
+		blocks[paddr>>12]->code = ppc_block->code;
+		blocks[paddr>>12]->code_addr = ppc_block->code_addr;
+		blocks[paddr>>12]->length = ppc_block->length;
+		blocks[paddr>>12]->max_length = ppc_block->max_length;
+		
+		paddr += ppc_block->end_address - ppc_block->start_address - 4;
+		invalid_code_set(paddr>>12, 0);
+		blocks[paddr>>12]->code = ppc_block->code;
+		blocks[paddr>>12]->code_addr = ppc_block->code_addr;
+		blocks[paddr>>12]->length = ppc_block->length;
+		blocks[paddr>>12]->max_length = ppc_block->max_length;
+		
+	} else {
+		unsigned int start = ppc_block->start_address;
+		unsigned int end   = ppc_block->end_address;
+		if(start >= 0x80000000 && end < 0xa0000000 &&
+		   invalid_code_get((start+0x20000000)>>12)){
+		   	invalid_code_set((start+0x20000000)>>12, 0);
+			blocks[(start+0x20000000)>>12]->code = ppc_block->code;
+			blocks[(start+0x20000000)>>12]->code_addr = ppc_block->code_addr;
+			blocks[(start+0x20000000)>>12]->length = ppc_block->length;
+			blocks[(start+0x20000000)>>12]->max_length = ppc_block->max_length;
+		}
+		if(start >= 0xa0000000 && end < 0xc0000000 &&
+		   invalid_code_get((start-0x20000000)>>12)){
+		   	invalid_code_set((start-0x20000000)>>12, 0);
+			blocks[(start-0x20000000)>>12]->code = ppc_block->code;
+			blocks[(start-0x20000000)>>12]->code_addr = ppc_block->code_addr;
+			blocks[(start-0x20000000)>>12]->length = ppc_block->length;
+			blocks[(start-0x20000000)>>12]->max_length = ppc_block->max_length;
+		}
+	}
 	// Since this is a fresh block of code,
 	// Make sure it wil show up in the ICache
 	DCFlushRange(ppc_block->code, ppc_block->length*sizeof(PowerPC_instr));
@@ -126,12 +181,11 @@ void init_block(MIPS_instr* mips_code, PowerPC_block* ppc_block){
 	unsigned int length = (ppc_block->end_address - ppc_block->start_address)/sizeof(MIPS_instr);
 	if(!ppc_block->code){
 		ppc_block->max_length = 3*length;
-		ppc_block->code = malloc(ppc_block->max_length
-		                         * sizeof(PowerPC_instr));
+		ppc_block->code = RecompCache_Alloc(ppc_block->max_length * sizeof(PowerPC_instr),
+		                                    ppc_block->start_address>>12);
 	}
-	if(ppc_block->code_addr)
-		free(ppc_block->code_addr);
-	ppc_block->code_addr = malloc(length * sizeof(PowerPC_instr*));
+	if(!ppc_block->code_addr)
+		ppc_block->code_addr = malloc(length * sizeof(PowerPC_instr*));
 	ppc_block->mips_code = mips_code;
 	
 	// TODO: We should probably point all equivalent addresses to this block as well
@@ -140,11 +194,62 @@ void init_block(MIPS_instr* mips_code, PowerPC_block* ppc_block){
 	ppc_block->length = 0;
 	// We haven't actually recompiled the block
 	invalid_code_set(ppc_block->start_address>>12, 1);
+	if(ppc_block->end_address < 0x80000000 || ppc_block->start_address >= 0xc0000000){	
+		unsigned long paddr;
+		
+		paddr = virtual_to_physical_address(ppc_block->start_address, 2);
+		invalid_code_set(paddr>>12, 1);
+		if(!blocks[paddr>>12]){
+		     blocks[paddr>>12] = malloc(sizeof(PowerPC_block));
+		     blocks[paddr>>12]->code = -1;
+		     blocks[paddr>>12]->code_addr = -1;
+		     blocks[paddr>>12]->start_address = paddr & ~0xFFF;
+		     blocks[paddr>>12]->end_address = (paddr & ~0xFFF) + 0x1000;
+		}
+		
+		paddr += ppc_block->end_address - ppc_block->start_address - 4;
+		invalid_code_set(paddr>>12, 1);
+		if(!blocks[paddr>>12]){
+		     blocks[paddr>>12] = malloc(sizeof(PowerPC_block));
+		     blocks[paddr>>12]->code = -1;
+		     blocks[paddr>>12]->code_addr = -1;
+		     blocks[paddr>>12]->start_address = paddr & ~0xFFF;
+		     blocks[paddr>>12]->end_address = (paddr & ~0xFFF) + 0x1000;
+		}
+		
+	} else {
+		unsigned int start = ppc_block->start_address;
+		unsigned int end   = ppc_block->end_address;
+		if(start >= 0x80000000 && end < 0xa0000000 &&
+		   invalid_code_get((start+0x20000000)>>12)){
+			if(!blocks[(start+0x20000000)>>12]){
+				blocks[(start+0x20000000)>>12] = malloc(sizeof(PowerPC_block));
+				blocks[(start+0x20000000)>>12]->code = -1;
+				blocks[(start+0x20000000)>>12]->code_addr = -1;
+				blocks[(start+0x20000000)>>12]->start_address
+					= (start+0x20000000) & ~0xFFF;
+				blocks[(start+0x20000000)>>12]->end_address
+					= ((start+0x20000000) & ~0xFFF) + 0x1000;
+			}
+		}
+		if(start >= 0xa0000000 && end < 0xc0000000 &&
+		   invalid_code_get((start-0x20000000)>>12)){
+			if (!blocks[(start-0x20000000)>>12]){
+				blocks[(start-0x20000000)>>12] = malloc(sizeof(PowerPC_block));
+				blocks[(start-0x20000000)>>12]->code = -1;
+				blocks[(start-0x20000000)>>12]->code_addr = -1;
+				blocks[(start-0x20000000)>>12]->start_address
+					= (start-0x20000000) & ~0xFFF;
+				blocks[(start-0x20000000)>>12]->end_address
+					= ((start-0x20000000) & ~0xFFF) + 0x1000;
+			}
+		}
+	}
 }
 
 void deinit_block(PowerPC_block* ppc_block){
 	if(ppc_block->code){
-		free(ppc_block->code);
+		RecompCache_Free(ppc_block->start_address>>12);
 		ppc_block->code = NULL;
 	}
 	if(ppc_block->code_addr){
@@ -153,7 +258,7 @@ void deinit_block(PowerPC_block* ppc_block){
 	}
 	invalid_code_set(ppc_block->start_address>>12, 1);
 	
-	// TODO: We should probably mark all equivalent addresses as invalid
+	// TODO: We need to mark all equivalent addresses as invalid
 }
 
 int is_j_out(int branch, int is_aa){
@@ -172,6 +277,21 @@ static void pass2(PowerPC_block* ppc_block){
 	PowerPC_instr* current;
 	for(i=0; i<current_jump; ++i){
 		current = jump_table[i].dst_instr;
+		
+		// Special jump, its been filled out
+		if(jump_table[i].type & JUMP_TYPE_SPEC){
+			if(!(jump_table[i].type & JUMP_TYPE_J)){
+				// We're filling in a branch instruction
+				*current &= ~(PPC_BD_MASK << PPC_BD_SHIFT);
+				PPC_SET_BD(*current, jump_table[i].new_jump);
+			} else {
+				// We're filling in a jump instrucion
+				*current &= ~(PPC_LI_MASK << PPC_LI_SHIFT);
+				PPC_SET_LI(*current, jump_table[i].new_jump);
+			}
+			continue;
+		}
+		
 		if(!(jump_table[i].type & JUMP_TYPE_J)){ // Branch instruction
 			int jump_offset = (unsigned int)jump_table[i].old_jump + 
 				         ((unsigned int)jump_table[i].src_instr - (unsigned int)src_first)/4;
@@ -192,31 +312,16 @@ static void pass2(PowerPC_block* ppc_block){
 				DEBUG_print(txtbuffer, DBG_USBGECKO);
 				current -= 4;
 				// mtctr r1
-				*current = NEW_PPC_INSTR();
-				PPC_SET_OPCODE(*current, PPC_OPCODE_X);
-				PPC_SET_FUNC  (*current, PPC_FUNC_MTSPR);
-				PPC_SET_RD    (*current, 1);
-				PPC_SET_SPR   (*current, 0x120);
+				GEN_MTCTR(*current, 1);
 				++current;
 				// lis	r1, dest@ha(0)
-				*current = NEW_PPC_INSTR();
-				PPC_SET_OPCODE(*current, PPC_OPCODE_ADDIS);
-				PPC_SET_RD    (*current, 1);
-				PPC_SET_IMMED (*current, dest>>16);
+				GEN_LIS(*current, 1, dest>>16);
 				++current;
 				// la	r0, dest@l(r1)
-				*current = NEW_PPC_INSTR();
-				PPC_SET_OPCODE(*current, PPC_OPCODE_ORI);
-				PPC_SET_RD    (*current, 1);
-				PPC_SET_RA    (*current, 0);
-				PPC_SET_IMMED (*current, dest);
+				GEN_LI(*current, 0, 1, dest);
 				++current;
 				// mfctr r1
-				*current = NEW_PPC_INSTR();
-				PPC_SET_OPCODE(*current, PPC_OPCODE_X);
-				PPC_SET_FUNC  (*current, PPC_FUNC_MFSPR);
-				PPC_SET_RD    (*current, 1);
-				PPC_SET_SPR   (*current, 0x120);
+				GEN_MFCTR(*current, 1);
 				++current;
 				
 				// bc	<jump_pad>     
@@ -250,31 +355,16 @@ static void pass2(PowerPC_block* ppc_block){
 				DEBUG_print(txtbuffer, DBG_USBGECKO);
 				current -= 4;
 				// mtctr r1
-				*current = NEW_PPC_INSTR();
-				PPC_SET_OPCODE(*current, PPC_OPCODE_X);
-				PPC_SET_FUNC  (*current, PPC_FUNC_MTSPR);
-				PPC_SET_RD    (*current, 1);
-				PPC_SET_SPR   (*current, 0x120);
+				GEN_MTCTR(*current, 1);
 				++current;
 				// lis	r1, dest@ha(0)
-				*current = NEW_PPC_INSTR();
-				PPC_SET_OPCODE(*current, PPC_OPCODE_ADDIS);
-				PPC_SET_RD    (*current, 1);
-				PPC_SET_IMMED (*current, jump_address>>16);
+				GEN_LIS(*current, 1, jump_address>>16);
 				++current;
 				// la	r0, dest@l(r1)
-				*current = NEW_PPC_INSTR();
-				PPC_SET_OPCODE(*current, PPC_OPCODE_ORI);
-				PPC_SET_RD    (*current, 1);
-				PPC_SET_RA    (*current, 0);
-				PPC_SET_IMMED (*current, jump_address);
+				GEN_LI(*current, 0, 1, jump_address);
 				++current;
 				// mfctr r1
-				*current = NEW_PPC_INSTR();
-				PPC_SET_OPCODE(*current, PPC_OPCODE_X);
-				PPC_SET_FUNC  (*current, PPC_FUNC_MFSPR);
-				PPC_SET_RD    (*current, 1);
-				PPC_SET_SPR   (*current, 0x120);
+				GEN_MFCTR(*current, 1);
 				++current;
 				         
 				// b	<jump_pad>
@@ -291,15 +381,17 @@ static void pass2(PowerPC_block* ppc_block){
 	}
 }
 
+extern int stop;
 inline unsigned long update_invalid_addr(unsigned long addr);
 void jump_to(unsigned int address){
+	if(stop) return;
 	PowerPC_block* dst_block = blocks[address>>12];
 	unsigned long paddr = update_invalid_addr(address);
-	if (!paddr) return;
+	if(!paddr) return;
 	
 	// Check for interrupts
 	update_count();
-	if (next_interupt <= Count) gen_interupt();
+	if(next_interupt <= Count) gen_interupt();
 	
 	sprintf(txtbuffer, "jump_to 0x%08x\n", address);
 	DEBUG_print(txtbuffer, DBG_USBGECKO);
@@ -333,6 +425,12 @@ void jump_to(unsigned int address){
 	if((address&0xFFF) > 0)
 		offset = dst_block->code_addr[(address&0xFFF)>>2] - dst_block->code;
 	
+	sprintf(txtbuffer, "Entering dynarec code @ 0x%08x\n",
+	         dst_block->code_addr[(address&0xFFF)>>2]);
+	DEBUG_print(txtbuffer, DBG_USBGECKO);
+	/*int i;
+	for(i=0; i<6; ++i) VIDEO_WaitVSync(); // Wait for output to propagate*/
+	
 	start(dst_block, offset);
 }
 extern unsigned long jump_to_address;
@@ -346,10 +444,8 @@ int resizeCode(PowerPC_block* block, int newSize){
 	
 	// Creating the new block and copying the code
 	PowerPC_instr* oldCode = block->code;
-	block->code = malloc(newSize * sizeof(PowerPC_instr));
+	block->code = RecompCache_Realloc(block->code, newSize * sizeof(PowerPC_instr));
 	if(!block->code) return 0;
-	memcpy(block->code, oldCode,
-	       ((block->max_length < newSize) ? block->max_length : newSize)*sizeof(PowerPC_instr));
 	
 	// Readjusting pointers
 	// Optimization: Sepp256 suggested storing offsets instead of pointers
@@ -361,11 +457,11 @@ int resizeCode(PowerPC_block* block, int newSize){
 	for(i=0; i<current_jump; ++i)
 		jump_table[i].dst_instr = block->code + (jump_table[i].dst_instr - oldCode);
 	
-	free(oldCode);
 	block->max_length = newSize;
 	return newSize;
 }
 
+// TODO: Rewrite
 // FIXME: Some instructions can be rearranged to remove some mf/mt ctr isntructions
 static void genJumpPad(PowerPC_block* ppc_block){
 	static PowerPC_instr padCode[16];
@@ -448,15 +544,11 @@ static void genJumpPad(PowerPC_block* ppc_block){
 		PPC_SET_RD    (*current, 1);
 		PPC_SET_IMMED (*current, (unsigned int)jump_to>>16);
 		++current;
-		//la	r1, jump_to@l(r1)
+		//la	r0, jump_to@l(r1)
 		PPC_SET_OPCODE(*current, PPC_OPCODE_ORI);
 		PPC_SET_RD    (*current, 1);
-		PPC_SET_RA    (*current, 1);
+		PPC_SET_RA    (*current, 0);
 		PPC_SET_IMMED (*current, (unsigned int)jump_to);
-		++current;
-		//move	r0, r1
-		PPC_SET_OPCODE(*current, PPC_OPCODE_ADDI);
-		PPC_SET_RA    (*current, 1);
 		++current;
 		//lis	r1, &return_address@ha(0)
 		PPC_SET_OPCODE(*current, PPC_OPCODE_ADDIS);
@@ -478,15 +570,11 @@ static void genJumpPad(PowerPC_block* ppc_block){
 		PPC_SET_RD    (*current, 1);
 		PPC_SET_IMMED (*current, (unsigned int)return_from_code>>16);
 		++current;
-		//la	r1, return_from_code@l(r1)
+		//la	r0, return_from_code@l(r1)
 		PPC_SET_OPCODE(*current, PPC_OPCODE_ORI);
 		PPC_SET_RD    (*current, 1);
-		PPC_SET_RA    (*current, 1);
+		PPC_SET_RA    (*current, 0);
 		PPC_SET_IMMED (*current, (unsigned int)return_from_code);
-		++current;
-		//move	r0, r1
-		PPC_SET_OPCODE(*current, PPC_OPCODE_ADDI);
-		PPC_SET_RA    (*current, 1);
 		++current;
 		//mfctr	r1
 		PPC_SET_OPCODE(*current, PPC_OPCODE_X);
@@ -508,175 +596,4 @@ static void genJumpPad(PowerPC_block* ppc_block){
 	 *code_length += 16;
 	 memcpy(dst, padCode, 16*sizeof(PowerPC_instr));
 }
-
-#if 0
-// NO LONGER USED
-// This creates a call to recompile the block
-static void genRecompileBlock(PowerPC_block* ppc_block){
-	static PowerPC_instr callCode[32];
-	static int generated = 0;
-	
-	if(!generated){
-		generated = 1;
-		PowerPC_instr* current = callCode;
-		PowerPC_instr ppc = NEW_PPC_INSTR();
-		
-		// -- First save the used registers --
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDI);
-		PPC_SET_RD    (ppc, 0);
-		PPC_SET_RA    (ppc, 1);
-		*(current++) = ppc;
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-		PPC_SET_RD    (ppc, 1);
-		PPC_SET_IMMED (ppc, (unsigned int)reg>>16);
-		*(current++) = ppc;
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDI);
-		PPC_SET_RD    (ppc, 1);
-		PPC_SET_RA    (ppc, 1);
-		PPC_SET_IMMED (ppc, (unsigned int)reg);
-		*(current++) = ppc;
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_STW);
-		PPC_SET_RD    (ppc, 0);
-		PPC_SET_RA    (ppc, 1);
-		PPC_SET_IMMED (ppc, 1*8 + 4);
-		*(current++) = ppc;
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_STW);
-		PPC_SET_RD    (ppc, 2);
-		PPC_SET_RA    (ppc, 1);
-		PPC_SET_IMMED (ppc, 2*8 + 4);
-		*(current++) = ppc;
-		
-		// lis	1, ppc_block@ha(0)
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-		PPC_SET_RD    (ppc, 2);
-		PPC_SET_IMMED (ppc, (unsigned int)ppc_block>>16);
-		*(current++) = ppc;
-		// li	1, ppc_block@l(1)
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-		PPC_SET_RD    (ppc, 2);
-		PPC_SET_RA    (ppc, 2);
-		PPC_SET_IMMED (ppc, (unsigned int)ppc_block);
-		*(current++) = ppc;
-		// addi	0, 1, 0
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDI);
-		PPC_SET_RD    (ppc, 0);
-		PPC_SET_RA    (ppc, 1);
-		*(current++) = ppc;
-		// lis	1, emu_reg@ha(0)
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-		PPC_SET_RD    (ppc, 1);
-		PPC_SET_IMMED (ppc, (unsigned int)emu_reg>>16);
-		*(current++) = ppc;
-		// li	1, emu_reg@l(1)
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-		PPC_SET_RD    (ppc, 1);
-		PPC_SET_RA    (ppc, 1);
-		PPC_SET_IMMED (ppc, (unsigned int)emu_reg);
-		*(current++) = ppc;
-		// stw	0, 3*4(1)	// Store arg0 in emu_reg[3]
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_STW);
-		PPC_SET_RD    (ppc, 0);
-		PPC_SET_RA    (ppc, 1);
-		PPC_SET_IMMED (ppc, 3*4);
-		*(current++) = ppc;
-		
-		// lis	2, recompile_block@ha(0)
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-		PPC_SET_RD    (ppc, 2);
-		PPC_SET_IMMED (ppc, (unsigned int)recompile_block>>16);
-		*(current++) = ppc;
-		// li	2, recompile_block@l(2)
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-		PPC_SET_RD    (ppc, 2);
-		PPC_SET_RA    (ppc, 2);
-		PPC_SET_IMMED (ppc, (unsigned int)recompile_block);
-		*(current++) = ppc;
-		// lis	1, return_address@ha(0)
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-		PPC_SET_RD    (ppc, 1);
-		PPC_SET_IMMED (ppc, (unsigned int)&return_address>>16);
-		*(current++) = ppc;
-		// li	1, return_address@l(1)
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-		PPC_SET_RD    (ppc, 1);
-		PPC_SET_RA    (ppc, 1);
-		PPC_SET_IMMED (ppc, (unsigned int)&return_address);
-		*(current++) = ppc;
-		// stw	2, 0(1)	// recompile_block is the return address
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_STW);
-		PPC_SET_RD    (ppc, 2);
-		PPC_SET_RA    (ppc, 1);
-		*(current++) = ppc;
-		
-		// lis	1, return_from_code@ha(0)
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-		PPC_SET_RD    (ppc, 1);
-		PPC_SET_IMMED (ppc, (unsigned int)return_from_code>>16);
-		*(current++) = ppc;
-		// li	1, return_from_code@l(1)
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-		PPC_SET_RD    (ppc, 1);
-		PPC_SET_RA    (ppc, 1);
-		PPC_SET_IMMED (ppc, (unsigned int)return_from_code);
-		*(current++) = ppc;
-		// mtctr 1
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_MTSPR);
-		PPC_SET_RD    (ppc, 1);
-		PPC_SET_SPR   (ppc, 0x120);
-		*(current++) = ppc;
-		
-		// -- Lastly restore the registers --
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-		PPC_SET_RD    (ppc, 1);
-		PPC_SET_IMMED (ppc, (unsigned int)reg>>16);
-		*(current++) = ppc;
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-		PPC_SET_RD    (ppc, 1);
-		PPC_SET_RA    (ppc, 1);
-		PPC_SET_IMMED (ppc, (unsigned int)reg);
-		*(current++) = ppc;
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_LWZ);
-		PPC_SET_RD    (ppc, 2);
-		PPC_SET_RA    (ppc, 1);
-		PPC_SET_IMMED (ppc, 2*8 + 4);
-		*(current++) = ppc;
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_LWZ);
-		PPC_SET_RD    (ppc, 1);
-		PPC_SET_RA    (ppc, 1);
-		PPC_SET_IMMED (ppc, 1*8 + 4);
-		*(current++) = ppc;
-		
-		// bctr
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_XL);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_BCCTR);
-		PPC_SET_BO    (ppc, 0x14);
-		*(current++) = ppc;
-	}
-	memcpy(ppc_block->code, callCode, 32*sizeof(PowerPC_instr));
-}
-#endif
 

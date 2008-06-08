@@ -24,6 +24,7 @@ typedef struct {
 #define MAX_JUMPS        1024
 #define JUMP_TYPE_J      1   // uses a long immed & abs addr
 #define JUMP_TYPE_OUT    2   // the jump leaves the block
+#define JUMP_TYPE_SPEC   3   // special jump, destination precomputed
 typedef struct {
 	MIPS_instr*    src_instr;
 	PowerPC_instr* dst_instr;
@@ -38,6 +39,9 @@ int        has_next_src(void);
 void       set_next_dst(PowerPC_instr);
 int        add_jump(int old_jump, int is_j, int is_out);
 int        is_j_out(int branch, int is_aa);
+// Use these for jumps that won't be known until later in compile time
+int        add_jump_special(int is_j);
+void       set_jump_special(int which, int new_jump);
 
 /* These functions are used to initialize, recompile, and deinit a block
    init assumes that all pointers in the block fed it it are NULL or allocated

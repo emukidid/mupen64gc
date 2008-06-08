@@ -92,7 +92,7 @@ static void init(void){
 		if(wpad.err == WPAD_ERR_NONE &&
 		   wpad.exp.type == WPAD_EXP_CLASSIC){
 			controller_Classic.available[i] = 1;
-			WPAD_SetDataFormat(i, WPAD_FMT_BTNS);
+			WPAD_SetDataFormat(i, WPAD_DATA_EXPANSION);
 		} else
 			controller_Classic.available[i] = 0;
 	}

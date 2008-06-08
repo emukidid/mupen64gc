@@ -12,7 +12,7 @@
 	4) Restores state
  */
 void decodeNInterpret(void);
-#if 1
+
 // These defines tell the recompiler to interpret
 //  rather than recompile the instruction
 #define INTERPRET_LB
@@ -35,35 +35,47 @@ void decodeNInterpret(void);
 #define INTERPRET_MADDU
 #define INTERPRET_MSUB
 #define INTERPRET_MSUBU
+
 //#define INTERPRET_CLO
+
 #define INTERPRET_HILO
+#if 1
+#define INTERPRET_MULT
+#define INTERPRET_MULTU
+#define INTERPRET_DIV
+#define INTERPRET_DIVU
+#endif
 
 //#define INTERPRET_MOVN
 //#define INTERPRET_MOVZ
 
-#if 1
-#define INTERPRET_J
 #define INTERPRET_JAL
 #define INTERPRET_JR
 #define INTERPRET_JALR
+#define INTERPRET_REGIMM
+#if 1
+#define INTERPRET_J
 #define INTERPRET_BEQ
 #define INTERPRET_BNE
 #define INTERPRET_BLEZ
 #define INTERPRET_BGTZ
-#define INTERPRET_BLTZ
-#define INTERPRET_BGEZ
-#define INTERPRET_BLTZAL
-#define INTERPRET_BGEZAL
-#define INTERPRET_BCZF
-#define INTERPRET_BCZT
+#define INTERPRET_BEQL
+#define INTERPRET_BNEL
+#define INTERPRET_BLEZL
+#define INTERPRET_BGTZL
+#define INTERPRET_BC
 #endif
-#endif
+
 #define INTERPRET_SYSCALL
 #define INTERPRET_BREAK
 #define INTERPRET_TRAPS
+
 #define INTERPRET_LL
 #define INTERPRET_SC
+
 #define INTERPRET_COP0
+
+#define INTERPRET_FP
 
 #endif
 

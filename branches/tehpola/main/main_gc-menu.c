@@ -412,6 +412,14 @@ void ogc_video__reset()
     	default:
 			rmode = &TVNtsc480IntDf;
     }
+    
+#ifdef WII
+    if(rmode == &TVNtsc480IntDf &&
+	   VIDEO_HaveComponentCable() &&
+	   CONF_GetProgressiveScan())
+    	rmode = &TVNtsc480Prog;
+#endif
+    
     vmode = rmode;
     VIDEO_Configure (vmode);
     VIDEO_ClearFrameBuffer(vmode, xfb[0], COLOR_BLACK);
