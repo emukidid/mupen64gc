@@ -678,11 +678,13 @@ static inline void menuStack_push(menu_item*);
 		{ "Debug to SD: file Closed",
 		  "Debug to SD: file Open" };
 	static char* toggleSDDebug_func(void);
+	
+	char* TLBCache_dump();
 
 #ifdef SDPRINT
-	#define NUM_DEV_FEATURES 3
+	#define NUM_DEV_FEATURES 4
 #else
-	#define NUM_DEV_FEATURES 2
+	#define NUM_DEV_FEATURES 3
 #endif
 	static menu_item devFeatures_submenu[] =
 		{{ &toggleFPS_strings[1][0],
@@ -692,6 +694,10 @@ static inline void menuStack_push(menu_item*);
 		 { &toggleScreenDebug_strings[1][0],
 		   MENU_ATTR_NONE,
 		   { .func = toggleScreenDebug_func }
+		  },
+		 { "Dump TLB Cache",
+		   MENU_ATTR_NONE,
+		   { .func = TLBCache_dump }
 		  },
 #ifdef SDPRINT
 		 { &toggleSDDebug_strings[0][0],
