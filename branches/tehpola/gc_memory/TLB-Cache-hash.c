@@ -33,15 +33,16 @@ typedef struct node {
 static TLB_hash_node* TLB_LUT_r[TLB_NUM_SLOTS];
 static TLB_hash_node* TLB_LUT_w[TLB_NUM_SLOTS];
 
-static unsigned int TLB_hash_shift;
+static unsigned int TLB_hash_mask;
 
 void TLBCache_init(void){
-	unsigned int temp = TLB_NUM_SLOTS;
+	TLB_hash_mask = 0;
+	unsigned int temp = TLB_NUM_SLOTS, temp2 = 1;
 	while(temp){
 		temp >>= 1;
-		++TLB_hash_shift;
+		TLB_hash_mask |= temp2;
+		temp2 <<= 1;
 	}
-	TLB_hash_shift = TLB_BITS_PER_PAGE_NUM - TLB_hash_shift + 1;
 }
 
 void TLBCache_deinit(void){
@@ -65,7 +66,7 @@ void TLBCache_deinit(void){
 }
 
 static unsigned int inline TLB_hash(unsigned int page){
-	return page >> TLB_hash_shift;
+	return page & TLB_hash_mask;
 }
 
 unsigned int inline TLBCache_get_r(unsigned int page){
@@ -124,5 +125,32 @@ void inline TLBCache_set_w(unsigned int page, unsigned int val){
 		}
 }
 
+#include "../gui/DEBUG.h"
+char* TLBCache_dump(){
+	int i;
+	DEBUG_print("\n\nTLB Cache r dump:\n", DBG_USBGECKO);
+	for(i=0; i<TLB_NUM_SLOTS; ++i){
+		sprintf(txtbuffer, "%d\t", i);
+		DEBUG_print(txtbuffer, DBG_USBGECKO);
+		TLB_hash_node* node = TLB_LUT_r[i];
+		for(; node != NULL; node = node->next){
+			sprintf(txtbuffer, "%05x,%05x -> ", node->page, node->value);
+			DEBUG_print(txtbuffer, DBG_USBGECKO);
+		}
+		DEBUG_print("\n", DBG_USBGECKO);
+	}
+	DEBUG_print("\n\nTLB Cache w dump:\n", DBG_USBGECKO);
+	for(i=0; i<TLB_NUM_SLOTS; ++i){
+		sprintf(txtbuffer, "%d\t", i);
+		DEBUG_print(txtbuffer, DBG_USBGECKO);
+		TLB_hash_node* node = TLB_LUT_w[i];
+		for(; node != NULL; node = node->next){
+			sprintf(txtbuffer, "%05x,%05x -> ", node->page, node->value);
+			DEBUG_print(txtbuffer, DBG_USBGECKO);
+		}
+		DEBUG_print("\n", DBG_USBGECKO);
+	}
+	return "TLB Cache dumped to USB Gecko";
+}
 
 #endif
