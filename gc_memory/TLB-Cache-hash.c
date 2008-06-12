@@ -13,8 +13,8 @@
  */
 
 #include <stdlib.h>
-#include <assert.h>
 #include "TLB-Cache.h"
+#include "../gui/DEBUG.h"
 
 #ifdef USE_TLB_CACHE
 
@@ -70,6 +70,10 @@ static unsigned int inline TLB_hash(unsigned int page){
 }
 
 unsigned int inline TLBCache_get_r(unsigned int page){
+#ifdef DEBUG_TLB
+	sprintf(txtbuffer, "TLB r read %05x\n", page);
+	DEBUG_print(txtbuffer, DBG_USBGECKO);
+#endif
 	TLB_hash_node* node = TLB_LUT_r[ TLB_hash(page) ];
 	
 	for(; node != NULL; node = node->next)
@@ -79,6 +83,10 @@ unsigned int inline TLBCache_get_r(unsigned int page){
 }
 
 unsigned int inline TLBCache_get_w(unsigned int page){
+#ifdef DEBUG_TLB
+	sprintf(txtbuffer, "TLB w read %05x\n", page);
+	DEBUG_print(txtbuffer, DBG_USBGECKO);
+#endif
 	TLB_hash_node* node = TLB_LUT_w[ TLB_hash(page) ];
 	
 	for(; node != NULL; node = node->next)
@@ -88,6 +96,10 @@ unsigned int inline TLBCache_get_w(unsigned int page){
 }
 
 void inline TLBCache_set_r(unsigned int page, unsigned int val){
+#ifdef DEBUG_TLB
+	sprintf(txtbuffer, "TLB r write %05x %08x\n", page, val);
+	DEBUG_print(txtbuffer, DBG_USBGECKO);
+#endif
 	TLB_hash_node* next = TLB_LUT_r[ TLB_hash(page) ];
 	
 	TLB_hash_node* node = malloc( sizeof(TLB_hash_node) );
@@ -107,6 +119,10 @@ void inline TLBCache_set_r(unsigned int page, unsigned int val){
 }
 
 void inline TLBCache_set_w(unsigned int page, unsigned int val){
+#ifdef DEBUG_TLB
+	sprintf(txtbuffer, "TLB r write %05x %08x\n", page, val);
+	DEBUG_print(txtbuffer, DBG_USBGECKO);
+#endif
 	TLB_hash_node* next = TLB_LUT_w[ TLB_hash(page) ];
 	
 	TLB_hash_node* node = malloc( sizeof(TLB_hash_node) );
@@ -125,7 +141,6 @@ void inline TLBCache_set_w(unsigned int page, unsigned int val){
 		}
 }
 
-#include "../gui/DEBUG.h"
 char* TLBCache_dump(){
 	int i;
 	DEBUG_print("\n\nTLB Cache r dump:\n", DBG_USBGECKO);
