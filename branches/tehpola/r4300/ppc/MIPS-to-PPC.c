@@ -2,6 +2,7 @@
    by Mike Slegeir for Mupen64-GC
  ************************************************
    FIXME: Review all branch destinations
+          Delay slots may screw with the static register mappings
    TODO: Complete adding register mapping (invalidate on branches)
          Create FP register mapping and recompile those
          Rewrite any interpretation to behave like normal function calls
@@ -10,9 +11,6 @@
 #include "MIPS-to-PPC.h"
 #include "Interpreter.h"
 #include "Wrappers.h"
-
-// If this is defined true, delay slots will get moved
-#define SUPPORT_DELAY_SLOT 1
 
 // Prototypes for functions used and defined in this file
 static void genCallInterp(MIPS_instr);
@@ -26,45 +24,22 @@ static void genJumpTo(unsigned int loc, unsigned int type);
 static int inline mips_is_jump(MIPS_instr);
 void jump_to(unsigned int);
 
-// Memory to be used in recompiled code
-extern long long int hi, lo; // hi/lo registers
-
-// This should be called before the jump is recompiled
-static inline int check_delaySlot(void){
-#if SUPPORT_DELAY_SLOT
-	if(peek_next_src() == 0){ // MIPS uses 0 as a NOP
-		get_next_src();   // Get rid of the NOP
-		return 0;
-	} else {
-		if(mips_is_jump(peek_next_src())) return CONVERT_WARNING;
-		convert(); // This just moves the delay slot instruction ahead of the branch
-		return 1;
-	}
-#else // SUPPORT_DELAY_SLOT
-	return 0;
-#endif
-}
-
-static inline int signExtend(int value, int size){
-	int signMask = 1 << (size-1);
-	int negMask = 0xffffffff << (size-1);
-	if(value & signMask) value |= negMask;
-	return value;
-}
-
+// Register Mapping
 // r13 holds reg
 #define MIPS_REG_HI 32
 #define MIPS_REG_LO 33
 static int regMap[34];
 
-static void flushRegisters(void){
+static int flushRegisters(void){
 	PowerPC_instr ppc;
-	int i;
+	int i, flushed = 0;
 	for(i=0; i<34; ++i)
 		if(regMap[i] >= 0){
 			GEN_STW(ppc, regMap[i], i*8+4, 13);
 			set_next_dst(ppc);
+			++flushed;
 		}
+	return flushed;
 }
 
 static void invalidateRegisters(void){
@@ -104,12 +79,37 @@ static int mapRegister(int reg){
 	return regMap[reg] = 3;
 }
 
+// Variable to indicate whether the current recompiled instruction
+//   is a delay slot (which needs to have its registers flushed)
+static int isDelaySlot;
+// This should be called before the jump is recompiled
+static inline int check_delaySlot(void){
+	if(peek_next_src() == 0){ // MIPS uses 0 as a NOP
+		get_next_src();   // Get rid of the NOP
+		return 0;
+	} else {
+		if(mips_is_jump(peek_next_src())) return CONVERT_WARNING;
+		isDelaySlot = 1;
+		convert(); // This just moves the delay slot instruction ahead of the branch
+		return 1;
+	}
+}
+
+static inline int signExtend(int value, int size){
+	int signMask = 1 << (size-1);
+	int negMask = 0xffffffff << (size-1);
+	if(value & signMask) value |= negMask;
+	return value;
+}
+
 
 static int (*gen_ops[64])(MIPS_instr);
 
 int convert(void){
 	MIPS_instr mips = get_next_src();
-	return gen_ops[MIPS_GET_OPCODE(mips)](mips);
+	int result = gen_ops[MIPS_GET_OPCODE(mips)](mips);
+	if(isDelaySlot){ flushRegisters(); isDelaySlot = 0; }
+	return result;
 }
 
 static int NI(MIPS_instr mips){
@@ -125,28 +125,24 @@ static int J(MIPS_instr mips){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 	
+	flushRegisters();
+	
 #ifdef INTERPRET_J
 	genJumpTo(MIPS_GET_LI(mips), JUMPTO_ADDR);
 #else // INTERPRET_J
-	// If we're jumping out, we need space to set things up
-	int j_out;
-	if(j_out = is_j_out(MIPS_GET_LI(mips), 1)){
-		// Allocate space for jumping out, 4 instrs
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
+	// If we're jumping out, we can't just use a branch instruction
+	if(is_j_out(MIPS_GET_LI(mips), 1)){
+		genJumpTo(MIPS_GET_LI(mips), JUMPTO_ADDR);
+	} else {
+		// Even though this is an absolute branch
+		//   in pass 2, we generate a relative branch
+		GEN_B(ppc, add_jump(MIPS_GET_LI(mips), 1, 0), 0, 0);
+		set_next_dst(ppc);
 	}
-	// Even though this is an absolute branch
-	//   in pass 2, we generate a relative branch
-	GEN_B(ppc, add_jump(MIPS_GET_LI(mips), 1, j_out), 0, 0);
-	set_next_dst(ppc);
-	// If we're jumping out, we need space to 0 r0
-	if(j_out) set_next_dst(PPC_NOP);
 #endif
 	
 	// Let's still recompile the delay slot in place in case its branched to
-	if(delaySlot) unget_last_src();
+	if(delaySlot){ unget_last_src(); isDelaySlot = 1; }
 	else nop_ignored();
 	
 #ifdef INTERPRET_J
@@ -163,40 +159,36 @@ static int JAL(MIPS_instr mips){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 	
-	// TODO: If I can figure out using the LR,
-	//         this might only be necessary for interp
 	// Set LR to next instruction
+	int lr = mapRegisterNew(MIPS_REG_LR);
 	// lis	lr, pc@ha(0)
-	GEN_LIS(ppc, MIPS_REG_LR, get_src_pc()>>16);
+	GEN_LIS(ppc, lr, get_src_pc()>>16);
 	set_next_dst(ppc);
 	// la	lr, pc@l(lr)
-	GEN_LI(ppc, MIPS_REG_LR, MIPS_REG_LR, get_src_pc());
+	GEN_LI(ppc, lr, lr, get_src_pc());
 	set_next_dst(ppc);
+	
+	flushRegisters();
 	
 #ifdef INTERPRET_JAL
 	genJumpTo(MIPS_GET_LI(mips), JUMPTO_ADDR);
 #else // INTERPRET_JAL
-	// If we're jumping out, we need space to set things up
-	int j_out;
-	if(j_out = is_j_out(MIPS_GET_LI(mips), 1)){
-		// Allocate space for jumping out, 4 instrs
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
+	// If we're jumping out, we can't just use a branch instruction
+	if(is_j_out(MIPS_GET_LI(mips), 1)){
+		genJumpTo(MIPS_GET_LI(mips), JUMPTO_ADDR);
+	} else {
+		// Even though this is an absolute branch
+		//   in pass 2, we generate a relative branch
+		// TODO: If I can figure out using the LR, use it!
+		GEN_B(ppc, add_jump(MIPS_GET_LI(mips), 1, 0), 0, 0);
+		set_next_dst(ppc);
 	}
-	// Even though this is an absolute branch
-	//   in pass 2, we generate a relative branch
-	// TODO: If I can figure out using the LR, use it!
-	GEN_B(ppc, add_jump(MIPS_GET_LI(mips), 1, j_out), 0, 0);
-	set_next_dst(ppc);
-	// If we're jumping out, we need space to 0 r0
-	if(j_out) set_next_dst(PPC_NOP);
 #endif
 	
 	// Let's still recompile the delay slot in place in case its branched to
 	if(delaySlot){
 		unget_last_src();
+		isDelaySlot = 1;
 		// Step over the already executed delay slot if we ever
 		//   actually use the real LR for JAL
 		// b delaySlot+1
@@ -215,7 +207,10 @@ static int BEQ(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	
 	// cmp ra, rb
-	GEN_CMP(ppc, MIPS_GET_RA(mips), MIPS_GET_RB(mips), 7);
+	GEN_CMP(ppc,
+	        mapRegister(MIPS_GET_RA(mips)),
+	        mapRegister(MIPS_GET_RB(mips)),
+	        7);
 	set_next_dst(ppc);
 	
 	// Check the delay slot, and note how big it is
@@ -223,33 +218,33 @@ static int BEQ(MIPS_instr mips){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 	
+	flushRegisters();
+	
 #ifdef INTERPRET_BEQ
 	// bne <past jumpto & delay>
 	GEN_BNE(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+2, 0, 0);
 	set_next_dst(ppc);
 	genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
 #else // INTERPRET_BEQ
-	// If we're jumping out, we need space to set things up
-	int j_out;
-	if(j_out = is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
-		// Allocate space for jumping out, 4 instrs
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
+	// If we're jumping out, we can't just use a branch instruction
+	if(is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
+		// bne <past jumpto & delay>
+		GEN_BNE(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+2, 0, 0);
+		set_next_dst(ppc);
+		genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
+	} else {
+		// The actual branch
+		GEN_BEQ(ppc, 7,
+		        add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, 0),
+		        0, 0);
+		set_next_dst(ppc);
 	}
-	// The actual branch
-	GEN_BEQ(ppc, 7,
-	        add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, j_out),
-	        0, 0);
-	set_next_dst(ppc);
-	// If we're jumping out, we need space to 0 r0
-	if(j_out) set_next_dst(PPC_NOP);
 #endif
 	
 	// Let's still recompile the delay slot in place in case its branched to
 	if(delaySlot){
 		unget_last_src();
+		isDelaySlot = 1;
 		// Step over the already executed delay slot if
 		//   the branch isn't taken
 		// b delaySlot+1
@@ -268,7 +263,10 @@ static int BNE(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	
 	// cmp ra, rb
-	GEN_CMP(ppc, MIPS_GET_RA(mips), MIPS_GET_RB(mips), 7);
+	GEN_CMP(ppc,
+	        mapRegister(MIPS_GET_RA(mips)),
+	        mapRegister(MIPS_GET_RB(mips)),
+	        7);
 	set_next_dst(ppc);
 	
 	// Check the delay slot, and note how big it is
@@ -276,33 +274,33 @@ static int BNE(MIPS_instr mips){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 	
+	flushRegisters();
+	
 #ifdef INTERPRET_BNE
 	// beq <past jumpto & delay>
 	GEN_BEQ(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+2, 0, 0);
 	set_next_dst(ppc);
 	genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
 #else // INTERPRET_BNE
-	// If we're jumping out, we need space to set things up
-	int j_out;
+	// If we're jumping out, we can't just branch
 	if(j_out = is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
-		// Allocate space for jumping out, 4 instrs
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
+		// beq <past jumpto & delay>
+		GEN_BEQ(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+2, 0, 0);
+		set_next_dst(ppc);
+		genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
+	} else {
+		// The actual branch
+		GEN_BNE(ppc, 7,
+		        add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, 0),
+		        0, 0);
+		set_next_dst(ppc);
 	}
-	// The actual branch
-	GEN_BNE(ppc, 7,
-	        add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, j_out),
-	        0, 0);
-	set_next_dst(ppc);
-	// If we're jumping out, we need space to 0 r0
-	if(j_out) set_next_dst(PPC_NOP);
 #endif
 	
 	// Let's still recompile the delay slot in place in case its branched to
 	if(delaySlot){
 		unget_last_src();
+		isDelaySlot = 1;
 		// Step over the already executed delay slot if
 		//   the branch isn't taken
 		// b delaySlot+1
@@ -321,7 +319,7 @@ static int BLEZ(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	
 	// cmpi ra, 0
-	GEN_CMPI(ppc, MIPS_GET_RA(mips), 0, 7);
+	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 7);
 	set_next_dst(ppc);
 	
 	// Check the delay slot, and note how big it is
@@ -329,33 +327,33 @@ static int BLEZ(MIPS_instr mips){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 	
+	flushRegisters();
+	
 #ifdef INTERPRET_BLEZ
 	// bgt <past jumpto & delay>
 	GEN_BGT(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+2, 0, 0);
 	set_next_dst(ppc);
 	genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
 #else // INTERPRET_BLEZ
-	// If we're jumping out, we need space to set things up
-	int j_out;
+	// If we're jumping out, we can't just branch
 	if(j_out = is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
-		// Allocate space for jumping out, 4 instrs
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
+		// bgt <past jumpto & delay>
+		GEN_BGT(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+2, 0, 0);
+		set_next_dst(ppc);
+		genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
+	} else {
+		// The actual branch
+		GEN_BLE(ppc, 7,
+		        add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, 0),
+		        0, 0);
+		set_next_dst(ppc);
 	}
-	// The actual branch
-	GEN_BLE(ppc, 7,
-	        add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, j_out),
-	        0, 0);
-	set_next_dst(ppc);
-	// If we're jumping out, we need space to 0 r0
-	if(j_out) set_next_dst(PPC_NOP);
 #endif
 	
 	// Let's still recompile the delay slot in place in case its branched to
 	if(delaySlot){
 		unget_last_src();
+		isDelaySlot = 1;
 		// Step over the already executed delay slot if
 		//   the branch isn't taken
 		// b delaySlot+1
@@ -374,7 +372,7 @@ static int BGTZ(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	
 	// cmpi ra, 0
-	GEN_CMPI(ppc, MIPS_GET_RA(mips), 0, 7);
+	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 7);
 	set_next_dst(ppc);
 	
 	// Check the delay slot, and note how big it is
@@ -382,33 +380,33 @@ static int BGTZ(MIPS_instr mips){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 	
+	flushRegisters();
+	
 #ifdef INTERPRET_BGTZ
 	// ble <past jumpto & delay>
 	GEN_BLE(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+2, 0, 0);
 	set_next_dst(ppc);
 	genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
 #else // INTERPRET_BGTZ
-	// If we're jumping out, we need space to set things up
-	int j_out;
-	if(j_out = is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
-		// Allocate space for jumping out, 4 instrs
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
+	// If we're jumping out, we can't just branch
+	if(is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
+		// ble <past jumpto & delay>
+		GEN_BLE(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+2, 0, 0);
+		set_next_dst(ppc);
+		genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
+	} else {
+		// The actual branch
+		GEN_BGT(ppc, 7,
+		        add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, 0),
+		        0, 0);
+		set_next_dst(ppc);
 	}
-	// The actual branch
-	GEN_BGT(ppc, 7,
-	        add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, j_out),
-	        0, 0);
-	set_next_dst(ppc);
-	// If we're jumping out, we need space to 0 r0
-	if(j_out) set_next_dst(PPC_NOP);
 #endif
 	
 	// Let's still recompile the delay slot in place in case its branched to
 	if(delaySlot){
 		unget_last_src();
+		isDelaySlot = 1;
 		// Step over the already executed delay slot if
 		//   the branch isn't taken
 		// b delaySlot+1
@@ -517,8 +515,13 @@ static int BEQL(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	
 	// cmp ra, rb
-	GEN_CMP(ppc, MIPS_GET_RA(mips), MIPS_GET_RB(mips), 7);
+	GEN_CMP(ppc,
+	        mapRegister(MIPS_GET_RA(mips)),
+	        mapRegister(MIPS_GET_RB(mips)),
+	        7);
 	set_next_dst(ppc);
+	
+	flushRegisters();
 	
 	// bne <past jumpto & delay>
 	int likely_id = add_jump_special(0);
@@ -535,30 +538,24 @@ static int BEQL(MIPS_instr mips){
 	set_jump_special(likely_id, JUMPTO_OFF_SIZE+2*delaySlot+1);
 	genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
 #else // INTERPRET_BEQL
-	int j_out;
-	// If we're jumping out, we need space to set things up
-	if(j_out = is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
+	// If we're jumping out, we can't just branch
+	if(is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
 		// Jump over the generated jump, and both delay slots
-		set_jump_special(likely_id, 6+2*delaySlot+1);
-		// Allocate space for jumping out, 4 instrs
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-	} else
+		set_jump_special(likely_id, JUMPTO_OFF_SIZE+2*delaySlot+1);
+		genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
+	} else {
 		// Jump over the generated jump, and both delay slots
 		set_jump_special(likely_id, 1+2*delaySlot+1);
-	// The actual branch
-	GEN_BEQ(ppc, 7,
-	        add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, j_out),
-	        0, 0);
-	set_next_dst(ppc);
-	// If we're jumping out, we need space to 0 r0
-	if(j_out) set_next_dst(PPC_NOP);
+		// The actual branch
+		GEN_BEQ(ppc, 7,
+		        add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, 0),
+		        0, 0);
+		set_next_dst(ppc);
+	}
 #endif
 	
 	// Let's still recompile the delay slot in place in case its branched to
-	if(delaySlot) unget_last_src();
+	if(delaySlot){ unget_last_src(); isDelaySlot = 1; }
 	else nop_ignored();
 	
 #ifdef INTERPRET_BEQL
@@ -572,8 +569,13 @@ static int BNEL(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	
 	// cmp ra, rb
-	GEN_CMP(ppc, MIPS_GET_RA(mips), MIPS_GET_RB(mips), 7);
+	GEN_CMP(ppc,
+	        mapRegister(MIPS_GET_RA(mips)),
+	        mapRegister(MIPS_GET_RB(mips)),
+	        7);
 	set_next_dst(ppc);
+	
+	flushRegisters();
 	
 	// beq <past jumpto & delay>
 	int likely_id = add_jump_special(0);
@@ -590,30 +592,24 @@ static int BNEL(MIPS_instr mips){
 	set_jump_special(likely_id, JUMPTO_OFF_SIZE+2*delaySlot+1);
 	genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
 #else // INTERPRET_BNEL
-	int j_out;
-	// If we're jumping out, we need space to set things up
-	if(j_out = is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
+	// If we're jumping out, we need to do more than just branch
+	if(is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
 		// Jump over the generated jump, and both delay slots
-		set_jump_special(likely_id, 6+2*delaySlot+1);
-		// Allocate space for jumping out, 4 instrs
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-	} else
+		set_jump_special(likely_id, JUMPTO_OFF_SIZE+2*delaySlot+1);
+		genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
+	} else {
 		// Jump over the generated jump, and both delay slots
 		set_jump_special(likely_id, 1+2*delaySlot+1);
-	// The actual branch
-	GEN_BNE(ppc, 7,
-	        add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, j_out),
-	        0, 0);
-	set_next_dst(ppc);
-	// If we're jumping out, we need space to 0 r0
-	if(j_out) set_next_dst(PPC_NOP);
+		// The actual branch
+		GEN_BNE(ppc, 7,
+		        add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, j_out),
+		        0, 0);
+		set_next_dst(ppc);
+	}
 #endif
 	
 	// Let's still recompile the delay slot in place in case its branched to
-	if(delaySlot) unget_last_src();
+	if(delaySlot){ unget_last_src(); isDelaySlot = 1; }
 	else nop_ignored();
 	
 #ifdef INTERPRET_BNEL
@@ -627,8 +623,10 @@ static int BLEZL(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	
 	// cmpi ra, 0
-	GEN_CMPI(ppc, MIPS_GET_RA(mips), 0, 7);
+	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 7);
 	set_next_dst(ppc);
+	
+	flushRegisters();
 	
 	// bgt <past jumpto & delay>
 	int likely_id = add_jump_special(0);
@@ -645,30 +643,24 @@ static int BLEZL(MIPS_instr mips){
 	set_jump_special(likely_id, JUMPTO_OFF_SIZE+2*delaySlot+1);
 	genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
 #else // INTERPRET_BLEZL
-	int j_out;
-	// If we're jumping out, we need space to set things up
-	if(j_out = is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
+	// If we're jumping out, we can't just branch
+	if(is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
 		// Jump over the generated jump, and both delay slots
-		set_jump_special(likely_id, 6+2*delaySlot+1);
-		// Allocate space for jumping out, 4 instrs
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-	} else
+		set_jump_special(likely_id, JUMPTO_OFF_SIZE+2*delaySlot+1);
+		genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
+	} else {
 		// Jump over the generated jump, and both delay slots
 		set_jump_special(likely_id, 1+2*delaySlot+1);
-	// The actual branch
-	GEN_BLE(ppc, 7,
-	        add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, j_out),
-	        0, 0);
-	set_next_dst(ppc);
-	// If we're jumping out, we need space to 0 r0
-	if(j_out) set_next_dst(PPC_NOP);
+		// The actual branch
+		GEN_BLE(ppc, 7,
+		        add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, j_out),
+		        0, 0);
+		set_next_dst(ppc);
+	}
 #endif
 	
 	// Let's still recompile the delay slot in place in case its branched to
-	if(delaySlot) unget_last_src();
+	if(delaySlot){ unget_last_src(); isDelaySlot = 1; }
 	else nop_ignored();
 	
 #ifdef INTERPRET_BLEZL
@@ -682,8 +674,10 @@ static int BGTZL(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	
 	// cmpi ra, 0
-	GEN_CMPI(ppc, MIPS_GET_RA(mips), 0, 7);
+	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 7);
 	set_next_dst(ppc);
+	
+	flushRegisters();
 	
 	// ble <past jumpto & delay>
 	int likely_id = add_jump_special(0);
@@ -700,30 +694,24 @@ static int BGTZL(MIPS_instr mips){
 	set_jump_special(likely_id, JUMPTO_OFF_SIZE+2*delaySlot+1);
 	genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
 #else // INTERPRET_BGTZL
-	int j_out;
-	// If we're jumping out, we need space to set things up
-	if(j_out = is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
+	// If we're jumping out, we need to trampoline
+	if(is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
 		// Jump over the generated jump, and both delay slots
-		set_jump_special(likely_id, 6+2*delaySlot+1);
-		// Allocate space for jumping out, 4 instrs
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-	} else
+		set_jump_special(likely_id, JUMPTO_OFF_SIZE+2*delaySlot+1);
+		genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
+	} else {
 		// Jump over the generated jump, and both delay slots
 		set_jump_special(likely_id, 1+2*delaySlot+1);
-	// The actual branch
-	GEN_BGT(ppc, 7,
-	        add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, j_out),
-	        0, 0);
-	set_next_dst(ppc);
-	// If we're jumping out, we need space to 0 r0
-	if(j_out) set_next_dst(PPC_NOP);
+		// The actual branch
+		GEN_BGT(ppc, 7,
+		        add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, j_out),
+		        0, 0);
+		set_next_dst(ppc);
+	}
 #endif
 	
 	// Let's still recompile the delay slot in place in case its branched to
-	if(delaySlot) unget_last_src();
+	if(delaySlot){ unget_last_src(); isDelaySlot = 1; }
 	else nop_ignored();
 	
 #ifdef INTERPRET_BGTZL
@@ -1101,16 +1089,16 @@ static int JR(MIPS_instr mips){
 	// Check the delay slot, and note how big it is
 	PowerPC_instr* preDelay = get_curr_dst();
 	check_delaySlot();
-	int delaySlot = get_curr_dst() - preDelay;
+	int delaySlot = get_curr_dst() - preDelay;	
 	
 #ifdef INTERPRET_JR
-	genJumpTo(MIPS_GET_RS(mips), JUMPTO_REG);
+	genJumpTo(mapRegister(MIPS_GET_RS(mips)), JUMPTO_REG);
 #else // INTERPRET_JR
 	// TODO: jr
 #endif
 	
 	// Let's still recompile the delay slot in place in case its branched to
-	if(delaySlot) unget_last_src();
+	if(delaySlot){ unget_last_src(); isDelaySlot = 1; }
 	else nop_ignored();
 	
 #ifdef INTERPRET_JR
@@ -1130,15 +1118,18 @@ static int JALR(MIPS_instr mips){
 	// TODO: If I can figure out using the LR,
 	//         this might only be necessary for interp
 	// Set LR to next instruction
+	int rd = mapRegisterNew(MIPS_GET_RD(mips));
 	// lis	lr, pc@ha(0)
-	GEN_LIS(ppc, MIPS_GET_RD(mips), get_src_pc()>>16);
+	GEN_LIS(ppc, rd, get_src_pc()>>16);
 	set_next_dst(ppc);
 	// la	lr, pc@l(lr)
-	GEN_LI(ppc, MIPS_GET_RD(mips), MIPS_GET_RD(mips), get_src_pc());
+	GEN_LI(ppc, rd, rd, get_src_pc());
 	set_next_dst(ppc);
 	
+	flushRegisters();
+	
 #ifdef INTERPRET_JALR
-	genJumpTo(MIPS_GET_RS(mips), JUMPTO_REG);
+	genJumpTo(mapRegister(MIPS_GET_RS(mips)), JUMPTO_REG);
 #else // INTERPRET_JALR
 	// TODO: jalr
 #endif
@@ -1146,6 +1137,7 @@ static int JALR(MIPS_instr mips){
 	// Let's still recompile the delay slot in place in case its branched to
 	if(delaySlot){
 		unget_last_src();
+		isDelaySlot = 1;
 		// Step over the already executed delay slot if we ever
 		//   actually use the real LR for JAL
 		// b delaySlot+1
@@ -1197,16 +1189,7 @@ static int MFHI(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_HILO
-	// FIXME: Set a flag in memory whether this value is only 32-bit
-	/*// la rd, &hi
-	GEN_LIS(ppc, MIPS_GET_RD(mips), ((unsigned int)&hi)>>16);
-	set_next_dst(ppc);
-	GEN_LI(ppc, MIPS_GET_RD(mips), (unsigned int)&hi);
-	set_next_dst(ppc);
-	// Use offset 4 because we want the LSW of the DW
-	// lwz rd, 4(rd)
-	GEN_LWZ(ppc, MIPS_GET_RD(mips), 4, MIPS_GET_RD(mips));
-	set_next_dst(ppc);*/
+	
 	// mr rd, hi
 	GEN_ORI(ppc,
 	        mapRegisterNew( MIPS_GET_RD(mips) ),
@@ -1242,16 +1225,7 @@ static int MFLO(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_HILO
-	// FIXME: Set a flag in memory whether this value is only 32-bit
-	/*// la rd, &lo
-	GEN_LIS(ppc, MIPS_GET_RD(mips), ((unsigned int)&lo)>>16);
-	set_next_dst(ppc);
-	GEN_LI(ppc, MIPS_GET_RD(mips), (unsigned int)&lo);
-	set_next_dst(ppc);
-	// Use offset 4 because we want the LSW of the DW
-	// lwz rd, 4(rd)
-	GEN_LWZ(ppc, MIPS_GET_RD(mips), 4, MIPS_GET_RD(mips));
-	set_next_dst(ppc);*/
+	
 	// mr rd, lo
 	GEN_ORI(ppc,
 	        mapRegisterNew( MIPS_GET_RD(mips) ),
@@ -1735,10 +1709,12 @@ static int REGIMM(MIPS_instr mips){
 	int likely_id = -1;
 	
 	// cmpi ra, 0
-	GEN_CMPI(ppc, MIPS_GET_RA(mips), 0, 7);
+	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 7);
 	set_next_dst(ppc);
 	
 	if(likely){
+		flushRegisters();
+		
 		// b[!cond] <past jumpto & delay>
 		likely_id = add_jump_special(0);
 		GEN_BC(ppc, likely_id, 0, 0,
@@ -1762,27 +1738,42 @@ static int REGIMM(MIPS_instr mips){
 	}
 	if(link){
 		// Set LR to next instruction
+		int lr = mapRegisterNew(MIPS_REG_LR);
 		// lis	lr, pc@ha(0)
-		GEN_LIS(ppc, MIPS_REG_LR, get_src_pc()>>16);
+		GEN_LIS(ppc, lr, get_src_pc()>>16);
 		set_next_dst(ppc);
 		// la	lr, pc@l(lr)
-		GEN_LI(ppc, MIPS_REG_LR, MIPS_REG_LR, get_src_pc());
+		GEN_LI(ppc, lr, lr, get_src_pc());
 		set_next_dst(ppc);
+		
+		flushRegisters();
 	}
 	genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
 #else // INTERPRET_REGIMM
 	// TODO: Link behavior if(link)
-	// If we're jumping out, we need space to set things up
-	int j_out;
-	if(j_out = is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
+	// If we're jumping out, we need to make random comments
+	if(is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
 		if(likely)
-			// TODO: set_jump_special
-			;
-		// Allocate space for jumping out, 4 instrs
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
+			set_jump_special(likely_id, JUMPTO_OFF_SIZE+2*delaySlot+1);
+		else {
+			// b[!cond] <past jumpto & delay>
+			GEN_BC(ppc, JUMPTO_OFF_SIZE+delaySlot+2,
+			       0, 0, cond ? 0xc : 0x4, 28);
+			set_next_dst(ppc);
+		}
+		if(link){
+			// Set LR to next instruction
+			int lr = mapRegisterNew(MIPS_REG_LR);
+			// lis	lr, pc@ha(0)
+			GEN_LIS(ppc, lr, get_src_pc()>>16);
+			set_next_dst(ppc);
+			// la	lr, pc@l(lr)
+			GEN_LI(ppc, lr, lr, get_src_pc());
+			set_next_dst(ppc);
+			
+			flushRegisters();
+		}
+		genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
 	} else if(likely)
 		// TODO: set_jump_special
 		;
@@ -1806,7 +1797,7 @@ static int REGIMM(MIPS_instr mips){
 	}
 	
 	// Let's still recompile the delay slot in place in case its branched to
-	if(delaySlot) unget_last_src();
+	if(delaySlot){ unget_last_src(); isDelaySlot = 1; }
 	else nop_ignored();
 	
 #ifdef INTERPRET_REGIMM
@@ -1909,32 +1900,32 @@ static int BC(MIPS_instr mips){
 #ifdef INTERPRET_FP
 	// Load the value from FCR31 and use that to set condition
 	extern long FCR31;
-	// mtctr r1
-	GEN_MTCTR(ppc, 1);
+	// mtctr r3
+	GEN_MTCTR(ppc, 3);
 	set_next_dst(ppc);
-	// la r1, &FCR31
-	GEN_LIS(ppc, 1, ((unsigned int)&FCR31)>>16);
+	// la r3, &FCR31
+	GEN_LIS(ppc, 3, ((unsigned int)&FCR31)>>16);
 	set_next_dst(ppc);
-	GEN_LI(ppc, 1, 1, (unsigned int)&FCR31);
+	GEN_LI(ppc, 3, 3, (unsigned int)&FCR31);
 	set_next_dst(ppc);
-	// lwz r1, 0(r1)
-	GEN_LWZ(ppc, 1, 0, 1);
+	// lwz r3, 0(r3)
+	GEN_LWZ(ppc, 3, 0, 3);
 	set_next_dst(ppc);
 	// The intention here is to shift the MSb
 	//   to the bit that will be checked by the bc
-	// srwi r1, r1, 20+MIPS_GET_CC(mips)
-	GEN_SRWI(ppc, 1, 1, 20+MIPS_GET_CC(mips));
+	// srwi r3, r3, 20+MIPS_GET_CC(mips)
+	GEN_SRWI(ppc, 3, 3, 20+MIPS_GET_CC(mips));
 	set_next_dst(ppc);
 	// FIXME: This destroys other CCs
-	// mtcrf cr5 & cr6, 1
+	// mtcrf cr5 & cr6, 3
 	ppc = NEW_PPC_INSTR();
 	PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
 	PPC_SET_FUNC  (ppc, PPC_FUNC_MTCRF);
-	PPC_SET_RD    (ppc, 1);
+	PPC_SET_RD    (ppc, 3);
 	ppc |= 0x06 << 12; // Set CRM to CR5
 	set_next_dst(ppc);
-	// mfctr r1
-	GEN_MFCTR(ppc, 1);
+	// mfctr r3
+	GEN_MFCTR(ppc, 3);
 	set_next_dst(ppc);
 #endif
 	
@@ -1965,31 +1956,31 @@ static int BC(MIPS_instr mips){
 	}
 	genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
 #else // INTERPRET_BC
-	int j_out;
-	// If we're jumping out, we need space to set things up
-	if(j_out = is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
+	// If we're jumping out, we need pizza
+	if(is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
 		if(likely)
 			// Jump over the generated jump, and both delay slots
-			set_jump_special(likely_id, 6+2*delaySlot+1);
-		// Allocate space for jumping out, 4 instrs
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-		set_next_dst(PPC_NOP);
-	} else if(likely)
+			set_jump_special(likely_id, JUMPTO_OFF_SIZE+2*delaySlot+1);
+		else {
+			// b[!cond] <past jumpto & delay> 
+			GEN_BC(ppc, JUMPTO_OFF_SIZE+delaySlot+2, 0, 0,
+			       cond ? 0x4 : 0xc,
+			       20+MIPS_GET_CC(mips)); 
+			set_next_dst(ppc);
+		}
+		genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
+	} else if(likely){
 		// Jump over the generated jump, and both delay slots
 		set_jump_special(likely_id, 1+2*delaySlot+1);
 	
-	// b[cond] <dest> 
-	GEN_BC(ppc, 
-	       add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, j_out),
-	       0, 0,
-	       cond ? 0xc : 0x4,
-	       20+MIPS_GET_CC(mips));
-	set_next_dst(ppc);
-	
-	// If we're jumping out, we need space to 0 r0
-	if(j_out) set_next_dst(PPC_NOP);
+		// b[cond] <dest> 
+		GEN_BC(ppc, 
+		       add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, j_out),
+		       0, 0,
+		       cond ? 0xc : 0x4,
+		       20+MIPS_GET_CC(mips));
+		set_next_dst(ppc);
+	}
 #endif
 	
 	if(!likely){
@@ -2002,7 +1993,7 @@ static int BC(MIPS_instr mips){
 	}
 	
 	// Let's still recompile the delay slot in place in case its branched to
-	if(delaySlot) unget_last_src();
+	if(delaySlot){ unget_last_src(); isDelaySlot = 1; }
 	else nop_ignored();
 	
 #ifdef INTERPRET_BC
@@ -2080,127 +2071,13 @@ static int (*gen_ops[64])(MIPS_instr) =
 
 static void genCallInterp(MIPS_instr mips){
 	PowerPC_instr ppc = NEW_PPC_INSTR();
-	
-	// mtctr r1
-	GEN_MTCTR(ppc, 1);
-	set_next_dst(ppc);
-	// lis r1, addr@ha(0)
-	GEN_LIS(ppc, 1, (unsigned int)decodeNInterpret>>16);
-	set_next_dst(ppc);
-	// li r1, addr@l(r1)
-	GEN_LI(ppc, 1, 1, (unsigned int)decodeNInterpret);
-	set_next_dst(ppc);
-	// mfctr r0
-	GEN_MFCTR(ppc, 0);
-	set_next_dst(ppc);
-	// mtctr r1
-	GEN_MTCTR(ppc, 1);
-	set_next_dst(ppc);
-	// Load the instruction
-	// lis r1, mips@ha(0)
-	GEN_LIS(ppc, 1, mips>>16);
-	set_next_dst(ppc);
-	// li r1, mips@l(r1)
-	GEN_LI(ppc, 1, 1, mips);
-	set_next_dst(ppc);
-	
-	// Swap r1 and r0
-	// xor r1, r0, r1
-	GEN_XOR(ppc, 1, 0, 1);
-	set_next_dst(ppc);
-	// xor r0, r1, r0
-	GEN_XOR(ppc, 0, 1, 0);
-	set_next_dst(ppc);
-	// xor r1, r0, r1
-	GEN_XOR(ppc, 1, 0, 1);
-	set_next_dst(ppc);
-	
-	// NOTE: Now mips is in r0 and r1 is as it was
-	//         and the ctr has &decodeNInterpret
-	
-	// TODO: What to do here?
-	// Then save the lr
-#if 0
-	// mflr MIPS_REG_LR
-	// TODO
-	set_next_dst(ppc);
-#else
-	set_next_dst(PPC_NOP); // This is a NOP placeholder
-#endif
-	
-	// Call the interpreter
-	// bctrl
-	GEN_BCTRL(ppc);
-	set_next_dst(ppc);
-	
-	// TODO: Do something?
-	// Restore the lr
-#if 0
-	// mtlr MIPS_GET_LR
-	// TODO
-	set_next_dst(ppc);
-#else
-	set_next_dst(PPC_NOP); // This is a NOP placeholder
-#endif
+	flushRegisters();
+	// TODO: genCallInterp
 }
 
 static void genJumpTo(unsigned int loc, unsigned int type){
 	PowerPC_instr ppc = NEW_PPC_INSTR();
-	unsigned int locReg = (type == JUMPTO_REG) ? loc : 0;
-	//mtctr	r1
-	GEN_MTCTR(ppc, 1);
-	set_next_dst(ppc);
-	// If we're jumping to an address, load it in r0
-	if(type != JUMPTO_REG){
-		loc <<= 2;
-		if(type == JUMPTO_OFF) loc += get_src_pc();
-		else loc |= get_src_pc() & 0xf0000000;
-		// lis	r1, loc@ha(0)
-		GEN_LIS(ppc, 1, loc>>16);
-		set_next_dst(ppc);
-		// la	r0, loc@l(r1)
-		GEN_LI(ppc, locReg, 1, loc);
-		set_next_dst(ppc);
-	}
-	//lis	r1, emu_reg@ha(0)
-	GEN_LIS(ppc, 1, (unsigned int)emu_reg>>16);
-	set_next_dst(ppc);
-	//la	r1, emu_reg@l(r1)
-	GEN_LI(ppc, 1, 1, (unsigned int)emu_reg);
-	set_next_dst(ppc);
-	//stw	RS, 3*4(r1)       // pass dest address as arg0
-	GEN_STW(ppc, locReg, 3*4, 1);
-	set_next_dst(ppc);
-	//lis	r1, jump_to@ha(0)
-	GEN_LIS(ppc, 1, (unsigned int)jump_to>>16);
-	set_next_dst(ppc);
-	//la	r0, jump_to@l(r1)
-	GEN_LI(ppc, 0, 1, (unsigned int)jump_to);
-	set_next_dst(ppc);
-	//lis	r1, &return_address@ha(0)
-	GEN_LIS(ppc, 1, (unsigned int)&return_address>>16);
-	set_next_dst(ppc);
-	//la	r1, &return_address@l(r1)
-	GEN_LI(ppc, 1, 1, (unsigned int)&return_address);
-	set_next_dst(ppc);
-	//stw	r0, 0(r1) // return to jump_to(dest)
-	GEN_STW(ppc, 0, 0, 1);
-	set_next_dst(ppc);
-	//lis	r1, return_from_code@ha(0)
-	GEN_LIS(ppc, 1, (unsigned int)return_from_code>>16);
-	set_next_dst(ppc);
-	//la	r0, return_from_code@l(r1)
-	GEN_LI(ppc, 0, 1, (unsigned int)return_from_code);
-	set_next_dst(ppc);
-	//mfctr	r1
-	GEN_MFCTR(ppc, 1);
-	set_next_dst(ppc);
-	//mtctr	r0
-	GEN_MTCTR(ppc, 0);
-	set_next_dst(ppc);
-	//bctr		// return_from_code();
-	GEN_BCTR(ppc);
-	set_next_dst(ppc);
+	// TODO: genJumpTo: drop back to the trampoline, invalidate if its a JR
 }
 
 static int mips_is_jump(MIPS_instr instr){
