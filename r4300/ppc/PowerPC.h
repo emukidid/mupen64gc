@@ -689,4 +689,18 @@ PowerPC_instr Instruction(int opcode, ...);
 	  PPC_SET_RD    (ppc, (ra)); \
 	  PPC_SET_RB    (ppc, (rb)); }
 
+#define GEN_BLR(ppc,lk) \
+	{ ppc = NEW_PPC_INSTR(); \
+	  PPC_SET_OPCODE(ppc, PPC_OPCODE_XL); \
+	  PPC_SET_FUNC  (ppc, PPC_FUNC_BCLR); \
+	  PPC_SET_BO    (ppc, 0x1f); \
+	  PPC_SET_LK    (ppc, lk); }
+
+#define GEN_MTLR(ppc,rs) \
+	{ ppc = NEW_PPC_INSTR(); \
+	  PPC_SET_OPCODE(ppc, PPC_OPCODE_X); \
+	  PPC_SET_FUNC  (ppc, PPC_FUNC_MTSPR); \
+	  PPC_SET_SPR   (ppc, 0x100); \
+	  PPC_SET_RD    (ppc, rs); }
+
 #endif
