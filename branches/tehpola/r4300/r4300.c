@@ -1864,7 +1864,8 @@ void go()
 	//printf("dynamic recompiler\n");
 	init_blocks();
 #ifdef PPC_DYNAREC
-	jump_to(0xa4000040);
+	//jump_to(0xa4000040);
+	dynarec(0xa400040);
 #else
 	code = (void *)(actual->code+(actual->block[0x40/4].local_addr));
 	dyna_start(code);

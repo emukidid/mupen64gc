@@ -2,7 +2,6 @@
    by Mike Slegeir for Mupen64-GC
  ************************************************
    FIXME: Review all branch destinations
-          Delay slots may screw with the static register mappings
    TODO: Complete adding register mapping (invalidate on branches)
          Create FP register mapping and recompile those
          Rewrite any interpretation to behave like normal function calls
@@ -2072,12 +2071,46 @@ static int (*gen_ops[64])(MIPS_instr) =
 static void genCallInterp(MIPS_instr mips){
 	PowerPC_instr ppc = NEW_PPC_INSTR();
 	flushRegisters();
-	// TODO: genCallInterp
+	// Load the address of decodeNInterpret
+	GEN_LIS(ppc, 3, ((unsigned int)decodeNInterpret)>>16);
+	set_next_dst(ppc);
+	GEN_LI(ppc, 3, 3, (unsigned int)decodeNInterpret);
+	set_next_dst(ppc);
+	// Move it to ctr for a bctr
+	GEN_MTCTR(ppc, 3);
+	set_next_dst(ppc);
+	// Load our argument into r3 (mips)
+	GEN_LIS(ppc, 3, mips>>16);
+	set_next_dst(ppc);
+	GEN_LI(ppc, 3, 3, mips);
+	set_next_dst(ppc);
+	// Branch to decodeNInterpret
+	GEN_BCTRL(ppc);
+	set_next_dst(ppc);
 }
 
 static void genJumpTo(unsigned int loc, unsigned int type){
 	PowerPC_instr ppc = NEW_PPC_INSTR();
-	// TODO: genJumpTo: drop back to the trampoline, invalidate if its a JR
+	
+	if(type == JUMPTO_REG){
+		// Load the register as the return value
+		GEN_LWZ(ppc, 3, loc*8+4, 13);
+		set_next_dst(ppc);
+	} else {
+		// Calculate the destination address
+		loc <<= 2;
+		if(type == JUMPTO_OFF) loc += get_src_pc();
+		else loc |= get_src_pc() & 0xf0000000;
+		// Load the address as the return value
+		GEN_LIS(ppc, 3, loc >> 16);
+		set_next_dst(ppc);
+		GEN_LI(ppc, 3, 3, loc);
+		set_next_dst(ppc);
+	}
+	
+	// Branch to the jump pad
+	GEN_B(ppc, add_jump(loc, 1, 1), 0, 0);
+	set_next_dst(ppc);
 }
 
 static int mips_is_jump(MIPS_instr instr){

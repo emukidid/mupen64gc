@@ -292,91 +292,43 @@ static void pass2(PowerPC_block* ppc_block){
 			continue;
 		}
 		
-		if(!(jump_table[i].type & JUMP_TYPE_J)){ // Branch instruction
+		if(jump_table[i].type & JUMP_TYPE_OUT){
+			unsigned int jump_address = (jump_table[i].old_jump << 2) |
+			                            ((unsigned int)ppc_block->start_address & 0xF0000000);
+			// We're jumping out of this block
+			sprintf(txtbuffer,"Trampolining out to 0x%08x\n", jump_address);
+			DEBUG_print(txtbuffer, DBG_USBGECKO);
+			
+			*current &= ~(PPC_LI_MASK << PPC_LI_SHIFT);
+			PPC_SET_LI(*current, jump_table[i].new_jump);
+			
+		} else if(!(jump_table[i].type & JUMP_TYPE_J)){ // Branch instruction
 			int jump_offset = (unsigned int)jump_table[i].old_jump + 
 				         ((unsigned int)jump_table[i].src_instr - (unsigned int)src_first)/4;
 			
-			if(!(jump_table[i].type & JUMP_TYPE_OUT)){
-				jump_table[i].new_jump = ppc_block->code_addr[jump_offset] - current;
+			jump_table[i].new_jump = ppc_block->code_addr[jump_offset] - current;
 
-				sprintf(txtbuffer,"Converting old_jump = %d, to new_jump = %d\n",
-				       jump_table[i].old_jump, jump_table[i].new_jump);
-				DEBUG_print(txtbuffer, DBG_USBGECKO);
-				
-				*current &= ~(PPC_BD_MASK << PPC_BD_SHIFT);
-				PPC_SET_BD(*current, jump_table[i].new_jump);
-				
-			} else { // jump couldn't be recalculated, should jump out
-				unsigned int dest = (jump_offset << 2) + ppc_block->start_address;
-				sprintf(txtbuffer,"Branching out to 0x%08x\n", dest);
-				DEBUG_print(txtbuffer, DBG_USBGECKO);
-				current -= 4;
-				// mtctr r1
-				GEN_MTCTR(*current, 1);
-				++current;
-				// lis	r1, dest@ha(0)
-				GEN_LIS(*current, 1, dest>>16);
-				++current;
-				// la	r0, dest@l(r1)
-				GEN_LI(*current, 0, 1, dest);
-				++current;
-				// mfctr r1
-				GEN_MFCTR(*current, 1);
-				++current;
-				
-				// bc	<jump_pad>     
-				*current &= ~(PPC_BD_MASK << PPC_BD_SHIFT);
-				PPC_SET_BD(*current, ((unsigned int)jump_pad-(unsigned int)current)>>2);
-				++current;
-					
-				// andi	r0, r0, 0
-				*current = NEW_PPC_INSTR();
-				PPC_SET_OPCODE(*current, PPC_OPCODE_ANDI);
-			}
+			sprintf(txtbuffer,"Converting old_jump = %d, to new_jump = %d\n",
+			       jump_table[i].old_jump, jump_table[i].new_jump);
+			DEBUG_print(txtbuffer, DBG_USBGECKO);
+			
+			*current &= ~(PPC_BD_MASK << PPC_BD_SHIFT);
+			PPC_SET_BD(*current, jump_table[i].new_jump);
 			
 		} else { // Jump instruction
 			// The jump_address is actually calculated with the delay slot address
 			unsigned int jump_address = (jump_table[i].old_jump << 2) |
 			                            ((unsigned int)ppc_block->start_address & 0xF0000000);
 			
-			if(!(jump_table[i].type & JUMP_TYPE_OUT)){
-				// We're jumping within this block, find out where
-				int jump_offset = (jump_address - ppc_block->start_address) >> 2;
-				jump_table[i].new_jump = ppc_block->code_addr[jump_offset] - current;
+			// We're jumping within this block, find out where
+			int jump_offset = (jump_address - ppc_block->start_address) >> 2;
+			jump_table[i].new_jump = ppc_block->code_addr[jump_offset] - current;
 
-				sprintf(txtbuffer,"Jumping to 0x%08x; jump_offset = %d\n", jump_address, jump_offset);
-				DEBUG_print(txtbuffer, DBG_USBGECKO);
-				*current &= ~(PPC_LI_MASK << PPC_LI_SHIFT);
-				PPC_SET_LI(*current, jump_table[i].new_jump);
-				
-			} else {
-				// We're jumping out of this block
-				sprintf(txtbuffer,"Jumping out to 0x%08x\n", jump_address);
-				DEBUG_print(txtbuffer, DBG_USBGECKO);
-				current -= 4;
-				// mtctr r1
-				GEN_MTCTR(*current, 1);
-				++current;
-				// lis	r1, dest@ha(0)
-				GEN_LIS(*current, 1, jump_address>>16);
-				++current;
-				// la	r0, dest@l(r1)
-				GEN_LI(*current, 0, 1, jump_address);
-				++current;
-				// mfctr r1
-				GEN_MFCTR(*current, 1);
-				++current;
-				         
-				// b	<jump_pad>
-				*current &= ~(PPC_LI_MASK << PPC_LI_SHIFT);
-				PPC_SET_LI(*current, ((unsigned int)jump_pad-(unsigned int)current)>>2);
-				++current;
-				         
-				// andi	r0, r0, 0
-				*current = NEW_PPC_INSTR();
-				PPC_SET_OPCODE(*current, PPC_OPCODE_ANDI);
-				
-			}
+			sprintf(txtbuffer,"Jumping to 0x%08x; jump_offset = %d\n", jump_address, jump_offset);
+			DEBUG_print(txtbuffer, DBG_USBGECKO);
+			*current &= ~(PPC_LI_MASK << PPC_LI_SHIFT);
+			PPC_SET_LI(*current, jump_table[i].new_jump);
+			
 		}
 	}
 }
@@ -384,6 +336,7 @@ static void pass2(PowerPC_block* ppc_block){
 extern int stop;
 inline unsigned long update_invalid_addr(unsigned long addr);
 void jump_to(unsigned int address){
+#if 0
 	if(stop) return;
 	PowerPC_block* dst_block = blocks[address>>12];
 	unsigned long paddr = update_invalid_addr(address);
@@ -432,6 +385,10 @@ void jump_to(unsigned int address){
 	for(i=0; i<6; ++i) VIDEO_WaitVSync(); // Wait for output to propagate*/
 	
 	start(dst_block, offset);
+#else
+	DEBUG_print("jump_to called! exiting.\n", DBG_USBGECKO);
+	stop = 1;
+#endif
 }
 extern unsigned long jump_to_address;
 void dyna_jump(){ jump_to(jump_to_address); }
@@ -461,139 +418,30 @@ int resizeCode(PowerPC_block* block, int newSize){
 	return newSize;
 }
 
-// TODO: Rewrite
-// FIXME: Some instructions can be rearranged to remove some mf/mt ctr isntructions
 static void genJumpPad(PowerPC_block* ppc_block){
-	static PowerPC_instr padCode[16];
-	static int generated = 0;
+	PowerPC_instr ppc = NEW_PPC_INSTR();
 	
-	if(*code_length + 22 >= ppc_block->max_length)
-		resizeCode(ppc_block, ppc_block->max_length + 22);
+	GEN_LIS(ppc, 3, ppc_block->end_address>>16);
+	set_next_dst(ppc);
+	GEN_LI(ppc, 3, 3, ppc_block->end_address);
+	set_next_dst(ppc);
 	
 	jump_pad = dst;
 	
-	// (dest address saved in r0):
-	PowerPC_instr ppc = NEW_PPC_INSTR();
-	
-	//cmpi	cr7, r0, 0 // If r0 is 0 we probably should just go to
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_CMPI);
-	PPC_SET_CRF   (ppc, 7);
+	// Restore any saved registers
+	// Restore r13
+	GEN_LWZ(ppc, 13, 8, 1);
 	set_next_dst(ppc);
-	//bne	cr7, 5     // the next block of code
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-	PPC_SET_BD(ppc, 5);
-	PPC_SET_BO(ppc, 0xc);  // Test if CR is 1
-	PPC_SET_BI(ppc, 30);  // Check CR bit 30 (CR7, EQ FIELD)
+	// Restore lr
+	GEN_LWZ(ppc, 0, 4, 1);
 	set_next_dst(ppc);
-	//mtctr	r1
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-	PPC_SET_FUNC  (ppc, PPC_FUNC_MTSPR);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_SPR   (ppc, 0x120);
+	GEN_MTLR(ppc, 0);
 	set_next_dst(ppc);
-	//lis	r1, (ppc_block->end_address+4)@ha(0)
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_IMMED (ppc, (ppc_block->end_address+4)>>16);
+	// Restore the sp
+	GEN_LWZ(ppc, 1, 0, 1);
 	set_next_dst(ppc);
-	//la	r0, (ppc_block->end_address+4)@l(r1)
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_IMMED (ppc, (ppc_block->end_address+4));
+	// return destination
+	GEN_BLR(ppc,0);
 	set_next_dst(ppc);
-	//mfctr	r1
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-	PPC_SET_FUNC  (ppc, PPC_FUNC_MFSPR);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_SPR   (ppc, 0x120);
-	set_next_dst(ppc);
-	
-	if(!generated){
-		generated = 1;
-		PowerPC_instr* current = padCode;
-		
-		//mtctr	r1
-		PPC_SET_OPCODE(*current, PPC_OPCODE_X);
-		PPC_SET_FUNC  (*current, PPC_FUNC_MTSPR);
-		PPC_SET_RD    (*current, 1);
-		PPC_SET_SPR   (*current, 0x120);
-		++current;
-		//lis	r1, emu_reg@ha(0)
-		PPC_SET_OPCODE(*current, PPC_OPCODE_ADDIS);
-		PPC_SET_RD    (*current, 1);
-		PPC_SET_IMMED (*current, (unsigned int)emu_reg>>16);
-		++current;
-		//la	r1, emu_reg@l(r1)
-		PPC_SET_OPCODE(*current, PPC_OPCODE_ORI);
-		PPC_SET_RD    (*current, 1);
-		PPC_SET_RA    (*current, 1);
-		PPC_SET_IMMED (*current, (unsigned int)emu_reg);
-		++current;
-		//stw	r0, 3*4(r1)       // pass dest address as arg0
-		PPC_SET_OPCODE(*current, PPC_OPCODE_STW);
-		PPC_SET_RA    (*current, 1);
-		PPC_SET_IMMED (*current, 3*4);
-		++current;
-		//lis	r1, jump_to@ha(0)
-		PPC_SET_OPCODE(*current, PPC_OPCODE_ADDIS);
-		PPC_SET_RD    (*current, 1);
-		PPC_SET_IMMED (*current, (unsigned int)jump_to>>16);
-		++current;
-		//la	r0, jump_to@l(r1)
-		PPC_SET_OPCODE(*current, PPC_OPCODE_ORI);
-		PPC_SET_RD    (*current, 1);
-		PPC_SET_RA    (*current, 0);
-		PPC_SET_IMMED (*current, (unsigned int)jump_to);
-		++current;
-		//lis	r1, &return_address@ha(0)
-		PPC_SET_OPCODE(*current, PPC_OPCODE_ADDIS);
-		PPC_SET_RD    (*current, 1);
-		PPC_SET_IMMED (*current, (unsigned int)&return_address>>16);
-		++current;
-		//la	r1, &return_address@l(r1)
-		PPC_SET_OPCODE(*current, PPC_OPCODE_ORI);
-		PPC_SET_RD    (*current, 1);
-		PPC_SET_RA    (*current, 1);
-		PPC_SET_IMMED (*current, (unsigned int)&return_address);
-		++current;
-		//stw	r0, 0(r1) // return to jump_to(dest)
-		PPC_SET_OPCODE(*current, PPC_OPCODE_STW);
-		PPC_SET_RA    (*current, 1);
-		++current;
-		//lis	r1, return_from_code@ha(0)
-		PPC_SET_OPCODE(*current, PPC_OPCODE_ADDIS);
-		PPC_SET_RD    (*current, 1);
-		PPC_SET_IMMED (*current, (unsigned int)return_from_code>>16);
-		++current;
-		//la	r0, return_from_code@l(r1)
-		PPC_SET_OPCODE(*current, PPC_OPCODE_ORI);
-		PPC_SET_RD    (*current, 1);
-		PPC_SET_RA    (*current, 0);
-		PPC_SET_IMMED (*current, (unsigned int)return_from_code);
-		++current;
-		//mfctr	r1
-		PPC_SET_OPCODE(*current, PPC_OPCODE_X);
-		PPC_SET_FUNC  (*current, PPC_FUNC_MFSPR);
-		PPC_SET_RD    (*current, 1);
-		PPC_SET_SPR   (*current, 0x120);
-		++current;
-		//mtctr	r0
-		PPC_SET_OPCODE(*current, PPC_OPCODE_X);
-		PPC_SET_FUNC  (*current, PPC_FUNC_MTSPR);
-		PPC_SET_SPR   (*current, 0x120);
-		++current;
-		//bctr		// return_from_code();
-		PPC_SET_OPCODE(*current, PPC_OPCODE_XL);
-		PPC_SET_FUNC  (*current, PPC_FUNC_BCCTR);
-		PPC_SET_BO    (*current, 0x14);
-	 }
-	 
-	 *code_length += 16;
-	 memcpy(dst, padCode, 16*sizeof(PowerPC_instr));
 }
 
