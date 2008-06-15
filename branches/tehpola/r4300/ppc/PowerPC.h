@@ -703,4 +703,11 @@ PowerPC_instr Instruction(int opcode, ...);
 	  PPC_SET_SPR   (ppc, 0x100); \
 	  PPC_SET_RD    (ppc, rs); }
 
+#define GEN_MFLR(ppc,rd) \
+	{ ppc = NEW_PPC_INSTR(); \
+	  PPC_SET_OPCODE(ppc, PPC_OPCODE_X); \
+	  PPC_SET_FUNC  (ppc, PPC_FUNC_MFSPR); \
+	  PPC_SET_SPR   (ppc, 0x100); \
+	  PPC_SET_RD    (ppc, rd); }
+
 #endif
