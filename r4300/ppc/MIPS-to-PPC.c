@@ -2071,6 +2071,11 @@ static int (*gen_ops[64])(MIPS_instr) =
 static void genCallInterp(MIPS_instr mips){
 	PowerPC_instr ppc = NEW_PPC_INSTR();
 	flushRegisters();
+	// Save the lr
+	GEN_MFLR(ppc, 0);
+	set_next_dst(ppc);
+	GEN_STW(ppc, 0, 4, 1);
+	set_next_dst(ppc);
 	// Load the address of decodeNInterpret
 	GEN_LIS(ppc, 3, ((unsigned int)decodeNInterpret)>>16);
 	set_next_dst(ppc);
@@ -2084,8 +2089,24 @@ static void genCallInterp(MIPS_instr mips){
 	set_next_dst(ppc);
 	GEN_LI(ppc, 3, 3, mips);
 	set_next_dst(ppc);
+	// Load the current PC as the second arg
+	GEN_LIS(ppc, 4, get_src_pc()>>16);
+	set_next_dst(ppc);
+	GEN_LI(ppc, 4, 4, get_src_pc());
+	set_next_dst(ppc);
 	// Branch to decodeNInterpret
 	GEN_BCTRL(ppc);
+	set_next_dst(ppc);
+	// Restore the lr
+	GEN_LWZ(ppc, 0, 4, 1);
+	set_next_dst(ppc);
+	GEN_MTLR(ppc, 0);
+	set_next_dst(ppc);
+	// if decodeNInterpret returned an address
+	//   jumpTo it
+	GEN_CMPI(ppc, 3, 0, 6);
+	set_next_dst(ppc);
+	GEN_BNE(ppc, 6, add_jump(-1, 0, 1), 0, 0);
 	set_next_dst(ppc);
 }
 

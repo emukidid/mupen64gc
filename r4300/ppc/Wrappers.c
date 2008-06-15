@@ -11,12 +11,39 @@
 #include "Wrappers.h"
 
 extern int stop;
+extern unsigned long instructionCount;
 extern void (*interp_ops[64])(void);
 inline unsigned long update_invalid_addr(unsigned long addr);
 
+#define START_INSTRUCTION_COUNT() \
+	__asm__ __volatile__ ( \
+		/* Start up the instruction counter is running */ \
+		"mfmmcr0	%0 \n" \
+		"ori		%0, %0, 2 \n" \
+		"mtmmcr0	%0 \n" \
+		/* Get start value for the instruction counter */ \
+		"mfpmc2	%0 \n" \
+		: "=r" (instructionCount) )
+
+#define STOP_INSTRUCTION_COUNT() \
+	__asm__ __volatile__ ( \
+		/* Read the instruction counter and subtract from the previous */ \
+		"mfpmc2	9 \n" \
+		"subf	%0, %1, 9 \n" \
+		: "=r" (instructionCount) \
+		: "r" (instructionCount) \
+		: "r9" )
+
+#define DYNAREC_PRELUDE() \
+	__asm__ __volatile__ ( \
+		"stwu	1, -16(1) \n" \
+		"stw	13, 8(1) \n" \
+		"mr		13, %0 \n" \
+		:: "r" (reg) )
+
 
 void dynarec(unsigned int address){
-	// TODO: Set up registers (reg in r13, stack pointer, link register, etc)
+	dynacore = 0, interpcore = 1;
 	while(!stop){
 		PowerPC_block* dst_block = blocks[address>>12];
 		unsigned long paddr = update_invalid_addr(address);
@@ -54,15 +81,23 @@ void dynarec(unsigned int address){
 		sprintf(txtbuffer, "Entering dynarec code @ 0x%08x\n", code);
 		DEBUG_print(txtbuffer, DBG_USBGECKO);
 		
-		// TODO: Start counting instructions
+		// Start counting instructions
+		START_INSTRUCTION_COUNT();
+		DYNAREC_PRELUDE();
 		address = code();
-		// TODO: Stop counting instructions, add to count
+		// Update the value for the instruction count
+		STOP_INSTRUCTION_COUNT();
 	}
+	dynacore = 1, interpcore = 0;
 }
 
-void decodeNInterpret(MIPS_instr mips){
-	// TODO: Pause counting instructions
+unsigned int decodeNInterpret(MIPS_instr mips, unsigned int PC){
+	// Update the value for the instruction count
+	STOP_INSTRUCTION_COUNT();
+	interp_addr = PC;
 	prefetch_opcode(mips);
 	interp_ops[MIPS_GET_OPCODE(mips)]();
-	// TODO: Resume counting instructions
+	// Resume counting instructions
+	START_INSTRUCTION_COUNT();
+	return interp_addr != PC + 4 ? interp_addr : 0;
 }

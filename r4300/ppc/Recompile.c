@@ -299,8 +299,9 @@ static void pass2(PowerPC_block* ppc_block){
 			sprintf(txtbuffer,"Trampolining out to 0x%08x\n", jump_address);
 			DEBUG_print(txtbuffer, DBG_USBGECKO);
 			
-			*current &= ~(PPC_LI_MASK << PPC_LI_SHIFT);
-			PPC_SET_LI(*current, jump_table[i].new_jump);
+			// b <jump_pad>
+			*current &= ~(PPC_BD_MASK << PPC_BD_SHIFT);
+			PPC_SET_BD(*current, ((unsigned int)jump_pad-(unsigned int)current)>>2);
 			
 		} else if(!(jump_table[i].type & JUMP_TYPE_J)){ // Branch instruction
 			int jump_offset = (unsigned int)jump_table[i].old_jump + 
@@ -386,7 +387,8 @@ void jump_to(unsigned int address){
 	
 	start(dst_block, offset);
 #else
-	DEBUG_print("jump_to called! exiting.\n", DBG_USBGECKO);
+	sprintf(txtbuffer, "jump_to(%08x) called! exiting.\n", address);
+	DEBUG_print(txtbuffer, DBG_USBGECKO);
 	stop = 1;
 #endif
 }
@@ -431,11 +433,6 @@ static void genJumpPad(PowerPC_block* ppc_block){
 	// Restore any saved registers
 	// Restore r13
 	GEN_LWZ(ppc, 13, 8, 1);
-	set_next_dst(ppc);
-	// Restore lr
-	GEN_LWZ(ppc, 0, 4, 1);
-	set_next_dst(ppc);
-	GEN_MTLR(ppc, 0);
 	set_next_dst(ppc);
 	// Restore the sp
 	GEN_LWZ(ppc, 1, 0, 1);

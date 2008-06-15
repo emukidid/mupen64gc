@@ -5,13 +5,13 @@
 #ifndef INTERPRETER_H
 #define INTERPRETER_H
 
-/* decodeNInterpret (passed instr through r1):
+/* decodeNInterpret(MIPS_instr, unsigned int PC):
 	1) Saves state
 	2) Calls prefetch_opcode(instr)               (Decodes)
 	3) Calls interp_ops[MIPS_GET_OPCODE(instr)]() (Interprets)
 	4) Restores state
  */
-void decodeNInterpret(void);
+unsigned int decodeNInterpret();
 
 // These defines tell the recompiler to interpret
 //  rather than recompile the instruction
