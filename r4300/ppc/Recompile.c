@@ -98,13 +98,14 @@ void recompile_block(PowerPC_block* ppc_block){
 	addr_last  = ppc_block->end_address;
 	current_jump = 0;
 	code_addr = ppc_block->code_addr;
+	start_new_block();
 	
 	while(has_next_src()){
 		// Make sure the code doesn't overflow
 		// FIXME: The resize factor may not be optimal
 		//          maybe we can make a guess based on
 		//          how far along we are now
-		if(*code_length + 16 >= ppc_block->max_length)
+		if(*code_length + 32 >= ppc_block->max_length)
 			resizeCode(ppc_block, ppc_block->max_length * 3/2);
 		
 		ppc_block->code_addr[src-src_first] = dst;
@@ -422,6 +423,9 @@ int resizeCode(PowerPC_block* block, int newSize){
 
 static void genJumpPad(PowerPC_block* ppc_block){
 	PowerPC_instr ppc = NEW_PPC_INSTR();
+	
+	if(*code_length + 8 >= ppc_block->max_length)
+			resizeCode(ppc_block, ppc_block->max_length + 8);
 	
 	GEN_LIS(ppc, 3, ppc_block->end_address>>16);
 	set_next_dst(ppc);

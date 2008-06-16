@@ -7,6 +7,7 @@
          Rewrite any interpretation to behave like normal function calls
  */
 
+#include <string.h>
 #include "MIPS-to-PPC.h"
 #include "Interpreter.h"
 #include "Wrappers.h"
@@ -28,16 +29,30 @@ void jump_to(unsigned int);
 #define MIPS_REG_HI 32
 #define MIPS_REG_LO 33
 static int regMap[34];
+static int availableRegsDefault[32] = {
+	0, /* r0 is mostly used for saving/restoring lr: usable */
+	0, /* sp: leave alone! */
+	0, /* gp: leave alone! */
+	1,1,1,1,1,1,1,1, /* Volatile argument registers */
+	0,0, /* Volatile registers used for special purposes: dunno */
+	/* Non-volatile registers: using might be too costly */
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	};
+static int availableRegs[32];
 
 static int flushRegisters(void){
 	PowerPC_instr ppc;
 	int i, flushed = 0;
 	for(i=0; i<34; ++i)
 		if(regMap[i] >= 0){
-			GEN_STW(ppc, regMap[i], i*8+4, 13);
-			set_next_dst(ppc);
+			if(i != 0){
+				GEN_STW(ppc, regMap[i], i*8+4, 13);
+				set_next_dst(ppc);
+			}
+			regMap[i] = -1;
 			++flushed;
 		}
+	memcpy(availableRegs, availableRegsDefault, 32*sizeof(int));
 	return flushed;
 }
 
@@ -45,37 +60,48 @@ static void invalidateRegisters(void){
 	int i;
 	for(i=0; i<34; ++i)
 		regMap[i] = -1;
+	memcpy(availableRegs, availableRegsDefault, 32*sizeof(int));
 }
 
 static int mapRegisterNew(int reg){
 	if(regMap[reg] >= 0) return regMap[reg];
-	int availableRegs[] = {0,0,0,1,1,1,1,1,1,1};
 	int i;
-	for(i=0; i<34; ++i)
-		if(regMap[i] >= 0) availableRegs[i] = 0;
-	for(i=0; i<sizeof(availableRegs)/4; ++i)
-		if(availableRegs[i]) return regMap[reg] = i;
+	for(i=0; i<32; ++i)
+		if(availableRegs[i]){
+			availableRegs[i] = 0;
+			return regMap[reg] = i;
+		}
 	flushRegisters();
+	availableRegs[3] = 0;
 	return regMap[reg] = 3;
 }
 
 static int mapRegister(int reg){
 	PowerPC_instr ppc;
 	if(regMap[reg] >= 0) return regMap[reg];
-	int availableRegs[] = {0,0,0,1,1,1,1,1,1,1,1};
 	int i;
-	for(i=0; i<34; ++i)
-		if(regMap[i] >= 0) availableRegs[i] = 0;
 	for(i=0; i<sizeof(availableRegs)/4; ++i)
 		if(availableRegs[i]){
-			GEN_LWZ(ppc, i, reg*8+4, 13);
-			set_next_dst(ppc);
+			if(reg != 0){
+				GEN_LWZ(ppc, i, reg*8+4, 13);
+				set_next_dst(ppc);
+			} else {
+				GEN_LI(ppc, i, 0, 0);
+				set_next_dst(ppc);
+			}
+			availableRegs[i] = 0;
 			return regMap[reg] = i;
 		}
 	flushRegisters();
 	GEN_LWZ(ppc, 3, reg*8+4, 13);
 	set_next_dst(ppc);
+	availableRegs[3] = 0;
 	return regMap[reg] = 3;
+}
+
+// Initialize register mappings
+void start_new_block(void){
+	invalidateRegisters();
 }
 
 // Variable to indicate whether the current recompiled instruction
@@ -422,9 +448,10 @@ static int BGTZ(MIPS_instr mips){
 
 static int ADDIU(MIPS_instr mips){
 	PowerPC_instr ppc;
+	int rs = mapRegister( MIPS_GET_RS(mips) );
 	GEN_ADDI(ppc,
 	         mapRegisterNew( MIPS_GET_RT(mips) ),
-	         mapRegister( MIPS_GET_RS(mips) ),
+	         rs,
 	         MIPS_GET_IMMED(mips));
 	set_next_dst(ppc);
 	return CONVERT_SUCCESS;
@@ -439,10 +466,11 @@ static int SLTI(MIPS_instr mips){
 	int shiftSrc ;
 	// If immed != 0: rd <- rs - immed
 	if( MIPS_GET_IMMED(mips) ){
+		int rs = mapRegister( MIPS_GET_RS(mips) );
 		shiftSrc = mapRegisterNew( MIPS_GET_RT(mips) );
 		GEN_ADDI(ppc,
 		         shiftSrc,
-		         mapRegister( MIPS_GET_RS(mips) ),
+		         rs,
 		         -signExtend(MIPS_GET_IMMED(mips),16));
 		set_next_dst(ppc);
 	} else shiftSrc = mapRegister( MIPS_GET_RS(mips) );
@@ -454,8 +482,8 @@ static int SLTI(MIPS_instr mips){
 }
 
 static int SLTIU(MIPS_instr mips){
-	int rt = mapRegisterNew( MIPS_GET_RT(mips) );
 	int rs = mapRegister( MIPS_GET_RS(mips) );
+	int rt = mapRegisterNew( MIPS_GET_RT(mips) );
 	PowerPC_instr ppc;
 	// rd <- rs - immed
 	GEN_ADDI(ppc, rt, rs, -MIPS_GET_IMMED(mips));
@@ -469,9 +497,10 @@ static int SLTIU(MIPS_instr mips){
 
 static int ANDI(MIPS_instr mips){
 	PowerPC_instr ppc;
+	int rs = mapRegister( MIPS_GET_RS(mips) );
 	GEN_ANDI(ppc,
 	         mapRegisterNew( MIPS_GET_RT(mips) ),
-	         mapRegister( MIPS_GET_RS(mips) ),
+	         rs,
 	         MIPS_GET_IMMED(mips));
 	set_next_dst(ppc);
 	
@@ -480,9 +509,10 @@ static int ANDI(MIPS_instr mips){
 
 static int ORI(MIPS_instr mips){
 	PowerPC_instr ppc;
+	int rs = mapRegister( MIPS_GET_RS(mips) );
 	GEN_ORI(ppc,
 	        mapRegisterNew( MIPS_GET_RT(mips) ),
-	        mapRegister( MIPS_GET_RS(mips) ),
+	        rs,
 	        MIPS_GET_IMMED(mips));
 	set_next_dst(ppc);
 	
@@ -491,9 +521,10 @@ static int ORI(MIPS_instr mips){
 
 static int XORI(MIPS_instr mips){
 	PowerPC_instr ppc;
+	int rs = mapRegister( MIPS_GET_RS(mips) );
 	GEN_XORI(ppc,
 	         mapRegisterNew( MIPS_GET_RT(mips) ),
-	         mapRegister( MIPS_GET_RS(mips) ),
+	         rs,
 	         MIPS_GET_IMMED(mips));
 	set_next_dst(ppc);
 	
@@ -1019,10 +1050,12 @@ static int SC(MIPS_instr mips){
 
 static int SLL(MIPS_instr mips){
 	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int sa = mapRegister( MIPS_GET_SA(mips) );
 	GEN_SLWI(ppc,
 	         mapRegisterNew( MIPS_GET_RD(mips) ),
-	         mapRegister( MIPS_GET_RT(mips) ),
-	         mapRegister( MIPS_GET_SA(mips) ));
+	         rt,
+	         sa);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -1030,10 +1063,12 @@ static int SLL(MIPS_instr mips){
 
 static int SRL(MIPS_instr mips){
 	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int sa = mapRegister( MIPS_GET_SA(mips) );
 	GEN_SRWI(ppc,
 	         mapRegisterNew( MIPS_GET_RD(mips) ),
-	         mapRegister( MIPS_GET_RT(mips) ),
-	         mapRegister( MIPS_GET_SA(mips) ));
+	         rt,
+	         sa);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -1041,10 +1076,12 @@ static int SRL(MIPS_instr mips){
 
 static int SRA(MIPS_instr mips){
 	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int sa = mapRegister( MIPS_GET_SA(mips) );
 	GEN_SRAWI(ppc,
 	          mapRegisterNew( MIPS_GET_RD(mips) ),
-	          mapRegister( MIPS_GET_RT(mips) ),
-	          mapRegister( MIPS_GET_SA(mips) ));
+	          rt,
+	          sa);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -1052,10 +1089,12 @@ static int SRA(MIPS_instr mips){
 
 static int SLLV(MIPS_instr mips){
 	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int rs = mapRegister( MIPS_GET_RS(mips) );
 	GEN_SLW(ppc,
 	        mapRegisterNew( MIPS_GET_RD(mips) ),
-	        mapRegister( MIPS_GET_RT(mips) ),
-	        mapRegister( MIPS_GET_RS(mips) ));
+	        rt,
+	        rs);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -1063,10 +1102,12 @@ static int SLLV(MIPS_instr mips){
 
 static int SRLV(MIPS_instr mips){
 	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int rs = mapRegister( MIPS_GET_RS(mips) );
 	GEN_SRW(ppc,
 	        mapRegisterNew( MIPS_GET_RD(mips) ),
-	        mapRegister( MIPS_GET_RT(mips) ),
-	        mapRegister( MIPS_GET_RS(mips) ));
+	        rt,
+	        rs);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -1074,10 +1115,12 @@ static int SRLV(MIPS_instr mips){
 
 static int SRAV(MIPS_instr mips){
 	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int rs = mapRegister( MIPS_GET_RS(mips) );
 	GEN_SRAW(ppc,
 	         mapRegisterNew( MIPS_GET_RD(mips) ),
-	         mapRegister( MIPS_GET_RT(mips) ),
-	         mapRegister( MIPS_GET_RS(mips) ));
+	         rt,
+	         rs);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -1561,10 +1604,12 @@ static int DSRA32(MIPS_instr mips){
 
 static int ADDU(MIPS_instr mips){
 	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int rs = mapRegister( MIPS_GET_RS(mips) );
 	GEN_ADD(ppc,
 	        mapRegisterNew( MIPS_GET_RD(mips) ),
-	        mapRegister( MIPS_GET_RS(mips) ),
-	        mapRegister( MIPS_GET_RT(mips) ));
+	        rs,
+	        rt);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -1576,10 +1621,12 @@ static int ADD(MIPS_instr mips){
 
 static int SUBU(MIPS_instr mips){
 	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int rs = mapRegister( MIPS_GET_RS(mips) );
 	GEN_SUB(ppc,
 	        mapRegisterNew( MIPS_GET_RD(mips) ),
-	        mapRegister( MIPS_GET_RS(mips) ),
-	        mapRegister( MIPS_GET_RT(mips) ));
+	        rs,
+	        rt);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -1591,10 +1638,12 @@ static int SUB(MIPS_instr mips){
 
 static int AND(MIPS_instr mips){
 	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int rs = mapRegister( MIPS_GET_RS(mips) );
 	GEN_AND(ppc,
 	        mapRegisterNew( MIPS_GET_RD(mips) ),
-	        mapRegister( MIPS_GET_RS(mips) ),
-	        mapRegister( MIPS_GET_RT(mips) ));
+	        rs,
+	        rt);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -1602,10 +1651,12 @@ static int AND(MIPS_instr mips){
 
 static int OR(MIPS_instr mips){
 	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int rs = mapRegister( MIPS_GET_RS(mips) );
 	GEN_OR(ppc,
 	        mapRegisterNew( MIPS_GET_RD(mips) ),
-	        mapRegister( MIPS_GET_RS(mips) ),
-	        mapRegister( MIPS_GET_RT(mips) ));
+	        rs,
+	        rt);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -1613,10 +1664,12 @@ static int OR(MIPS_instr mips){
 
 static int XOR(MIPS_instr mips){
 	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int rs = mapRegister( MIPS_GET_RS(mips) );
 	GEN_XOR(ppc,
 	        mapRegisterNew( MIPS_GET_RD(mips) ),
-	        mapRegister( MIPS_GET_RS(mips) ),
-	        mapRegister( MIPS_GET_RT(mips) ));
+	        rs,
+	        rt);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -1624,10 +1677,12 @@ static int XOR(MIPS_instr mips){
 
 static int NOR(MIPS_instr mips){
 	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int rs = mapRegister( MIPS_GET_RS(mips) );
 	GEN_NOR(ppc,
 	        mapRegisterNew( MIPS_GET_RD(mips) ),
-	        mapRegister( MIPS_GET_RS(mips) ),
-	        mapRegister( MIPS_GET_RT(mips) ));
+	        rs,
+	        rt);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -1638,11 +1693,13 @@ static int SLT(MIPS_instr mips){
 	int shiftSrc;
 	// If rt != r0: rd <- rs - rt
 	if( MIPS_GET_RT(mips) ){
+		int rt = mapRegister( MIPS_GET_RT(mips) );
+		int rs = mapRegister( MIPS_GET_RS(mips) );
 		shiftSrc = mapRegisterNew( MIPS_GET_RD(mips) );
 		GEN_SUB(ppc,
 		        shiftSrc,
-		        mapRegister( MIPS_GET_RS(mips) ),
-		        mapRegister( MIPS_GET_RT(mips) ));
+		        rs,
+		        rt);
 		set_next_dst(ppc);
 	} else shiftSrc = mapRegister( MIPS_GET_RS(mips) );
 	// Shift the sign bit to the LSb
@@ -1653,13 +1710,15 @@ static int SLT(MIPS_instr mips){
 }
 
 static int SLTU(MIPS_instr mips){
-	int rd = mapRegisterNew( MIPS_GET_RD(mips) );
 	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	int rd = mapRegisterNew( MIPS_GET_RD(mips) );
 	// rd <- rs - rt
 	GEN_SUB(ppc,
 	        rd,
-	        mapRegister( MIPS_GET_RS(mips) ),
-	        mapRegister( MIPS_GET_RT(mips) ));
+	        rs,
+	        rt);
 	set_next_dst(ppc);
 	// Shift the sign bit to the LSb
 	GEN_SRWI(ppc, rd, rd, 31);
