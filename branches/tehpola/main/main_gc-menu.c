@@ -143,7 +143,7 @@ int main(){
 	return 0;
 }
 
-#ifdef WII
+#if defined(WII) && !defined(NO_BT)
 u16 readWPAD(void){
 	WPADData wpad;
 	WPAD_ReadEvent(0, &wpad);
@@ -332,7 +332,9 @@ static void Initialise (void){
   PAD_Reset(0xf0000000);
 #ifdef WII
   CONF_Init();
+#ifndef NO_BT
   WPAD_Init();
+#endif
 #endif
   
   vmode = VIDEO_GetPreferredMode(NULL);
