@@ -2,6 +2,7 @@
    by Mike Slegeir for Mupen64-GC
  ************************************************
    FIXME: Review all branch destinations
+          Don't allow any writes to r0
    TODO: Complete adding register mapping (invalidate on branches)
          Create FP register mapping and recompile those
          Rewrite any interpretation to behave like normal function calls
