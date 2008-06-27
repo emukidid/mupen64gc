@@ -1,8 +1,8 @@
 ; MIPS.ss: Handlers for MIPS instructions (generates scheme code for each instruction)
 ; by Mike Slegeir for Mupen64-GC
 
-(require mzscheme)
-(require (lib "defmacro.ss"))
+;(require mzscheme)
+;(require (lib "defmacro.ss"))
 
 ; TODO: functions which probably need to be implemented in C code somewhere:
 (define (s16-ext val)
@@ -12,7 +12,8 @@
 ; FIXME: Actually make this one logical
 (define logical-shift arithmetic-shift)
 (define (interpret instr)
-  (raise "TODO: implement interpret"))
+  (set! end-of-frag #t)
+  (decode&interpret instr))
 
 ; Hash tables for decoding instructions
 (define opcode-handlers (make-hash-table))
@@ -26,6 +27,7 @@
 (define (gen-delay)
   (gen-op (get-next-src)))
 
+#|
 ; Register manipulation
 (define (reg num)
   (raise "TODO: implement reg"))
@@ -58,6 +60,7 @@
   (raise "TODO: implement =mb"))
 (define (=md addr val)
   (raise "TODO: implement =md"))
+|#
 
 ; General functions
 (define (branch addr)
@@ -283,6 +286,7 @@
 (define DADDI DADDIU)
 (hash-table-put! opcode-handlers #x18 DADDI)
 
+#|
 ; TODO: LDL, LDR
 
 (opcode #x20 LB
@@ -336,6 +340,7 @@
 ; TODO:  LL     , LWC1  , NI  , NI   , NI  , LDC1
 ; TODO:  SC     , SWC1  , NI  , NI   , NI  , SDC1
 
+|#
 
 ; SPECIAL instruction handlers
 

@@ -17,7 +17,7 @@
 (let ((pc 0))
   (set! set-pc (lambda (new-value) (set! pc new-value)))
   (set! get-pc (lambda () pc))
-  (set! get-next-src (lambda () (raise "TODO: implement get-next-src"))))
+  (set! get-next-src (lambda () (umemw pc))))
 
 (define end-of-frag #f)
 (define (recompile-fragment start)
