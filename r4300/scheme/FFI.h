@@ -1,6 +1,9 @@
 #ifndef FFI_H
 #define FFI_H
 
+int init_scheme_dynarec(void);
+unsigned int dynarec(unsigned int addr);
+
 #ifdef MZ_SCHEME
 #define INT2SCM(i) \
 	scheme_make_integer_value(i)
@@ -26,4 +29,4 @@
 
 #endif // MZ_SCHEME
 
-#endif FFI_H
+#endif // FFI_H
