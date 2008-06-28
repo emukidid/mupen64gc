@@ -1,8 +1,9 @@
 ; MIPS.ss: Handlers for MIPS instructions (generates scheme code for each instruction)
 ; by Mike Slegeir for Mupen64-GC
 
-;(require mzscheme)
-;(require (lib "defmacro.ss"))
+(begin
+(require mzscheme)
+(require (lib "defmacro.ss"))
 
 ; TODO: functions which probably need to be implemented in C code somewhere:
 (define (s16-ext val)
@@ -12,8 +13,9 @@
 ; FIXME: Actually make this one logical
 (define logical-shift arithmetic-shift)
 (define (interpret instr)
-  (set! end-of-frag #t)
-  (decode&interpret instr))
+  (raise `(end-of-frag (decode&interpret ,instr))))
+  ;(set! end-of-frag #t)
+  ;(decode&interpret instr))
 
 ; Hash tables for decoding instructions
 (define opcode-handlers (make-hash-table))
@@ -24,8 +26,8 @@
   ((hash-table-get opcode-handlers 
                    (bitwise-and (arithmetic-shift instr -26) #x3F) (lambda () NI))
     instr))
-(define (gen-delay)
-  (gen-op (get-next-src)))
+;(define (gen-delay)
+;  (gen-op (get-next-src)))
 
 #|
 ; Register manipulation
@@ -64,8 +66,9 @@
 
 ; General functions
 (define (branch addr)
-  (set! end-of-frag #t)
-  addr)
+  (raise `(end-of-frag ,addr)))
+  ;(set! end-of-frag #t)
+  ;addr)
 
 ; Macros for extracting fields of an instruction
 (define-macro (get-rt instr)
@@ -123,7 +126,7 @@
     instr))
 
 ; TODO: REGIMM
-
+#|
 (opcode #x02 J
   (let ((li (get-li instr)))
     `(begin
@@ -193,6 +196,7 @@
            (branch ,(+ (get-pc) (arithmetic-shift (s16-ext immed) 2)))
            ; Else continue executing past the delay slot
            (branch ,(+ (get-pc) 8))))))
+|#
 
 (opcode #x09 ADDIU
   (with-i-form
@@ -227,6 +231,7 @@
 
 ; TODO: COP0   , COP1
 
+#|
 (opcode #x14 BEQL
   (with-i-form
     ; If $rs = $rt
@@ -278,6 +283,7 @@
            (branch ,(+ (get-pc) (arithmetic-shift (s16-ext immed) 2))))
          ; Else continue executing past the delay slot
          (branch ,(+ (get-pc) 8)))))
+|#
 
 (opcode #x19 DADDIU
   (with-i-form
@@ -368,6 +374,7 @@
   (with-reg-form
     `(r= ,rd (arithmetic-shift (reg ,rt) (- (reg ,rs))))))
 
+#|
 (opcode #x08 JR
   (let ((rs (get-rs instr)))
     `(begin
@@ -386,6 +393,7 @@
        (r= ,rd ,(+ (get-pc) 4))
        ; Branch to $rs
        (branch (ureg ,rs)))))
+|#
 
 ; TODO: SYSCALL
 
@@ -521,3 +529,4 @@
   (with-shift-form
     `(r64= ,rd (arithmetic-shift (reg64 ,rt) ,(- (+ sa 32))))))
 
+)

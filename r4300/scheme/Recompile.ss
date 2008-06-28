@@ -1,5 +1,6 @@
 ; Recompile.ss: Drives the recompilation and execution of code
 
+(begin
 ; Code fragments (basic blocks) hash tables of functions
 ;   which begin at the address represented by the key
 (define fragments (make-hash-table))
@@ -19,10 +20,19 @@
   (set! get-pc (lambda () pc))
   (set! get-next-src (lambda () (umemw pc))))
 
+; FIXME: maybe branch should (raise '(end-of-frag last-op))
+;          and (with-handlers (((lambda (e) (eq? 'end-of-frag (car e)) (hash...)))) 
 (define end-of-frag #f)
 (define (recompile-fragment start)
   ; Set up the environment
   (set-pc start)
+  (let loop ((frag ()))
+    (with-handlers (((lambda (e) (eq? 'end-of-frag (car e)))
+                     (lambda (e)
+                       (hash-table-put! fragments start
+                                        `(begin ,(nreverse (cons (cdr e) frag)))))))
+       (loop (cons (gen-op (get-next-src)) frag)))))
+  #| Old method: used a global flag
   (set! end-of-frag #f)
   ; Build up the fragment
   (let loop ((frag ()))
@@ -31,6 +41,7 @@
         (hash-table-put! fragments start `(begin ,(nreverse frag)))
         ; Otherwise, just cons our new 'instruction' and keep going
         (loop (cons (gen-op (get-next-src)) frag)))))
+  |#
 
 (define (execute pc)
   ; Get the fragment from the hash-table (recompiling on failure)
@@ -49,4 +60,4 @@
         pc
         (loop (execute pc)))))
 
-    
+)

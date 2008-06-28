@@ -34,6 +34,13 @@ Scheme_Object* decodeNInterpret(int argc, Scheme_Object* argv[]){
 	return UINT2SCM(addr);
 }
 
+// int isStopSignaled(void){
+#ifdef MZ_SCHEME
+Scheme_Object* isStopSignaled(int argc, Scheme_Object* argv[]){
+#endif
+	return stop ? scheme_true : scheme_false;
+}
+
 //long regLoad(int which){ return (long)reg[which]; }
 #ifdef MZ_SCHEME
 Scheme_Object* regLoad(int argc, Scheme_Object* argv[]){
@@ -188,11 +195,12 @@ static int setup_mzscheme(Scheme_Env* e, int argc, char* argv[]){
     declare_modules(e);
     
     printf("requiring mzscheme\n");
-    scheme_namespace_require(scheme_intern_symbol("mzscheme"));
+    scheme_namespace_require(scheme_intern_symbol("scheme/base"));
     
     // Create a Scheme function for each C function that needs to be called
     printf("registering functions\n");
     SCM_DEFUN(e, decodeNInterpret, "decode&interpret", 1, 1);
+    SCM_DEFUN(e, isStopSignaled, "stop-signaled?", 0, 0);
     SCM_DEFUN(e, regLoad, "reg", 1, 1);
     SCM_DEFUN(e, uregLoad, "ureg", 1, 1);
     SCM_DEFUN(e, reg64Load, "reg64", 1, 1);
