@@ -45,7 +45,7 @@
 
 (define (dynarec start)
   (let loop ((pc start))
-    (if stop
+    (if (stop-signaled?)
         pc
         (loop (execute pc)))))
 

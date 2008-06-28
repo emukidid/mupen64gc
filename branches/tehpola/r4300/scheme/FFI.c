@@ -2,24 +2,32 @@
    by Mike Slegeir for Mupen64-GC
  */
 
-#include "../../memory/memory.h"
-#include "../r4300.h"
+#include <stdio.h>
+#include "/home/mike/tmp/mupen64_scheme/memory/memory.h"
+#include "/home/mike/tmp/mupen64_scheme/r4300/r4300.h"
 #include "scheme.h"
 #include "FFI.h"
 
+extern void (*interp_ops[64])(void);
+extern char* MIPS_scheme_code;
+extern char* Recompile_scheme_code;
+
+#ifdef MZ_SCHEME
+static Scheme_Env* env;
+#endif
 
 //unsigned int decodeNInterpret(unsigned int instr, unsigned int addr){
 #ifdef MZ_SCHEME
 Scheme_Object* decodeNInterpret(int argc, Scheme_Object* argv[]){
 	unsigned int instr;
-	SCM2UINT(argv[0], insr);
+	SCM2UINT(argv[0], instr);
 	unsigned int addr;
 	SCM2UINT(argv[0], addr);
 #endif
 	
 	interp_addr = addr;
-	prefetch_opcode(mips);
-	interp_ops[MIPS_GET_OPCODE(mips)]();
+	prefetch_opcode(instr);
+	interp_ops[((instr >> 26) & 0x3F)]();
 	
 	//return interp_addr != addr + 4 ? interp_addr : 0;
 	addr = interp_addr != addr + 4 ? interp_addr : 0;
@@ -171,18 +179,19 @@ void dynaInvalidate(unsigned int start, unsigned int stop){
 #ifdef MZ_SCHEME
 #include "required.c" // Ugly huh? Seems like the best way though
 
-static Scheme_Env* env;
-
 static int setup_mzscheme(Scheme_Env* e, int argc, char* argv[]){
 	int i;
     mz_jmp_buf * volatile save, fresh;
     
     /* Declare embedded modules in "required.c": */
+    printf("declaring modules\n");
     declare_modules(e);
     
+    printf("requiring mzscheme\n");
     scheme_namespace_require(scheme_intern_symbol("mzscheme"));
     
     // Create a Scheme function for each C function that needs to be called
+    printf("registering functions\n");
     SCM_DEFUN(e, decodeNInterpret, "decode&interpret", 1, 1);
     SCM_DEFUN(e, regLoad, "reg", 1, 1);
     SCM_DEFUN(e, uregLoad, "ureg", 1, 1);
@@ -197,16 +206,24 @@ static int setup_mzscheme(Scheme_Env* e, int argc, char* argv[]){
 	save = scheme_current_thread->error_buf;
     scheme_current_thread->error_buf = &fresh;
     
+    printf("setjmp\n");
 	if(scheme_setjmp(scheme_error_buf)){
 		// This block will only be executed after a longjmp (an error in scheme code)
 		scheme_current_thread->error_buf = save;
 		env = NULL;
+		printf("scheme exception caught\n");
 		return -1; /* There was an error */
 	
 	} else {
 		// This block of code is executed immediately after setjmp
-		// TODO: eval all the scheme code strings
-		//scheme_eval_string("(hello-world)", e);
+		// Load our scheme source
+		printf("loading scheme code\n");
+		Scheme_Object* v;
+		printf("loading MIPS.ss with contents:\n%s\n", &MIPS_scheme_code);
+		scheme_eval_string(&MIPS_scheme_code, e);
+		printf("loading Recompile.ss with contents:\n%s\n", &Recompile_scheme_code);
+		scheme_eval_string(&Recompile_scheme_code, e);
+		fflush(stdout);
 		scheme_current_thread->error_buf = save;
 	}
 	
@@ -216,6 +233,7 @@ static int setup_mzscheme(Scheme_Env* e, int argc, char* argv[]){
 #endif // MZ_SCHEME
 
 int init_scheme_dynarec(void){
+	printf("initing scheme\n");
 #ifdef MZ_SCHEME
 	return scheme_main_setup(1, setup_mzscheme, 0, NULL);
 #endif // MZ_SCHEME
@@ -223,8 +241,13 @@ int init_scheme_dynarec(void){
 
 unsigned int dynarec(unsigned int addr){
 	char call[64];
-	sprintf(call, "(dynarec #x%08x)", addr);
 	unsigned int ret;
+	sprintf(call, "(dynarec #x%08x)", addr);
+	dynacore = 0;
+	interpcore = 1;
+	printf("I'm going in: %s\n", call);
 	SCM2UINT( scheme_eval_string(call, env), ret );
+	dynacore = 1;
+	interpcore = 0;
 	return ret;
 }
