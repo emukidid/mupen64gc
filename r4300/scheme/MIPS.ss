@@ -1,131 +1,103 @@
 ; MIPS.ss: Handlers for MIPS instructions (generates scheme code for each instruction)
 ; by Mike Slegeir for Mupen64-GC
 
-(begin
-(require mzscheme)
-(require (lib "defmacro.ss"))
 
-; TODO: functions which probably need to be implemented in C code somewhere:
-(define (s16-ext val)
-  (if (= (bitwise-and val #x80) #x80)
-      (- (+ (bitwise-and (bitwise-not val) #xFF) 1))
-      val))
-; FIXME: Actually make this one logical
-(define logical-shift arithmetic-shift)
-(define (interpret instr)
-  (raise `(end-of-frag (decode&interpret ,instr))))
-  ;(set! end-of-frag #t)
-  ;(decode&interpret instr))
+(module MIPS mzscheme
+  (require mzscheme)
+  (require (lib "defmacro.ss"))
+  (require "Bridge.ss")
+  (provide gen-op)
 
-; Hash tables for decoding instructions
-(define opcode-handlers (make-hash-table))
-(define special-handlers (make-hash-table))
+  ; TODO: functions which probably need to be implemented in C code somewhere:
+  (define (s16-ext val)
+    (if (= (bitwise-and val #x80) #x80)
+        (- (+ (bitwise-and (bitwise-not val) #xFF) 1))
+        val))
+  ; FIXME: Actually make this one logical
+  (define logical-shift arithmetic-shift)
+  (define (interpret instr)
+    (raise `(end-of-frag (decode&interpret ,instr ,(get-pc)))))
+    ;(set! end-of-frag #t)
+    ;(decode&interpret instr))
 
-; Entry-point: given the instruction, we find the opcode and return its implementation
-(define (gen-op instr)
-  ((hash-table-get opcode-handlers 
-                   (bitwise-and (arithmetic-shift instr -26) #x3F) (lambda () NI))
-    instr))
-;(define (gen-delay)
-;  (gen-op (get-next-src)))
+  ; Hash tables for decoding instructions
+  (define opcode-handlers (make-hash-table))
+  (define special-handlers (make-hash-table))
 
-#|
-; Register manipulation
-(define (reg num)
-  (raise "TODO: implement reg"))
-(define (ureg num)
-  (raise "TODO: implement ureg"))
-(define (r= reg val)
-  (raise "TODO: implement r="))
-(define (reg64 num)
-  (raise "TODO: implement reg64"))
-(define (ureg64 num)
-  (raise "TODO: implement ureg64"))
-(define (r64= reg val)
-  (raise "TODO: implement r64="))
-; Memory access
-; TODO: For non-critical memory accesses values can be cached
-;         so there is no need to call a foreign function
-(define (memw addr)
-  (raise "TODO: implement memw"))
-(define (memh addr)
-  (raise "TODO: implement memh"))
-(define (memb addr)
-  (raise "TODO: implement memb"))
-(define (memd addr)
-  (raise "TODO: implement memd"))
-(define (=mw addr val)
-  (raise "TODO: implement =mw"))
-(define (=mh addr val)
-  (raise "TODO: implement =mh"))
-(define (=mb addr val)
-  (raise "TODO: implement =mb"))
-(define (=md addr val)
-  (raise "TODO: implement =md"))
-|#
+  ; Entry-point: given the instruction, we find the opcode and return its implementation
+  (define (gen-op instr)
+    (printf "gen-op ~X~%" instr)
+    ((hash-table-get opcode-handlers
+                     (bitwise-and (arithmetic-shift instr -26) #x3F) (lambda () NI))
+     instr))
+  ;(define (gen-delay)
+  ;  (gen-op (get-next-src)))
 
-; General functions
-(define (branch addr)
-  (raise `(end-of-frag ,addr)))
-  ;(set! end-of-frag #t)
-  ;addr)
 
-; Macros for extracting fields of an instruction
-(define-macro (get-rt instr)
-  `(bitwise-and (arithmetic-shift ,instr -16) #x1F))
-(define-macro (get-rs instr)
-  `(bitwise-and (arithmetic-shift ,instr -21) #x1F))
-(define-macro (get-rd instr)
-  `(bitwise-and (arithmetic-shift ,instr -11) #x1F))
-(define-macro (get-immed instr)
-  `(bitwise-and ,instr #xFFFF))
-(define-macro (get-sa instr)
-  `(bitwise-and (arithmetic-shift ,instr -6) #x1F))
-(define-macro (get-li instr)
-  `(bitwise-and ,instr #x3FFFFFF))
-; Form macros
-(define-macro (opcode number name body)
-  `(begin
-     (define ,name (lambda (instr) ,body))
-     (hash-table-put! opcode-handlers ,number ,name)))
-(define-macro (special number name body)
-  `(begin
-     (define ,name (lambda (instr) ,body))
-     (hash-table-put! special-handlers ,number ,name)))
+  ; General functions
+  (define (branch addr)
+    (raise `(end-of-frag ,addr)))
+    ;(set! end-of-frag #t)
+    ;addr)
 
-(define-macro (with-i-form body)
-  `(let ((rt ,`(get-rt instr))
-         (rs ,`(get-rs instr))
-         (immed ,`(get-immed instr)))
-     ,body))
-(define-macro (with-shift-form body)
-  `(let ((rd ,`(get-rd instr))
-         (rt ,`(get-rt instr))
-         (sa ,`(get-sa instr)))
-     ,body))
-(define-macro (with-reg-form body)
-  `(let ((rd ,`(get-rd instr))
-         (rt ,`(get-rt instr))
-         (rs ,`(get-rs instr)))
-     ,body))
-(define-macro (with-mult-form body)
-  `(let ((rt ,`(get-rt instr))
-         (rs ,`(get-rs instr)))
-     ,body))
-(define-macro (with-regimm-form body)
-  `(let ((rs ,`(get-rs instr))
-         (immed ,`(get-immed instr)))
-     ,body))
+  ; Macros for extracting fields of an instruction
+  (define-macro (get-rt instr)
+    `(bitwise-and (arithmetic-shift ,instr -16) #x1F))
+  (define-macro (get-rs instr)
+    `(bitwise-and (arithmetic-shift ,instr -21) #x1F))
+  (define-macro (get-rd instr)
+    `(bitwise-and (arithmetic-shift ,instr -11) #x1F))
+  (define-macro (get-immed instr)
+    `(bitwise-and ,instr #xFFFF))
+  (define-macro (get-sa instr)
+    `(bitwise-and (arithmetic-shift ,instr -6) #x1F))
+  (define-macro (get-li instr)
+    `(bitwise-and ,instr #x3FFFFFF))
+  ; Form macros
+  (define-macro (opcode number name body)
+    `(begin
+       (define ,name (lambda (instr) ,body))
+       (hash-table-put! opcode-handlers ,number ,name)))
+  (define-macro (special number name body)
+    `(begin
+       (define ,name (lambda (instr) ,body))
+       (hash-table-put! special-handlers ,number ,name)))
 
-; Instruction implementations
-(define (NI instr) '(interpret instr))
+  (define-macro (with-i-form body)
+    `(let ((rt ,`(get-rt instr))
+           (rs ,`(get-rs instr))
+           (immed ,`(get-immed instr)))
+       ,body))
+  (define-macro (with-shift-form body)
+    `(let ((rd ,`(get-rd instr))
+           (rt ,`(get-rt instr))
+           (sa ,`(get-sa instr)))
+       ,body))
+  (define-macro (with-reg-form body)
+    `(let ((rd ,`(get-rd instr))
+           (rt ,`(get-rt instr))
+           (rs ,`(get-rs instr)))
+       ,body))
+  (define-macro (with-mult-form body)
+    `(let ((rt ,`(get-rt instr))
+           (rs ,`(get-rs instr)))
+       ,body))
+  (define-macro (with-regimm-form body)
+    `(let ((rs ,`(get-rs instr))
+           (immed ,`(get-immed instr)))
+       ,body))
 
-(opcode #x00 SPECIAL-OPCODE
-  ((hash-table-get special-handlers
-     (bitwise-and instr #x3F) (lambda () NI))
-    instr))
+  ; Instruction implementations
+  (define (NI instr)
+    (printf "instruction ~X not implemented!~%" instr) 
+    (interpret instr))
 
-; TODO: REGIMM
+  (opcode #x00 SPECIAL-OPCODE
+          ((hash-table-get special-handlers
+                           (bitwise-and instr #x3F) (lambda () NI))
+           instr))
+
+  ; TODO: REGIMM
 #|
 (opcode #x02 J
   (let ((li (get-li instr)))
@@ -198,38 +170,38 @@
            (branch ,(+ (get-pc) 8))))))
 |#
 
-(opcode #x09 ADDIU
-  (with-i-form
-    `(r= ,rt (+ (reg ,rs) ,(s16-ext immed)))))
+  (opcode #x09 ADDIU
+          (with-i-form
+           `(r= ,rt (+ (reg ,rs) ,(s16-ext immed)))))
 
-(define ADDI ADDIU)
-(hash-table-put! opcode-handlers #x08 ADDI)
+  (define ADDI ADDIU)
+  (hash-table-put! opcode-handlers #x08 ADDI)
 
-(opcode #x0a SLTI
-  (with-i-form
-    `(r= ,rt (if (< (reg ,rs) ,(s16-ext immed)) 1 0))))
+  (opcode #x0a SLTI
+          (with-i-form
+           `(r= ,rt (if (< (reg ,rs) ,(s16-ext immed)) 1 0))))
 
-(opcode #x0b SLTIU
-  (with-i-form
-    `(r= ,rt (if (< (ureg ,rs) ,immed)) 1 0)))
+  (opcode #x0b SLTIU
+          (with-i-form
+           `(r= ,rt (if (< (ureg ,rs) ,immed)) 1 0)))
 
-(opcode #x0c ANDI
-  (with-i-form
-    `(r= ,rt (bitwise-and (reg ,rs) ,immed))))
+  (opcode #x0c ANDI
+          (with-i-form
+           `(r= ,rt (bitwise-and (reg ,rs) ,immed))))
 
-(opcode #x0d ORI
-  (with-i-form
-    `(r= ,rt (bitwise-or (reg ,rs) ,immed))))
+  (opcode #x0d ORI
+          (with-i-form
+           `(r= ,rt (bitwise-or (reg ,rs) ,immed))))
 
-(opcode #x0e XORI
-  (with-i-form
-    `(r= ,rt (bitwise-xor (reg ,rs) ,immed))))
+  (opcode #x0e XORI
+          (with-i-form
+           `(r= ,rt (bitwise-xor (reg ,rs) ,immed))))
 
-(opcode #x0f LUI
-  (with-i-form
-    `(r= ,rt (arithmetic-shift ,immed 16))))
+  (opcode #x0f LUI
+          (with-i-form
+           `(r= ,rt (arithmetic-shift ,immed 16))))
 
-; TODO: COP0   , COP1
+  ; TODO: COP0   , COP1
 
 #|
 (opcode #x14 BEQL
@@ -285,12 +257,12 @@
          (branch ,(+ (get-pc) 8)))))
 |#
 
-(opcode #x19 DADDIU
-  (with-i-form
-    `(r64= ,rt (+ (reg64 ,rs) ,(s16-ext immed)))))
+  (opcode #x19 DADDIU
+          (with-i-form
+           `(r64= ,rt (+ (reg64 ,rs) ,(s16-ext immed)))))
 
-(define DADDI DADDIU)
-(hash-table-put! opcode-handlers #x18 DADDI)
+  (define DADDI DADDIU)
+  (hash-table-put! opcode-handlers #x18 DADDI)
 
 #|
 ; TODO: LDL, LDR
@@ -342,37 +314,37 @@
   (with-i-form
     `(md= (+ (reg ,rs) ,(s16-ext immed)) (reg64 ,rt))))
 
-; TODO:  SWL , SDL , SDR , SWR
-; TODO:  LL     , LWC1  , NI  , NI   , NI  , LDC1
-; TODO:  SC     , SWC1  , NI  , NI   , NI  , SDC1
+  ; TODO:  SWL , SDL , SDR , SWR
+  ; TODO:  LL     , LWC1  , NI  , NI   , NI  , LDC1
+  ; TODO:  SC     , SWC1  , NI  , NI   , NI  , SDC1
 
 |#
 
-; SPECIAL instruction handlers
+  ; SPECIAL instruction handlers
 
-(special #x00 SLL
-  (with-shift-form
-    `(r= ,rd (arithmetic-shift (reg ,rt) ,sa))))
+  (special #x00 SLL
+           (with-shift-form
+            `(r= ,rd (arithmetic-shift (reg ,rt) ,sa))))
 
-(special #x02 SRL
-  (with-shift-form
-    `(r= ,rd (logical-shift (reg ,rt) ,(- sa)))))
+  (special #x02 SRL
+           (with-shift-form
+            `(r= ,rd (logical-shift (reg ,rt) ,(- sa)))))
 
-(special #x03 SRA
-  (with-shift-form
-    `(r= ,rd (arithmetic-shift (reg ,rt) ,(- sa)))))
+  (special #x03 SRA
+           (with-shift-form
+            `(r= ,rd (arithmetic-shift (reg ,rt) ,(- sa)))))
 
-(special #x04 SLLV
-  (with-reg-form
-    `(r= ,rd (arithmetic-shift (reg ,rt) (reg ,rs)))))
+  (special #x04 SLLV
+           (with-reg-form
+            `(r= ,rd (arithmetic-shift (reg ,rt) (reg ,rs)))))
 
-(special #x06 SRLV
-  (with-reg-form
-    `(r= ,rd (logical-shift (reg ,rt) (- (reg ,rs))))))
+  (special #x06 SRLV
+           (with-reg-form
+            `(r= ,rd (logical-shift (reg ,rt) (- (reg ,rs))))))
 
-(special #x07 SRAV
-  (with-reg-form
-    `(r= ,rd (arithmetic-shift (reg ,rt) (- (reg ,rs))))))
+  (special #x07 SRAV
+           (with-reg-form
+            `(r= ,rd (arithmetic-shift (reg ,rt) (- (reg ,rs))))))
 
 #|
 (opcode #x08 JR
@@ -395,138 +367,139 @@
        (branch (ureg ,rs)))))
 |#
 
-; TODO: SYSCALL
+  ; TODO: SYSCALL
 
-(special #x10 MFHI
-  (let ((rd (get-rd instr)))
-    `(r= ,rd (reg "hi"))))
+  (special #x10 MFHI
+           (let ((rd (get-rd instr)))
+             `(r= ,rd (reg "hi"))))
 
-(special #x11 MTHI
-  (let ((rs (get-rs instr)))
-    `(r= "hi" (reg ,rs))))
+  (special #x11 MTHI
+           (let ((rs (get-rs instr)))
+             `(r= "hi" (reg ,rs))))
 
-(special #x12 MFLO
-  (let ((rd (get-rd instr)))
-    `(r= ,rd (reg "lo"))))
+  (special #x12 MFLO
+           (let ((rd (get-rd instr)))
+             `(r= ,rd (reg "lo"))))
 
-(special #x13 MTLO
-  (let ((rs (get-rs instr)))
-    `(r= "lo" (reg ,rs))))
+  (special #x13 MTLO
+           (let ((rs (get-rs instr)))
+             `(r= "lo" (reg ,rs))))
 
-(special #x14 DSLLV
-  (with-reg-form
-    `(r64= ,rd (arithmetic-shift (reg64 ,rt) (reg ,rs)))))
+  (special #x14 DSLLV
+           (with-reg-form
+            `(r64= ,rd (arithmetic-shift (reg64 ,rt) (reg ,rs)))))
 
-(special #x16 DSRLV
-  (with-reg-form
-    `(r64= ,rd (logical-shift (reg64 ,rt) (- (reg ,rs))))))
+  (special #x16 DSRLV
+           (with-reg-form
+            `(r64= ,rd (logical-shift (reg64 ,rt) (- (reg ,rs))))))
 
-(special #x17 DSRAV
-  (with-reg-form
-    `(r64= ,rd (arithmetic-shift (reg64 ,rt) (- (reg ,rs))))))
+  (special #x17 DSRAV
+           (with-reg-form
+            `(r64= ,rd (arithmetic-shift (reg64 ,rt) (- (reg ,rs))))))
 
-(special #x18 MULT
-  (with-mult-form
-    `(let ((product (* (reg ,rs) (reg ,rt))))
-       (begin
-         (r= "lo" (bitwise-and product #xFFFFFFFF))
-         (r= "hi" (bitwise-and (arithmetic-shift product -32) #xFFFFFFFF))))))
+  (special #x18 MULT
+           (with-mult-form
+            `(let ((product (* (reg ,rs) (reg ,rt))))
+               (begin
+                 (r= "lo" (bitwise-and product #xFFFFFFFF))
+                 (r= "hi" (bitwise-and (arithmetic-shift product -32) #xFFFFFFFF))))))
 
-(special #x19 MULTU
-  (with-mult-form
-    `(let ((product (* (ureg ,rs) (ureg ,rt))))
-       (begin
-         (r= "lo" (bitwise-and product #xFFFFFFFF))
-         (r= "hi" (bitwise-and (arithmetic-shift product -32) #xFFFFFFFF))))))
+  (special #x19 MULTU
+           (with-mult-form
+            `(let ((product (* (ureg ,rs) (ureg ,rt))))
+               (begin
+                 (r= "lo" (bitwise-and product #xFFFFFFFF))
+                 (r= "hi" (bitwise-and (arithmetic-shift product -32) #xFFFFFFFF))))))
 
-(special #x1a DIV
-  (with-mult-form
-    `(begin
-       (r= "lo" (quotient (reg ,rs) (reg ,rt)))
-       (r= "hi" (modulo (reg ,rs) (reg ,rt))))))
+  (special #x1a DIV
+           (with-mult-form
+            `(begin
+               (r= "lo" (quotient (reg ,rs) (reg ,rt)))
+               (r= "hi" (modulo (reg ,rs) (reg ,rt))))))
 
-(special #x1b DIVU
-  (with-mult-form
-    `(begin
-       (r= "lo" (quotient (ureg ,rs) (ureg ,rt)))
-       (r= "hi" (modulo (ureg ,rs) (ureg ,rt))))))
+  (special #x1b DIVU
+           (with-mult-form
+            `(begin
+               (r= "lo" (quotient (ureg ,rs) (ureg ,rt)))
+               (r= "hi" (modulo (ureg ,rs) (ureg ,rt))))))
 
-(special #x21 ADDU
-  (with-reg-form
-    `(r= ,rd (+ (reg ,rs) (reg ,rt)))))
+  (special #x21 ADDU
+           (with-reg-form
+            `(r= ,rd (+ (reg ,rs) (reg ,rt)))))
 
-(define ADD ADDU)
-(hash-table-put! opcode-handlers #x20 ADD)
+  (define ADD ADDU)
+  (hash-table-put! opcode-handlers #x20 ADD)
 
-(special #x23 SUBU
-  (with-reg-form
-    `(r= ,rd (- (reg ,rs) (reg ,rt)))))
+  (special #x23 SUBU
+           (with-reg-form
+            `(r= ,rd (- (reg ,rs) (reg ,rt)))))
 
-(define SUB SUBU)
-(hash-table-put! opcode-handlers #x22 SUB)
+  (define SUB SUBU)
+  (hash-table-put! opcode-handlers #x22 SUB)
 
-(special #x24 AND
-  (with-reg-form
-    `(r= ,rd (bitwise-and (reg ,rs) (reg ,rt)))))
+  (special #x24 AND
+           (with-reg-form
+            `(r= ,rd (bitwise-and (reg ,rs) (reg ,rt)))))
 
-(special #x25 OR
-  (with-reg-form
-    `(r= ,rd (bitwise-or (reg ,rs) (reg ,rt)))))
+  (special #x25 OR
+           (with-reg-form
+            `(r= ,rd (bitwise-or (reg ,rs) (reg ,rt)))))
 
-(special #x26 XOR
-  (with-reg-form
-    `(r= ,rd (bitwise-xor (reg ,rs) (reg ,rt)))))
+  (special #x26 XOR
+           (with-reg-form
+            `(r= ,rd (bitwise-xor (reg ,rs) (reg ,rt)))))
 
-(special #x27 NOR
-  (with-reg-form
-    `(r= ,rd (bitwise-nor (reg ,rs) (reg ,rt)))))
+  (special #x27 NOR
+           (with-reg-form
+            `(r= ,rd (bitwise-nor (reg ,rs) (reg ,rt)))))
 
-(special #x2a SLT
-  (with-reg-form
-    `(r= ,rd (if (< (reg ,rs) (reg ,rt)) 1 0))))
+  (special #x2a SLT
+           (with-reg-form
+            `(r= ,rd (if (< (reg ,rs) (reg ,rt)) 1 0))))
 
-(special #x2b SLTU
-  (with-reg-form
-    `(r= ,rd (if (< (ureg ,rs) (ureg ,rt)) 1 0))))
+  (special #x2b SLTU
+           (with-reg-form
+            `(r= ,rd (if (< (ureg ,rs) (ureg ,rt)) 1 0))))
 
-(special #x2d DADDU
-  (with-reg-form
-    `(r64= ,rd (+ (reg64 ,rs) (reg64 ,rt)))))
+  (special #x2d DADDU
+           (with-reg-form
+            `(r64= ,rd (+ (reg64 ,rs) (reg64 ,rt)))))
 
-(define DADD DADDU)
-(hash-table-put! opcode-handlers #x2c DADD)
+  (define DADD DADDU)
+  (hash-table-put! opcode-handlers #x2c DADD)
 
-(special #x2f DSUBU
-  (with-reg-form
-    `(r64= ,rd (- (reg64 ,rs) (reg64 ,rt)))))
+  (special #x2f DSUBU
+           (with-reg-form
+            `(r64= ,rd (- (reg64 ,rs) (reg64 ,rt)))))
 
-(define DSUB DSUBU)
-(hash-table-put! opcode-handlers #x2e DSUB)
+  (define DSUB DSUBU)
+  (hash-table-put! opcode-handlers #x2e DSUB)
 
-; TODO: TEQ if necessary
+  ; TODO: TEQ if necessary
 
-(special #x38 DSLL
-  (with-shift-form
-    `(r64= ,rd (arithmetic-shift (reg64 ,rt) ,sa))))
+  (special #x38 DSLL
+           (with-shift-form
+            `(r64= ,rd (arithmetic-shift (reg64 ,rt) ,sa))))
 
-(special #x3a DSRL
-  (with-shift-form
-    `(r64= ,rd (logical-shift (reg64 ,rt) ,(- sa)))))
+  (special #x3a DSRL
+           (with-shift-form
+            `(r64= ,rd (logical-shift (reg64 ,rt) ,(- sa)))))
 
-(special #x3b DSRA
-  (with-shift-form
-    `(r64= ,rd (arithmetic-shift (reg64 ,rt) ,(- sa)))))
+  (special #x3b DSRA
+           (with-shift-form
+            `(r64= ,rd (arithmetic-shift (reg64 ,rt) ,(- sa)))))
 
-(special #x3c DSLL32
-  (with-shift-form
-    `(r64= ,rd (arithmetic-shift (reg64 ,rt) ,(+ sa 32)))))
+  (special #x3c DSLL32
+           (with-shift-form
+            `(r64= ,rd (arithmetic-shift (reg64 ,rt) ,(+ sa 32)))))
 
-(special #x3e DSRL32
-  (with-shift-form
-    `(r64= ,rd (logical-shift (reg64 ,rt) ,(- (+ sa 32))))))
+  (special #x3e DSRL32
+           (with-shift-form
+            `(r64= ,rd (logical-shift (reg64 ,rt) ,(- (+ sa 32))))))
 
-(special #x3f DSRA32
-  (with-shift-form
-    `(r64= ,rd (arithmetic-shift (reg64 ,rt) ,(- (+ sa 32))))))
+  (special #x3f DSRA32
+           (with-shift-form
+            `(r64= ,rd (arithmetic-shift (reg64 ,rt) ,(- (+ sa 32))))))
+  
+  )
 
-)

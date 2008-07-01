@@ -27,6 +27,13 @@ unsigned int dynarec(unsigned int addr);
 	scheme_add_global_constant( name, \
 		scheme_make_prim_w_arity(f, name, min, max), env)
 
+#define SCM_DEFUN_MOD(env,mod,f,name,min,max) \
+	scheme_set_global_bucket( \
+		name, \
+		scheme_module_bucket(mod, scheme_intern_symbol(name), -1, env), \
+		scheme_make_prim_w_arity(f, name, min, max), \
+		1)
+
 #endif // MZ_SCHEME
 
 #endif // FFI_H
