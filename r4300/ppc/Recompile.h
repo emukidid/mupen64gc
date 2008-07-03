@@ -24,7 +24,7 @@ typedef struct {
 #define MAX_JUMPS        1024
 #define JUMP_TYPE_J      1   // uses a long immed & abs addr
 #define JUMP_TYPE_OUT    2   // the jump leaves the block
-#define JUMP_TYPE_SPEC   3   // special jump, destination precomputed
+#define JUMP_TYPE_SPEC   4   // special jump, destination precomputed
 typedef struct {
 	MIPS_instr*    src_instr;
 	PowerPC_instr* dst_instr;

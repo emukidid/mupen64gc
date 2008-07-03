@@ -3,6 +3,7 @@
 
 int init_scheme_dynarec(void);
 unsigned int dynarec(unsigned int addr);
+void dynaInvalidate(unsigned int start, unsigned int stop);
 
 #ifdef MZ_SCHEME
 #define INT2SCM(i) \

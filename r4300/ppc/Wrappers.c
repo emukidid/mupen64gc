@@ -17,7 +17,7 @@ inline unsigned long update_invalid_addr(unsigned long addr);
 
 #define START_INSTRUCTION_COUNT() \
 	__asm__ __volatile__ ( \
-		/* Start up the instruction counter is running */ \
+		/* Start up the instruction counter */ \
 		"mfmmcr0	%0 \n" \
 		"ori		%0, %0, 2 \n" \
 		"mtmmcr0	%0 \n" \
@@ -37,7 +37,7 @@ inline unsigned long update_invalid_addr(unsigned long addr);
 #define DYNAREC_PRELUDE() \
 	__asm__ __volatile__ ( \
 		"stwu	1, -16(1) \n" \
-		"stw	13, 8(1) \n" \
+		"stw	13, 12(1) \n" \
 		"mr		13, %0 \n" \
 		:: "r" (reg) )
 

@@ -693,7 +693,7 @@ PowerPC_instr Instruction(int opcode, ...);
 	{ ppc = NEW_PPC_INSTR(); \
 	  PPC_SET_OPCODE(ppc, PPC_OPCODE_XL); \
 	  PPC_SET_FUNC  (ppc, PPC_FUNC_BCLR); \
-	  PPC_SET_BO    (ppc, 0x1f); \
+	  PPC_SET_BO    (ppc, 0x14); \
 	  PPC_SET_LK    (ppc, lk); }
 
 #define GEN_MTLR(ppc,rs) \
