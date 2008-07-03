@@ -436,7 +436,7 @@ static void genJumpPad(PowerPC_block* ppc_block){
 	
 	// Restore any saved registers
 	// Restore r13
-	GEN_LWZ(ppc, 13, 8, 1);
+	GEN_LWZ(ppc, 13, 12, 1);
 	set_next_dst(ppc);
 	// Restore the sp
 	GEN_LWZ(ppc, 1, 0, 1);

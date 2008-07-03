@@ -13,8 +13,6 @@
     (if (= (bitwise-and val #x80) #x80)
         (- (+ (bitwise-and (bitwise-not val) #xFF) 1))
         val))
-  ; FIXME: Actually make this one logical
-  (define logical-shift arithmetic-shift)
   (define (interpret instr)
     (raise `(end-of-frag (decode&interpret ,instr ,(get-pc)))))
     ;(set! end-of-frag #t)
@@ -105,7 +103,7 @@
        ; Recompile the delay slot
        ,(gen-delay)
        ; Branch to ($PC & 0xF0000000) | (li << 2)
-       (branch ,(bitwise-or 
+       (branch ,(bitwise-ior 
                   (bitwise-and (get-pc) #xF0000000) 
                   (arithmetic-shift li 2))))))
 
@@ -117,7 +115,7 @@
        ; Link
        (r= 31 ,(+ (get-pc) 4))
        ; Branch to ($PC & 0xF0000000) | (li << 2)
-       (branch ,(bitwise-or
+       (branch ,(bitwise-ior
                   (bitwise-and (get-pc) #xF0000000)
                   (arithmetic-shift li 2))))))
 
@@ -177,13 +175,14 @@
   (define ADDI ADDIU)
   (hash-table-put! opcode-handlers #x08 ADDI)
 
+#|
   (opcode #x0a SLTI
           (with-i-form
-           `(r= ,rt (if (< (reg ,rs) ,(s16-ext immed)) 1 0))))
+           `(r= ,rt (if (< (sreg ,rs) ,(s16-ext immed)) 1 0))))
 
   (opcode #x0b SLTIU
           (with-i-form
-           `(r= ,rt (if (< (ureg ,rs) ,immed)) 1 0)))
+           `(r= ,rt (if (< (reg ,rs) ,immed)) 1 0)))
 
   (opcode #x0c ANDI
           (with-i-form
@@ -191,7 +190,7 @@
 
   (opcode #x0d ORI
           (with-i-form
-           `(r= ,rt (bitwise-or (reg ,rs) ,immed))))
+           `(r= ,rt (bitwise-ior (reg ,rs) ,immed))))
 
   (opcode #x0e XORI
           (with-i-form
@@ -200,7 +199,7 @@
   (opcode #x0f LUI
           (with-i-form
            `(r= ,rt (arithmetic-shift ,immed 16))))
-
+|#
   ; TODO: COP0   , COP1
 
 #|
@@ -256,14 +255,14 @@
          ; Else continue executing past the delay slot
          (branch ,(+ (get-pc) 8)))))
 |#
-
+#|
   (opcode #x19 DADDIU
           (with-i-form
            `(r64= ,rt (+ (reg64 ,rs) ,(s16-ext immed)))))
 
   (define DADDI DADDIU)
   (hash-table-put! opcode-handlers #x18 DADDI)
-
+|#
 #|
 ; TODO: LDL, LDR
 
@@ -321,7 +320,7 @@
 |#
 
   ; SPECIAL instruction handlers
-
+#|
   (special #x00 SLL
            (with-shift-form
             `(r= ,rd (arithmetic-shift (reg ,rt) ,sa))))
@@ -345,7 +344,7 @@
   (special #x07 SRAV
            (with-reg-form
             `(r= ,rd (arithmetic-shift (reg ,rt) (- (reg ,rs))))))
-
+|#
 #|
 (opcode #x08 JR
   (let ((rs (get-rs instr)))
@@ -353,7 +352,7 @@
        ; Recompile the delay slot
        ,(gen-delay)
        ; Branch to $rs
-       (branch (ureg ,rs)))))
+       (branch (reg ,rs)))))
 
 (opcode #x09 JALR
   (let ((rs (get-rs instr))
@@ -364,11 +363,11 @@
        ; Link
        (r= ,rd ,(+ (get-pc) 4))
        ; Branch to $rs
-       (branch (ureg ,rs)))))
+       (branch (reg ,rs)))))
 |#
 
   ; TODO: SYSCALL
-
+#|
   (special #x10 MFHI
            (let ((rd (get-rd instr)))
              `(r= ,rd (reg "hi"))))
@@ -384,7 +383,8 @@
   (special #x13 MTLO
            (let ((rs (get-rs instr)))
              `(r= "lo" (reg ,rs))))
-
+|#
+#|
   (special #x14 DSLLV
            (with-reg-form
             `(r64= ,rd (arithmetic-shift (reg64 ,rt) (reg ,rs)))))
@@ -396,17 +396,18 @@
   (special #x17 DSRAV
            (with-reg-form
             `(r64= ,rd (arithmetic-shift (reg64 ,rt) (- (reg ,rs))))))
-
+|#
+#|
   (special #x18 MULT
            (with-mult-form
-            `(let ((product (* (reg ,rs) (reg ,rt))))
+            `(let ((product (* (sreg ,rs) (sreg ,rt))))
                (begin
                  (r= "lo" (bitwise-and product #xFFFFFFFF))
                  (r= "hi" (bitwise-and (arithmetic-shift product -32) #xFFFFFFFF))))))
 
   (special #x19 MULTU
            (with-mult-form
-            `(let ((product (* (ureg ,rs) (ureg ,rt))))
+            `(let ((product (* (reg ,rs) (reg ,rt))))
                (begin
                  (r= "lo" (bitwise-and product #xFFFFFFFF))
                  (r= "hi" (bitwise-and (arithmetic-shift product -32) #xFFFFFFFF))))))
@@ -414,14 +415,14 @@
   (special #x1a DIV
            (with-mult-form
             `(begin
-               (r= "lo" (quotient (reg ,rs) (reg ,rt)))
-               (r= "hi" (modulo (reg ,rs) (reg ,rt))))))
+               (r= "lo" (quotient (sreg ,rs) (sreg ,rt)))
+               (r= "hi" (modulo (sreg ,rs) (sreg ,rt))))))
 
   (special #x1b DIVU
            (with-mult-form
             `(begin
-               (r= "lo" (quotient (ureg ,rs) (ureg ,rt)))
-               (r= "hi" (modulo (ureg ,rs) (ureg ,rt))))))
+               (r= "lo" (quotient (reg ,rs) (reg ,rt)))
+               (r= "hi" (modulo (reg ,rs) (reg ,rt))))))
 
   (special #x21 ADDU
            (with-reg-form
@@ -443,7 +444,7 @@
 
   (special #x25 OR
            (with-reg-form
-            `(r= ,rd (bitwise-or (reg ,rs) (reg ,rt)))))
+            `(r= ,rd (bitwise-ior (reg ,rs) (reg ,rt)))))
 
   (special #x26 XOR
            (with-reg-form
@@ -455,12 +456,13 @@
 
   (special #x2a SLT
            (with-reg-form
-            `(r= ,rd (if (< (reg ,rs) (reg ,rt)) 1 0))))
+            `(r= ,rd (if (< (sreg ,rs) (sreg ,rt)) 1 0))))
 
   (special #x2b SLTU
            (with-reg-form
-            `(r= ,rd (if (< (ureg ,rs) (ureg ,rt)) 1 0))))
-
+            `(r= ,rd (if (< (reg ,rs) (reg ,rt)) 1 0))))
+|#
+#|
   (special #x2d DADDU
            (with-reg-form
             `(r64= ,rd (+ (reg64 ,rs) (reg64 ,rt)))))
@@ -500,6 +502,6 @@
   (special #x3f DSRA32
            (with-shift-form
             `(r64= ,rd (arithmetic-shift (reg64 ,rt) ,(- (+ sa 32))))))
-  
+|#
   )
 

@@ -3,14 +3,14 @@
  */
 
 #include <stdio.h>
+#include "/home/mike/tmp/mupen64_scheme/r4300/macros.h"
 #include "/home/mike/tmp/mupen64_scheme/memory/memory.h"
 #include "/home/mike/tmp/mupen64_scheme/r4300/r4300.h"
 #include "scheme.h"
 #include "FFI.h"
 
 extern void (*interp_ops[64])(void);
-extern char* MIPS_scheme_code;
-extern char* Recompile_scheme_code;
+extern unsigned long op;
 
 #ifdef MZ_SCHEME
 static Scheme_Env* env;
@@ -19,14 +19,19 @@ static Scheme_Env* env;
 //unsigned int decodeNInterpret(unsigned int instr, unsigned int addr){
 #ifdef MZ_SCHEME
 Scheme_Object* decodeNInterpret(int argc, Scheme_Object* argv[]){
-	unsigned int instr;
-	SCM2UINT(argv[0], instr);
+	unsigned int count;
+	SCM2UINT(argv[0], op);
 	SCM2UINT(argv[1], interp_addr);
+	SCM2UINT(scheme_eval_string("(get&reset-count)", env), count);
 #endif
+	if (interp_addr == 0xa4000ac8) stop = 1;
+	//printf("Executed %d instructions\n", count);
+	//Count += count;
 	
-	printf("Interpreting %08x @ %08x\n", instr, interp_addr);
-	prefetch_opcode(instr);
-	interp_ops[((instr >> 26) & 0x3F)]();
+	//printf("Interpreting %08x @ %08x\n", op, interp_addr);
+	//prefetch_opcode(op);
+	prefetch();
+	interp_ops[((op >> 26) & 0x3F)]();
 	
 	return UINT2SCM(interp_addr);
 }
@@ -38,20 +43,23 @@ Scheme_Object* isStopSignaled(int argc, Scheme_Object* argv[]){
 	return stop ? scheme_true : scheme_false;
 }
 
-//long regLoad(int which){ return (long)reg[which]; }
+//unsigned long regLoad(int which){ return (long)reg[which]; }
 #ifdef MZ_SCHEME
 Scheme_Object* regLoad(int argc, Scheme_Object* argv[]){
 	int which;
 	SCM2INT(argv[0], which);
-	return INT2SCM((int)reg[which]);
+	printf("%x (%llx) <- r%d\n", (int)reg[which], reg[which], which);
+	//if(which == 4) getc(stdin);
+	//return INT2SCM((int)reg[which]);
+	return UINT2SCM((unsigned int)reg[which]);
 }
 #endif
-//unsigned long uregLoad(int which){ return (unsigned long)reg[which]; }
+//long sregLoad(int which){ return (unsigned long)reg[which]; }
 #ifdef MZ_SCHEME
-Scheme_Object* uregLoad(int argc, Scheme_Object* argv[]){
+Scheme_Object* sregLoad(int argc, Scheme_Object* argv[]){
 	int which;
 	SCM2INT(argv[0], which);
-	return UINT2SCM((unsigned int)reg[which]);
+	return INT2SCM((int)reg[which]);
 }
 #endif
 //long reg64Load(int which){ return (long long)reg[which]; }
@@ -77,8 +85,13 @@ Scheme_Object* regStore(int argc, Scheme_Object* argv[]){
 	int which;
 	SCM2INT(argv[0], which);
 	int val;
-	SCM2INT(argv[1], val);
+	argv[0] = scheme_make_integer_value_from_unsigned(0xffffffff);
+	argv[0] = scheme_apply(scheme_builtin_value("bitwise-and"), 2, argv);
+	if( !SCM2UINT(argv[0], val) )
+		scheme_signal_error("Error unpacking %V into r%d", argv[0], which);
 	reg[which] = (long long)val;
+	printf("r%d <- %x\n", which, (long long)val);
+	//if(which == 4) getc(stdin);
 	return scheme_false;
 }
 #endif
@@ -88,7 +101,8 @@ Scheme_Object* uregStore(int argc, Scheme_Object* argv[]){
 	int which;
 	SCM2INT(argv[0], which);
 	unsigned int val;
-	SCM2UINT(argv[1], val);
+	if( ! SCM2UINT(argv[1], val) )
+		scheme_signal_error("Error unpacking %V into r%d", argv[1], which);
 	reg[which] = (unsigned long long)val;
 	return scheme_false;
 }
@@ -194,10 +208,22 @@ void mem64Store(unsigned int addr, long long val){
 	write_dword_in_memory();
 }
 
+//unsigned int logicalShift(unsigned int val, int shift){
+#ifdef MZ_SCHEME
+Scheme_Object* logicalShift(int argc, Scheme_Object* argv[]){
+	unsigned int val;
+	SCM2UINT(argv[0], val);
+	int shift;
+	SCM2INT(argv[1], shift);
+#endif
+	return UINT2SCM(shift < 0 ? val >> (-shift) : val << shift);
+}
+
 void dynaInvalidate(unsigned int start, unsigned int stop){
 	char call[64];
 	sprintf(call, "(invalidate-range #x%08x #x%08x)", start, stop);
-	scheme_eval_string(call, env);
+	printf("%s\n", call);
+	if(env) scheme_eval_string(call, env);
 }
 
 #ifdef MZ_SCHEME
@@ -219,17 +245,18 @@ static int setup_mzscheme(Scheme_Env* e, int argc, char* argv[]){
     // Create a Scheme function for each C function that needs to be called
     printf("registering functions\n");
     SCM_DEFUN(e, decodeNInterpret, "decode&interpret", 2, 2);
-    Scheme_Object* module = scheme_intern_symbol("mips/Bridge");
-    SCM_DEFUN_MOD(e, module, isStopSignaled, "stop-signaled?", 0, 0);
-    SCM_DEFUN_MOD(e, module, fetch, "fetch", 1, 1);
+    SCM_DEFUN(e, logicalShift, "logical-shift", 2, 2);
     SCM_DEFUN(e, regLoad, "reg", 1, 1);
-    SCM_DEFUN(e, uregLoad, "ureg", 1, 1);
+    SCM_DEFUN(e, sregLoad, "sreg", 1, 1);
     SCM_DEFUN(e, reg64Load, "reg64", 1, 1);
     SCM_DEFUN(e, ureg64Load, "ureg64", 1, 1);
     SCM_DEFUN(e, regStore, "r=", 2, 2);
     SCM_DEFUN(e, uregStore, "ur=", 2, 2);
     SCM_DEFUN(e, reg64Store, "r64=", 2, 2);
     SCM_DEFUN(e, ureg64Store, "ur64=", 2, 2);
+    Scheme_Object* module = scheme_intern_symbol("mips/Bridge");
+    SCM_DEFUN_MOD(e, module, isStopSignaled, "stop-signaled?", 0, 0);
+    SCM_DEFUN_MOD(e, module, fetch, "fetch", 1, 1);
 	
 #if 0 
 	save = scheme_current_thread->error_buf;
@@ -275,7 +302,6 @@ unsigned int dynarec(unsigned int addr){
 	sprintf(call, "(dynarec #x%08x)", addr);
 	dynacore = 0;
 	interpcore = 1;
-	last_addr = addr;
 	
 	mz_jmp_buf * volatile save, fresh;
 	save = scheme_current_thread->error_buf;

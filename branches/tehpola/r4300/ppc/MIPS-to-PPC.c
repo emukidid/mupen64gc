@@ -2134,7 +2134,7 @@ static void genCallInterp(MIPS_instr mips){
 	// Save the lr
 	GEN_MFLR(ppc, 0);
 	set_next_dst(ppc);
-	GEN_STW(ppc, 0, 4, 1);
+	GEN_STW(ppc, 0, 8, 1);
 	set_next_dst(ppc);
 	// Load the address of decodeNInterpret
 	GEN_LIS(ppc, 3, ((unsigned int)decodeNInterpret)>>16);
@@ -2158,7 +2158,7 @@ static void genCallInterp(MIPS_instr mips){
 	GEN_BCTRL(ppc);
 	set_next_dst(ppc);
 	// Restore the lr
-	GEN_LWZ(ppc, 0, 4, 1);
+	GEN_LWZ(ppc, 0, 8, 1);
 	set_next_dst(ppc);
 	GEN_MTLR(ppc, 0);
 	set_next_dst(ppc);
