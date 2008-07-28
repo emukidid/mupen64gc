@@ -1491,7 +1491,9 @@ void update_count()
    if (interpcore)
      {
      	//sprintf(txtbuffer, "trace: addr = 0x%08x\n", interp_addr);
-	//DEBUG_print
+#ifdef PPC_DYNAREC
+	Count += instructionCount/3;
+#endif
 	Count = Count + (interp_addr - last_addr)/2;
 	last_addr = interp_addr;
      }
@@ -2163,6 +2165,9 @@ void cpu_init(void){
    //          worst case is probably this will leak mem
    if(dynacore == 2)
    	PC = malloc(sizeof(precomp_instr));
+#ifdef PPC_DYNAREC
+   instructionCount = 0;
+#endif
    // Hack for the interpreter
    cpu_inited = 1;
 }

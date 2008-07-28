@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <assert.h>
 #include "../../gc_memory/memory.h"
 #include "../Invalid_Code.h"
 #include "../interupt.h"
@@ -18,8 +19,6 @@
 #include "Recompile.h"
 #include "Wrappers.h"
 
-// Just for debugging
-#include <ogc/video.h>
 #include "../../gui/DEBUG.h"
 
 static MIPS_instr*    src;
@@ -33,12 +32,14 @@ static PowerPC_instr* jump_pad;
 static jump_node    jump_table[MAX_JUMPS];
 static unsigned int current_jump;
 static PowerPC_instr** code_addr;
+static unsigned char isJmpDst[1024];
 
 int    emu_reg[32]; // State of emulator
 double emu_fpr[32];
 int lr[8]; // link register stack
 int lr_i;
 
+static void pass0(PowerPC_block* ppc_block);
 static void pass2(PowerPC_block* ppc_block);
 //static void genRecompileBlock(PowerPC_block*);
 static void genJumpPad(PowerPC_block*);
@@ -58,7 +59,6 @@ int has_next_src(void){ return (src_last-src) > 0; }
  void nop_ignored(void){ code_addr[src-1-src_first] = dst; }
 // Returns the MIPS PC
 unsigned int get_src_pc(void){ return addr_first + ((src-1-src_first)<<2); }
-
 void set_next_dst(PowerPC_instr i){ *(dst++) = i; ++(*code_length); }
 
 int add_jump(int old_jump, int is_j, int is_out){
@@ -81,7 +81,7 @@ int add_jump_special(int is_j){
 	jump->type      = JUMP_TYPE_SPEC | (is_j ? JUMP_TYPE_J : 0);
 	return id;
 }
-	
+
 void set_jump_special(int which, int new_jump){
 	jump_node* jump = &jump_table[which];
 	if(jump->type != JUMP_TYPE_SPEC) return;
@@ -90,14 +90,18 @@ void set_jump_special(int which, int new_jump){
 
 // Converts a sequence of MIPS instructions to a PowerPC block
 void recompile_block(PowerPC_block* ppc_block){
-	src = src_first = ppc_block->mips_code;
-	dst = ppc_block->code;
-	src_last = src + (ppc_block->end_address - ppc_block->start_address)/4;
-	code_length = &ppc_block->length;
+	src_first = ppc_block->mips_code;
+	src_last = src_first + (ppc_block->end_address - ppc_block->start_address)/4;
 	addr_first = ppc_block->start_address;
 	addr_last  = ppc_block->end_address;
-	current_jump = 0;
 	code_addr = ppc_block->code_addr;
+	code_length = &ppc_block->length;
+	
+	pass0(ppc_block);
+	
+	src = src_first;
+	dst = ppc_block->code;
+	current_jump = 0;
 	start_new_block();
 	
 	while(has_next_src()){
@@ -108,6 +112,8 @@ void recompile_block(PowerPC_block* ppc_block){
 		if(*code_length + 32 >= ppc_block->max_length)
 			resizeCode(ppc_block, ppc_block->max_length * 3/2);
 		
+		if(isJmpDst[src-src_first]) start_new_mapping();
+		
 		ppc_block->code_addr[src-src_first] = dst;
 		if( convert() == CONVERT_ERROR ){
 			sprintf(txtbuffer,"Error converting MIPS instruction:\n"
@@ -116,15 +122,6 @@ void recompile_block(PowerPC_block* ppc_block){
 			DEBUG_print(txtbuffer, DBG_USBGECKO);
 			//int i=16; while(i--) VIDEO_WaitVSync();
 		}
-#ifdef DEBUG_DYNAREC
-		// This allows us to return to the debugger every instruction
-		PowerPC_instr ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_XL);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_BCLR);
-		PPC_SET_BO    (ppc, 0x14);
-		PPC_SET_LK    (ppc, 1);
-		set_next_dst(ppc);
-#endif
 	}
 	
 	// This simplifies jumps and branches out of the block
@@ -185,6 +182,7 @@ void init_block(MIPS_instr* mips_code, PowerPC_block* ppc_block){
 		ppc_block->code = RecompCache_Alloc(ppc_block->max_length * sizeof(PowerPC_instr),
 		                                    ppc_block->start_address>>12);
 	}
+	
 	if(!ppc_block->code_addr)
 		ppc_block->code_addr = malloc(length * sizeof(PowerPC_instr*));
 	ppc_block->mips_code = mips_code;
@@ -335,6 +333,39 @@ static void pass2(PowerPC_block* ppc_block){
 	}
 }
 
+static void pass0(PowerPC_block* ppc_block){
+	unsigned int pc = addr_first >> 2;
+	int i;
+	// Zero out the jump destinations table
+	for(i=0; i<1024; ++i) isJmpDst[i] = 0;
+	// Go through each instruction and map every branch instruction's destination
+	for(src = src_first; src < src_last; ++src, ++pc){
+		int opcode = MIPS_GET_OPCODE(*src);
+		if(opcode == MIPS_OPCODE_J || opcode == MIPS_OPCODE_JAL){
+			unsigned int li = MIPS_GET_LI(*src);
+			if(!is_j_out(li, 1)){
+				assert( ((li&0x3FF) >= 0) && ((li&0x3FF) < 1024) );
+				isJmpDst[ li & 0x3FF ] = 1;
+			}
+		} else if(opcode == MIPS_OPCODE_BEQ   ||
+                  opcode == MIPS_OPCODE_BNE   ||
+                  opcode == MIPS_OPCODE_BLEZ  ||
+                  opcode == MIPS_OPCODE_BGTZ  ||
+                  opcode == MIPS_OPCODE_BEQL  ||
+                  opcode == MIPS_OPCODE_BNEL  ||
+                  opcode == MIPS_OPCODE_BLEZL ||
+                  opcode == MIPS_OPCODE_BGTZL ||
+                  opcode == MIPS_OPCODE_B     ){
+        	int bd = MIPS_GET_IMMED(*src);
+        	bd |= (bd & 0x8000) ? 0xFFFF0000 : 0; // sign extend
+        	if(!is_j_out(bd, 0)){
+        		assert( (((pc+1) & 0x3FF) + bd >= 0) && (((pc+1) & 0x3FF) + bd < 1024) );
+        		isJmpDst[ ((pc+1) & 0x3FF) + bd ] = 1;
+        	}
+		}
+	}
+}
+
 extern int stop;
 inline unsigned long update_invalid_addr(unsigned long addr);
 void jump_to(unsigned int address){
@@ -435,6 +466,11 @@ static void genJumpPad(PowerPC_block* ppc_block){
 	jump_pad = dst;
 	
 	// Restore any saved registers
+	// Restore cr
+	GEN_LWZ(ppc, 13, 8, 1);
+	set_next_dst(ppc);
+	GEN_MTCR(ppc, 13);
+	set_next_dst(ppc);
 	// Restore r13
 	GEN_LWZ(ppc, 13, 12, 1);
 	set_next_dst(ppc);
