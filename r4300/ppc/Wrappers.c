@@ -34,16 +34,24 @@ inline unsigned long update_invalid_addr(unsigned long addr);
 		: "r" (instructionCount) \
 		: "r9" )
 
+/* Recompiled code stack frame:
+ * 	$sp+12	| old r13
+ * 	$sp+8	| old lr
+ * 	$sp+4	| old cr
+ * 	$sp		| old sp
+ */
+
 #define DYNAREC_PRELUDE() \
 	__asm__ __volatile__ ( \
 		"stwu	1, -16(1) \n" \
 		"stw	13, 12(1) \n" \
+		"mfcr	13 \n" \
+		"stw	13, 8(1) \n" \
 		"mr		13, %0 \n" \
 		:: "r" (reg) )
 
 
 void dynarec(unsigned int address){
-	dynacore = 0, interpcore = 1;
 	while(!stop){
 		PowerPC_block* dst_block = blocks[address>>12];
 		unsigned long paddr = update_invalid_addr(address);
@@ -88,7 +96,6 @@ void dynarec(unsigned int address){
 		// Update the value for the instruction count
 		STOP_INSTRUCTION_COUNT();
 	}
-	dynacore = 1, interpcore = 0;
 }
 
 unsigned int decodeNInterpret(MIPS_instr mips, unsigned int PC){

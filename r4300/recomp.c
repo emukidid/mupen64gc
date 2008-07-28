@@ -2852,8 +2852,8 @@ void prefetch_opcode(unsigned long instr)
    
    // tehpola: dynarec hack
    if(dynacore){
-   	sprintf(txtbuffer, "Interpreting 0x%08x\n", op);
-   	DEBUG_print(txtbuffer, DBG_USBGECKO);
+   	//sprintf(txtbuffer, "Interpreting 0x%08x\n", op);
+   	//DEBUG_print(txtbuffer, DBG_USBGECKO);
    	
    	// Check for interrupts
 	update_count();

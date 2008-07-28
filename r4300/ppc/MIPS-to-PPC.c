@@ -3,9 +3,11 @@
  ************************************************
    FIXME: Review all branch destinations
           Don't allow any writes to r0
-   TODO: Complete adding register mapping (invalidate on branches)
-         Create FP register mapping and recompile those
-         Rewrite any interpretation to behave like normal function calls
+   TODO: Create FP register mapping and recompile those
+         Calls to interp can be reduced by 2 instructions by maintaining
+           decodeNInterpret in a non-volatile register
+         If possible (and not too complicated, it would be nice to leave out
+           the in-place delay slot which is skipped if it is not branched to
  */
 
 #include <string.h>
@@ -18,9 +20,9 @@ static void genCallInterp(MIPS_instr);
 #define JUMPTO_REG  0
 #define JUMPTO_OFF  1
 #define JUMPTO_ADDR 2
-#define JUMPTO_REG_SIZE  14
-#define JUMPTO_OFF_SIZE  (JUMPTO_REG_SIZE+2)
-#define JUMPTO_ADDR_SIZE (JUMPTO_REG_SIZE+2)
+#define JUMPTO_REG_SIZE  2
+#define JUMPTO_OFF_SIZE  3
+#define JUMPTO_ADDR_SIZE 3
 static void genJumpTo(unsigned int loc, unsigned int type);
 static int inline mips_is_jump(MIPS_instr);
 void jump_to(unsigned int);
@@ -30,6 +32,9 @@ void jump_to(unsigned int);
 #define MIPS_REG_HI 32
 #define MIPS_REG_LO 33
 static int regMap[34];
+static int regDirty[34];
+static unsigned int regLRU[34];
+static unsigned int nextLRUVal;
 static int availableRegsDefault[32] = {
 	0, /* r0 is mostly used for saving/restoring lr: usable */
 	0, /* sp: leave alone! */
@@ -46,7 +51,7 @@ static int flushRegisters(void){
 	int i, flushed = 0;
 	for(i=0; i<34; ++i)
 		if(regMap[i] >= 0){
-			if(i != 0){
+			if(i && regDirty[i]){
 				GEN_STW(ppc, regMap[i], i*8+4, 13);
 				set_next_dst(ppc);
 			}
@@ -57,6 +62,23 @@ static int flushRegisters(void){
 	return flushed;
 }
 
+static int flushLRURegister(void){
+	PowerPC_instr ppc;
+	int i, lru_i = 0, lru_v = 0x7fffffff;
+	for(i=0; i<34; ++i)
+		if(regMap[i] >= 0 && regLRU[i] < lru_v){
+			lru_i = i; lru_v = regLRU[i];
+		}
+	
+	int map = regMap[lru_i];
+	if(lru_i && regDirty[lru_i]){
+		GEN_STW(ppc, map, lru_i*8+4, 13);
+		set_next_dst(ppc);
+	}
+	regMap[lru_i] = -1;
+	return map;
+}
+
 static void invalidateRegisters(void){
 	int i;
 	for(i=0; i<34; ++i)
@@ -65,6 +87,8 @@ static void invalidateRegisters(void){
 }
 
 static int mapRegisterNew(int reg){
+	regLRU[reg] = nextLRUVal++;
+	regDirty[reg] = 1;
 	if(regMap[reg] >= 0) return regMap[reg];
 	int i;
 	for(i=0; i<32; ++i)
@@ -72,14 +96,16 @@ static int mapRegisterNew(int reg){
 			availableRegs[i] = 0;
 			return regMap[reg] = i;
 		}
-	flushRegisters();
-	availableRegs[3] = 0;
-	return regMap[reg] = 3;
+	i = flushLRURegister();
+	availableRegs[i] = 0;
+	return regMap[reg] = i;
 }
 
 static int mapRegister(int reg){
 	PowerPC_instr ppc;
+	regLRU[reg] = nextLRUVal++;
 	if(regMap[reg] >= 0) return regMap[reg];
+	regDirty[reg] = 0;
 	int i;
 	for(i=0; i<sizeof(availableRegs)/4; ++i)
 		if(availableRegs[i]){
@@ -93,16 +119,25 @@ static int mapRegister(int reg){
 			availableRegs[i] = 0;
 			return regMap[reg] = i;
 		}
-	flushRegisters();
-	GEN_LWZ(ppc, 3, reg*8+4, 13);
-	set_next_dst(ppc);
-	availableRegs[3] = 0;
-	return regMap[reg] = 3;
+	i = flushLRURegister();
+	if(reg != 0){
+		GEN_LWZ(ppc, i, reg*8+4, 13);
+		set_next_dst(ppc);
+	} else {
+		GEN_LI(ppc, i, 0, 0);
+		set_next_dst(ppc);
+	}
+	availableRegs[i] = 0;
+	return regMap[reg] = i;
 }
 
 // Initialize register mappings
 void start_new_block(void){
 	invalidateRegisters();
+	nextLRUVal = 0;
+}
+void start_new_mapping(void){
+	flushRegisters();
 }
 
 // Variable to indicate whether the current recompiled instruction
@@ -128,13 +163,134 @@ static inline int signExtend(int value, int size){
 	return value;
 }
 
+typedef enum { NONE, EQ, NE, LT, GT, LE, GE } condition;
+// Branch a certain offset (possibly conditionally, linking, or likely)
+//   offset: N64 instructions from current N64 instruction to branch
+//   cond: type of branch to execute depending on cr 7
+//   link: if nonzero, branch and link
+//   likely: if nonzero, the delay slot will only be executed when cond is true
+static int branch(int offset, condition cond, int link, int likely){
+	PowerPC_instr ppc;
+	int likely_id;
+	// Condition codes for bc (and their negations)
+	int bo, bi, nbo;
+	switch(cond){
+		case EQ:
+			bo = 0xc, nbo = 0x4, bi = 18;
+			break;
+		case NE:
+			bo = 0x4, nbo = 0xc, bi = 18;
+			break;
+		case LT:
+			bo = 0xc, nbo = 0x4, bi = 16;
+			break;
+		case GE:
+			bo = 0x4, nbo = 0xc, bi = 16;
+			break;
+		case GT:
+			bo = 0xc, nbo = 0x4, bi = 17;
+			break;
+		case LE:
+			bo = 0x4, nbo = 0xc, bi = 17;
+			break;
+		default:
+			bo = 0x14; nbo = 0x4; bi = 19;
+			break;
+	}
+	
+	flushRegisters();
+	
+	if(likely){
+		// b[!cond] <past jumpto & delay>
+		likely_id = add_jump_special(0);
+		GEN_BC(ppc, likely_id, 0, 0, nbo, bi); 
+		set_next_dst(ppc);
+	}
+	
+	// Check the delay slot, and note how big it is
+	PowerPC_instr* preDelay = get_curr_dst();
+	check_delaySlot();
+	int delaySlot = get_curr_dst() - preDelay;
+	
+#ifndef INTERPRET_BRANCH
+	// If we're jumping out, we need to trampoline using genJumpTo
+	if(is_j_out(offset, 0)){
+#endif // INTEPRET_BRANCH
+
+		if(likely)
+			// Note: if there's a delay slot, I will branch to the branch over it
+			set_jump_special(likely_id, JUMPTO_OFF_SIZE+delaySlot+1+(link?3:0));
+		else {
+			// b[!cond] <past jumpto & delay>
+			//   Note: if there's a delay slot, I will branch to the branch over it
+			GEN_BC(ppc, JUMPTO_OFF_SIZE+1+(link?3:0), 0, 0, nbo, bi);
+			set_next_dst(ppc);
+		}
+		if(link){
+			// Set LR to next instruction
+			int lr = mapRegisterNew(MIPS_REG_LR);
+			// lis	lr, pc@ha(0)
+			GEN_LIS(ppc, lr, (get_src_pc()+4)>>16);
+			set_next_dst(ppc);
+			// la	lr, pc@l(lr)
+			GEN_ORI(ppc, lr, lr, get_src_pc()+4);
+			set_next_dst(ppc);
+			
+			flushRegisters();
+		}
+		
+		genJumpTo(offset, JUMPTO_OFF);
+		
+#ifndef INTERPRET_BRANCH		
+	} else {
+		if(likely)
+			// Note: if there's a delay slot, I will branch to the branch over it
+			set_jump_special(likely_id, 1+delaySlot+1+(link?3:0));
+		if(link){
+			// Set LR to next instruction
+			int lr = mapRegisterNew(MIPS_REG_LR);
+			// lis	lr, pc@ha(0)
+			GEN_LIS(ppc, lr, (get_src_pc()+4)>>16);
+			set_next_dst(ppc);
+			// la	lr, pc@l(lr)
+			GEN_ORI(ppc, lr, lr, get_src_pc()+4);
+			set_next_dst(ppc);
+			
+			flushRegisters();
+		}	
+	
+		// The actual branch
+		GEN_BC(ppc, add_jump(offset, 0, 0), 0, 0, bo, bi);
+		set_next_dst(ppc);
+	}
+#endif // INTERPRET_BRANCH
+	
+	// Let's still recompile the delay slot in place in case its branched to
+	if(delaySlot){
+		// Step over the already executed delay slot if the branch isn't taken
+		// b delaySlot+1
+		GEN_B(ppc, delaySlot+1, 0, 0);
+		set_next_dst(ppc); 
+		
+		unget_last_src();
+		isDelaySlot = 1;
+	} else nop_ignored();
+	
+#ifdef INTERPRET_BRANCH
+	return INTERPRETED;
+#else // INTERPRET_BRANCH
+	return CONVERT_SUCCESS;
+#endif
+}
+
 
 static int (*gen_ops[64])(MIPS_instr);
 
 int convert(void){
 	MIPS_instr mips = get_next_src();
+	int needFlush = isDelaySlot; isDelaySlot = 0;
 	int result = gen_ops[MIPS_GET_OPCODE(mips)](mips);
-	if(isDelaySlot){ flushRegisters(); isDelaySlot = 0; }
+	if(needFlush) flushRegisters();
 	return result;
 }
 
@@ -188,10 +344,10 @@ static int JAL(MIPS_instr mips){
 	// Set LR to next instruction
 	int lr = mapRegisterNew(MIPS_REG_LR);
 	// lis	lr, pc@ha(0)
-	GEN_LIS(ppc, lr, get_src_pc()>>16);
+	GEN_LIS(ppc, lr, (get_src_pc()+4)>>16);
 	set_next_dst(ppc);
 	// la	lr, pc@l(lr)
-	GEN_LI(ppc, lr, lr, get_src_pc());
+	GEN_ORI(ppc, lr, lr, get_src_pc()+4);
 	set_next_dst(ppc);
 	
 	flushRegisters();
@@ -236,9 +392,12 @@ static int BEQ(MIPS_instr mips){
 	GEN_CMP(ppc,
 	        mapRegister(MIPS_GET_RA(mips)),
 	        mapRegister(MIPS_GET_RB(mips)),
-	        7);
+	        4);
 	set_next_dst(ppc);
 	
+	return branch(signExtend(MIPS_GET_IMMED(mips),16), EQ, 0, 0);
+	
+#if 0
 	// Check the delay slot, and note how big it is
 	PowerPC_instr* preDelay = get_curr_dst();
 	check_delaySlot();
@@ -248,14 +407,14 @@ static int BEQ(MIPS_instr mips){
 	
 #ifdef INTERPRET_BEQ
 	// bne <past jumpto & delay>
-	GEN_BNE(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+2, 0, 0);
+	GEN_BNE(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+1, 0, 0);
 	set_next_dst(ppc);
 	genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
 #else // INTERPRET_BEQ
 	// If we're jumping out, we can't just use a branch instruction
 	if(is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
 		// bne <past jumpto & delay>
-		GEN_BNE(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+2, 0, 0);
+		GEN_BNE(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+1, 0, 0);
 		set_next_dst(ppc);
 		genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
 	} else {
@@ -283,6 +442,7 @@ static int BEQ(MIPS_instr mips){
 #else // INTERPRET_BEQ
 	return CONVERT_SUCCESS;
 #endif
+#endif // 0
 }
 
 static int BNE(MIPS_instr mips){
@@ -292,9 +452,12 @@ static int BNE(MIPS_instr mips){
 	GEN_CMP(ppc,
 	        mapRegister(MIPS_GET_RA(mips)),
 	        mapRegister(MIPS_GET_RB(mips)),
-	        7);
+	        4);
 	set_next_dst(ppc);
 	
+	return branch(signExtend(MIPS_GET_IMMED(mips),16), NE, 0, 0);
+	
+#if 0
 	// Check the delay slot, and note how big it is
 	PowerPC_instr* preDelay = get_curr_dst();
 	check_delaySlot();
@@ -304,14 +467,14 @@ static int BNE(MIPS_instr mips){
 	
 #ifdef INTERPRET_BNE
 	// beq <past jumpto & delay>
-	GEN_BEQ(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+2, 0, 0);
+	GEN_BEQ(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+(delaySlot?2:1), 0, 0);
 	set_next_dst(ppc);
 	genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
 #else // INTERPRET_BNE
 	// If we're jumping out, we can't just branch
 	if(j_out = is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
 		// beq <past jumpto & delay>
-		GEN_BEQ(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+2, 0, 0);
+		GEN_BEQ(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+1, 0, 0);
 		set_next_dst(ppc);
 		genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
 	} else {
@@ -339,15 +502,19 @@ static int BNE(MIPS_instr mips){
 #else // INTERPRET_BNE
 	return CONVERT_SUCCESS;
 #endif
+#endif // 0
 }
 
 static int BLEZ(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	
 	// cmpi ra, 0
-	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 7);
+	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 4);
 	set_next_dst(ppc);
 	
+	return branch(signExtend(MIPS_GET_IMMED(mips),16), LE, 0, 0);
+	
+#if 0
 	// Check the delay slot, and note how big it is
 	PowerPC_instr* preDelay = get_curr_dst();
 	check_delaySlot();
@@ -357,14 +524,14 @@ static int BLEZ(MIPS_instr mips){
 	
 #ifdef INTERPRET_BLEZ
 	// bgt <past jumpto & delay>
-	GEN_BGT(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+2, 0, 0);
+	GEN_BGT(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+1, 0, 0);
 	set_next_dst(ppc);
 	genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
 #else // INTERPRET_BLEZ
 	// If we're jumping out, we can't just branch
 	if(j_out = is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
 		// bgt <past jumpto & delay>
-		GEN_BGT(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+2, 0, 0);
+		GEN_BGT(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+1, 0, 0);
 		set_next_dst(ppc);
 		genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
 	} else {
@@ -392,15 +559,19 @@ static int BLEZ(MIPS_instr mips){
 #else // INTERPRET_BLEZ
 	return CONVERT_SUCCESS;
 #endif
+#endif // 0
 }
 
 static int BGTZ(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	
 	// cmpi ra, 0
-	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 7);
+	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 4);
 	set_next_dst(ppc);
 	
+	return branch(signExtend(MIPS_GET_IMMED(mips),16), GT, 0, 0);
+	
+#if 0
 	// Check the delay slot, and note how big it is
 	PowerPC_instr* preDelay = get_curr_dst();
 	check_delaySlot();
@@ -410,14 +581,14 @@ static int BGTZ(MIPS_instr mips){
 	
 #ifdef INTERPRET_BGTZ
 	// ble <past jumpto & delay>
-	GEN_BLE(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+2, 0, 0);
+	GEN_BLE(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+1, 0, 0);
 	set_next_dst(ppc);
 	genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
 #else // INTERPRET_BGTZ
 	// If we're jumping out, we can't just branch
 	if(is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
 		// ble <past jumpto & delay>
-		GEN_BLE(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+2, 0, 0);
+		GEN_BLE(ppc, 7, JUMPTO_OFF_SIZE+delaySlot+1, 0, 0);
 		set_next_dst(ppc);
 		genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
 	} else {
@@ -445,6 +616,7 @@ static int BGTZ(MIPS_instr mips){
 #else // INTERPRET_BGTZ
 	return CONVERT_SUCCESS;
 #endif
+#endif // 0
 }
 
 static int ADDIU(MIPS_instr mips){
@@ -549,9 +721,12 @@ static int BEQL(MIPS_instr mips){
 	GEN_CMP(ppc,
 	        mapRegister(MIPS_GET_RA(mips)),
 	        mapRegister(MIPS_GET_RB(mips)),
-	        7);
+	        4);
 	set_next_dst(ppc);
 	
+	return branch(signExtend(MIPS_GET_IMMED(mips),16), EQ, 0, 1);
+	
+#if 0
 	flushRegisters();
 	
 	// bne <past jumpto & delay>
@@ -594,6 +769,7 @@ static int BEQL(MIPS_instr mips){
 #else // INTERPRET_BEQL
 	return CONVERT_SUCCESS;
 #endif
+#endif // 0
 }
 
 static int BNEL(MIPS_instr mips){
@@ -603,9 +779,12 @@ static int BNEL(MIPS_instr mips){
 	GEN_CMP(ppc,
 	        mapRegister(MIPS_GET_RA(mips)),
 	        mapRegister(MIPS_GET_RB(mips)),
-	        7);
+	        4);
 	set_next_dst(ppc);
 	
+	return branch(signExtend(MIPS_GET_IMMED(mips),16), NE, 0, 1);
+	
+#if 0
 	flushRegisters();
 	
 	// beq <past jumpto & delay>
@@ -648,15 +827,19 @@ static int BNEL(MIPS_instr mips){
 #else // INTERPRET_BNEL
 	return CONVERT_SUCCESS;
 #endif
+#endif // 0
 }
 
 static int BLEZL(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	
 	// cmpi ra, 0
-	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 7);
+	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 4);
 	set_next_dst(ppc);
 	
+	return branch(signExtend(MIPS_GET_IMMED(mips),16), LE, 0, 1);
+	
+#if 0	
 	flushRegisters();
 	
 	// bgt <past jumpto & delay>
@@ -699,15 +882,19 @@ static int BLEZL(MIPS_instr mips){
 #else // INTERPRET_BLEZL
 	return CONVERT_SUCCESS;
 #endif
+#endif // 0
 }
 
 static int BGTZL(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	
 	// cmpi ra, 0
-	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 7);
+	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 4);
 	set_next_dst(ppc);
 	
+	return branch(signExtend(MIPS_GET_IMMED(mips),16), GT, 0, 1);
+	
+#if 0
 	flushRegisters();
 	
 	// ble <past jumpto & delay>
@@ -750,6 +937,7 @@ static int BGTZL(MIPS_instr mips){
 #else // INTERPRET_BGTZL
 	return CONVERT_SUCCESS;
 #endif
+#endif // 0
 }
 
 static int DADDIU(MIPS_instr mips){
@@ -1052,11 +1240,10 @@ static int SC(MIPS_instr mips){
 static int SLL(MIPS_instr mips){
 	PowerPC_instr ppc;
 	int rt = mapRegister( MIPS_GET_RT(mips) );
-	int sa = mapRegister( MIPS_GET_SA(mips) );
 	GEN_SLWI(ppc,
 	         mapRegisterNew( MIPS_GET_RD(mips) ),
 	         rt,
-	         sa);
+	         MIPS_GET_SA(mips));
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -1065,11 +1252,10 @@ static int SLL(MIPS_instr mips){
 static int SRL(MIPS_instr mips){
 	PowerPC_instr ppc;
 	int rt = mapRegister( MIPS_GET_RT(mips) );
-	int sa = mapRegister( MIPS_GET_SA(mips) );
 	GEN_SRWI(ppc,
 	         mapRegisterNew( MIPS_GET_RD(mips) ),
 	         rt,
-	         sa);
+	         MIPS_GET_SA(mips));
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -1078,11 +1264,10 @@ static int SRL(MIPS_instr mips){
 static int SRA(MIPS_instr mips){
 	PowerPC_instr ppc;
 	int rt = mapRegister( MIPS_GET_RT(mips) );
-	int sa = mapRegister( MIPS_GET_SA(mips) );
 	GEN_SRAWI(ppc,
 	          mapRegisterNew( MIPS_GET_RD(mips) ),
 	          rt,
-	          sa);
+	          MIPS_GET_SA(mips));
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -1132,10 +1317,12 @@ static int JR(MIPS_instr mips){
 	// Check the delay slot, and note how big it is
 	PowerPC_instr* preDelay = get_curr_dst();
 	check_delaySlot();
-	int delaySlot = get_curr_dst() - preDelay;	
+	int delaySlot = get_curr_dst() - preDelay;
+	
+	flushRegisters();
 	
 #ifdef INTERPRET_JR
-	genJumpTo(mapRegister(MIPS_GET_RS(mips)), JUMPTO_REG);
+	genJumpTo(MIPS_GET_RS(mips), JUMPTO_REG);
 #else // INTERPRET_JR
 	// TODO: jr
 #endif
@@ -1166,13 +1353,13 @@ static int JALR(MIPS_instr mips){
 	GEN_LIS(ppc, rd, get_src_pc()>>16);
 	set_next_dst(ppc);
 	// la	lr, pc@l(lr)
-	GEN_LI(ppc, rd, rd, get_src_pc());
+	GEN_ORI(ppc, rd, rd, get_src_pc());
 	set_next_dst(ppc);
 	
 	flushRegisters();
 	
 #ifdef INTERPRET_JALR
-	genJumpTo(mapRegister(MIPS_GET_RS(mips)), JUMPTO_REG);
+	genJumpTo(MIPS_GET_RS(mips), JUMPTO_REG);
 #else // INTERPRET_JALR
 	// TODO: jalr
 #endif
@@ -1765,11 +1952,16 @@ static int REGIMM(MIPS_instr mips){
 	int cond   = which & 1; // t = GE, f = LT
 	int likely = which & 2;
 	int link   = which & 16;
-	int likely_id = -1;
 	
 	// cmpi ra, 0
-	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 7);
+	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 4);
 	set_next_dst(ppc);
+	
+	return branch(signExtend(MIPS_GET_IMMED(mips),16),
+	              cond ? GE : LT, link, likely);
+	
+#if 0
+	int likely_id = -1;
 	
 	if(likely){
 		flushRegisters();
@@ -1791,7 +1983,7 @@ static int REGIMM(MIPS_instr mips){
 		set_jump_special(likely_id, JUMPTO_OFF_SIZE+2*delaySlot+1);
 	else {
 		// b[!cond] <past jumpto & delay>
-		GEN_BC(ppc, JUMPTO_OFF_SIZE+delaySlot+2,
+		GEN_BC(ppc, JUMPTO_OFF_SIZE+delaySlot+1+(link?3:0),
 		       0, 0, cond ? 0xc : 0x4, 28);
 		set_next_dst(ppc);
 	}
@@ -1799,10 +1991,10 @@ static int REGIMM(MIPS_instr mips){
 		// Set LR to next instruction
 		int lr = mapRegisterNew(MIPS_REG_LR);
 		// lis	lr, pc@ha(0)
-		GEN_LIS(ppc, lr, get_src_pc()>>16);
+		GEN_LIS(ppc, lr, (get_src_pc()+4)>>16);
 		set_next_dst(ppc);
 		// la	lr, pc@l(lr)
-		GEN_LI(ppc, lr, lr, get_src_pc());
+		GEN_ORI(ppc, lr, lr, get_src_pc()+4);
 		set_next_dst(ppc);
 		
 		flushRegisters();
@@ -1813,10 +2005,10 @@ static int REGIMM(MIPS_instr mips){
 	// If we're jumping out, we need to make random comments
 	if(is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
 		if(likely)
-			set_jump_special(likely_id, JUMPTO_OFF_SIZE+2*delaySlot+1);
+			set_jump_special(likely_id, JUMPTO_OFF_SIZE+2*delaySlot+1+(link?3:0));
 		else {
 			// b[!cond] <past jumpto & delay>
-			GEN_BC(ppc, JUMPTO_OFF_SIZE+delaySlot+2,
+			GEN_BC(ppc, JUMPTO_OFF_SIZE+delaySlot+1+(link?3:0),
 			       0, 0, cond ? 0xc : 0x4, 28);
 			set_next_dst(ppc);
 		}
@@ -1824,10 +2016,10 @@ static int REGIMM(MIPS_instr mips){
 			// Set LR to next instruction
 			int lr = mapRegisterNew(MIPS_REG_LR);
 			// lis	lr, pc@ha(0)
-			GEN_LIS(ppc, lr, get_src_pc()>>16);
+			GEN_LIS(ppc, lr, (get_src_pc()+4)>>16);
 			set_next_dst(ppc);
 			// la	lr, pc@l(lr)
-			GEN_LI(ppc, lr, lr, get_src_pc());
+			GEN_ORI(ppc, lr, lr, get_src_pc()+4);
 			set_next_dst(ppc);
 			
 			flushRegisters();
@@ -1864,6 +2056,7 @@ static int REGIMM(MIPS_instr mips){
 #else // INTERPRET_REGIMM
 	return CONVERT_SUCCESS;
 #endif
+#endif // 0
 }
 
 // -- COP0 Instructions --
@@ -1965,7 +2158,7 @@ static int BC(MIPS_instr mips){
 	// la r3, &FCR31
 	GEN_LIS(ppc, 3, ((unsigned int)&FCR31)>>16);
 	set_next_dst(ppc);
-	GEN_LI(ppc, 3, 3, (unsigned int)&FCR31);
+	GEN_ORI(ppc, 3, 3, (unsigned int)&FCR31);
 	set_next_dst(ppc);
 	// lwz r3, 0(r3)
 	GEN_LWZ(ppc, 3, 0, 3);
@@ -2139,7 +2332,7 @@ static void genCallInterp(MIPS_instr mips){
 	// Load the address of decodeNInterpret
 	GEN_LIS(ppc, 3, ((unsigned int)decodeNInterpret)>>16);
 	set_next_dst(ppc);
-	GEN_LI(ppc, 3, 3, (unsigned int)decodeNInterpret);
+	GEN_ORI(ppc, 3, 3, (unsigned int)decodeNInterpret);
 	set_next_dst(ppc);
 	// Move it to ctr for a bctr
 	GEN_MTCTR(ppc, 3);
@@ -2147,12 +2340,12 @@ static void genCallInterp(MIPS_instr mips){
 	// Load our argument into r3 (mips)
 	GEN_LIS(ppc, 3, mips>>16);
 	set_next_dst(ppc);
-	GEN_LI(ppc, 3, 3, mips);
+	GEN_ORI(ppc, 3, 3, mips);
 	set_next_dst(ppc);
 	// Load the current PC as the second arg
 	GEN_LIS(ppc, 4, get_src_pc()>>16);
 	set_next_dst(ppc);
-	GEN_LI(ppc, 4, 4, get_src_pc());
+	GEN_ORI(ppc, 4, 4, get_src_pc());
 	set_next_dst(ppc);
 	// Branch to decodeNInterpret
 	GEN_BCTRL(ppc);
@@ -2185,7 +2378,7 @@ static void genJumpTo(unsigned int loc, unsigned int type){
 		// Load the address as the return value
 		GEN_LIS(ppc, 3, loc >> 16);
 		set_next_dst(ppc);
-		GEN_LI(ppc, 3, 3, loc);
+		GEN_ORI(ppc, 3, 3, loc);
 		set_next_dst(ppc);
 	}
 	
