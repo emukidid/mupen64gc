@@ -658,6 +658,29 @@ PowerPC_instr Instruction(int opcode, ...);
 	  PPC_SET_RA    (ppc, (ra)); \
 	  PPC_SET_RB    (ppc, (rb)); }
 
+#define GEN_SUBFC(ppc,rd,ra,rb) \
+	{ ppc = NEW_PPC_INSTR(); \
+	  PPC_SET_OPCODE(ppc, PPC_OPCODE_X); \
+	  PPC_SET_FUNC  (ppc, PPC_FUNC_SUBFC); \
+	  PPC_SET_RD    (ppc, (rd)); \
+	  PPC_SET_RA    (ppc, (ra)); \
+	  PPC_SET_RB    (ppc, (rb)); }
+
+#define GEN_SUBFE(ppc,rd,ra,rb) \
+	{ ppc = NEW_PPC_INSTR(); \
+	  PPC_SET_OPCODE(ppc, PPC_OPCODE_X); \
+	  PPC_SET_FUNC  (ppc, PPC_FUNC_SUBFE); \
+	  PPC_SET_RD    (ppc, (rd)); \
+	  PPC_SET_RA    (ppc, (ra)); \
+	  PPC_SET_RB    (ppc, (rb)); }
+
+#define GEN_ADDIC(ppc,rd,ra,immed) \
+	{ ppc = NEW_PPC_INSTR(); \
+	  PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIC); \
+	  PPC_SET_RD    (ppc, (rd)); \
+	  PPC_SET_RA    (ppc, (ra)); \
+	  PPC_SET_IMMED (ppc, (immed)); }
+
 #define GEN_SUB(ppc,rd,ra,rb) \
 	GEN_SUBF(ppc,rd,rb,ra)
 
@@ -720,5 +743,27 @@ PowerPC_instr Instruction(int opcode, ...);
 	  PPC_SET_FUNC  (ppc, PPC_FUNC_MTCRF); \
 	  ppc |= 0xFF << 12; /* Set CRM so it copies all */ \
 	  PPC_SET_RD    (ppc, (rs)); }
+
+#define GEN_NEG(ppc,rd,rs) \
+	{ ppc = NEW_PPC_INSTR(); \
+	  PPC_SET_OPCODE(ppc, PPC_OPCODE_X); \
+	  PPC_SET_FUNC  (ppc, PPC_FUNC_NEG); \
+	  PPC_SET_RD    (ppc, (rd)); \
+	  PPC_SET_RA    (ppc, (rs)); }
+	  
+#define GEN_EQV(ppc,rd,ra,rb) \
+	{ ppc = NEW_PPC_INSTR(); \
+	  PPC_SET_OPCODE(ppc, PPC_OPCODE_X); \
+	  PPC_SET_FUNC  (ppc, PPC_FUNC_EQV); \
+	  PPC_SET_RA    (ppc, (rd)); \
+	  PPC_SET_RD    (ppc, (ra)); \
+	  PPC_SET_RB    (ppc, (rb)); } 
+	  
+#define GEN_ADDZE(ppc,rd,rs) \
+	{ ppc = NEW_PPC_INSTR(); \
+	  PPC_SET_OPCODE(ppc, PPC_OPCODE_X); \
+	  PPC_SET_FUNC  (ppc, PPC_FUNC_ADDZE); \
+	  PPC_SET_RD    (ppc, (rd)); \
+	  PPC_SET_RA    (ppc, (rs)); }
 
 #endif

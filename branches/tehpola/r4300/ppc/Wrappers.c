@@ -35,7 +35,11 @@ inline unsigned long update_invalid_addr(unsigned long addr);
 		: "r9" )
 
 /* Recompiled code stack frame:
- * 	$sp+12	| old r13
+ *  $sp+28  |
+ *  $sp+24  |
+ *  $sp+20  | old r15 (new r15 holds decodeNInterpret)
+ *  $sp+16  | old r14 (new r14 holds 0)
+ * 	$sp+12	| old r13 (new r13 holds reg)
  * 	$sp+8	| old lr
  * 	$sp+4	| old cr
  * 	$sp		| old sp
@@ -43,12 +47,16 @@ inline unsigned long update_invalid_addr(unsigned long addr);
 
 #define DYNAREC_PRELUDE() \
 	__asm__ __volatile__ ( \
-		"stwu	1, -16(1) \n" \
+		"stwu	1, -32(1) \n" \
 		"stw	13, 12(1) \n" \
-		"mfcr	13 \n" \
-		"stw	13, 8(1) \n" \
-		"mr		13, %0 \n" \
-		:: "r" (reg) )
+		"mfcr	13        \n" \
+		"stw	13, 8(1)  \n" \
+		"mr		13, %0    \n" \
+		"stw	14, 16(1) \n" \
+		"addi	14, 0, 0  \n" \
+		"stw	15, 20(1) \n" \
+		"mr		15, %1    \n" \
+		:: "r" (reg), "r" (decodeNInterpret) )
 
 
 void dynarec(unsigned int address){

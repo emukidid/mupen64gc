@@ -52,6 +52,13 @@ static int flushRegisters(void){
 	for(i=0; i<34; ++i)
 		if(regMap[i] >= 0){
 			if(i && regDirty[i]){
+				// Sign extend to 64-bits
+				GEN_SRAWI(ppc, 0, regMap[i], 31);
+				set_next_dst(ppc);
+				// Store the MSW
+				GEN_STW(ppc, 0, i*8, 13);
+				set_next_dst(ppc);
+				// Store the LSW
 				GEN_STW(ppc, regMap[i], i*8+4, 13);
 				set_next_dst(ppc);
 			}
@@ -72,6 +79,13 @@ static int flushLRURegister(void){
 	
 	int map = regMap[lru_i];
 	if(lru_i && regDirty[lru_i]){
+		// Sign extend to 64-bits
+		GEN_SRAWI(ppc, 0, regMap[i], 31);
+		set_next_dst(ppc);
+		// Store the MSW
+		GEN_STW(ppc, 0, i*8, 13);
+		set_next_dst(ppc);
+		// Store the LSW
 		GEN_STW(ppc, map, lru_i*8+4, 13);
 		set_next_dst(ppc);
 	}
@@ -87,6 +101,7 @@ static void invalidateRegisters(void){
 }
 
 static int mapRegisterNew(int reg){
+	if(!reg) return 0; // Discard any writes to r0
 	regLRU[reg] = nextLRUVal++;
 	regDirty[reg] = 1;
 	if(regMap[reg] >= 0) return regMap[reg];
@@ -103,6 +118,7 @@ static int mapRegisterNew(int reg){
 
 static int mapRegister(int reg){
 	PowerPC_instr ppc;
+	if(!reg) return 14; // Return r0 mapped to r14
 	regLRU[reg] = nextLRUVal++;
 	if(regMap[reg] >= 0) return regMap[reg];
 	regDirty[reg] = 0;
@@ -636,6 +652,7 @@ static int ADDI(MIPS_instr mips){
 
 static int SLTI(MIPS_instr mips){
 	PowerPC_instr ppc;
+#if 0
 	int shiftSrc ;
 	// If immed != 0: rd <- rs - immed
 	if( MIPS_GET_IMMED(mips) ){
@@ -650,19 +667,47 @@ static int SLTI(MIPS_instr mips){
 	// Shift the sign bit to the LSb
 	GEN_SRWI(ppc, mapRegisterNew( MIPS_GET_RT(mips) ), shiftSrc, 31);
 	set_next_dst(ppc);
+#else
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	int rt = mapRegisterNew( MIPS_GET_RT(mips) );
+	// r0 = immed (sign extended)
+	GEN_ADDI(ppc, 0, 0, signExtend(MIPS_GET_IMMED(mips),16));
+	set_next_dst(ppc);
+	// carry = rs < immed ? 0 : 1 (unsigned)
+	GEN_SUBFC(ppc, rt, 0, rs);
+	set_next_dst(ppc);
+	// rt = ~(rs ^ immed)
+	GEN_EQV(ppc, rt, 0, rs);
+	set_next_dst(ppc);
+	// rt = sign(rs) == sign(immed) ? 1 : 0
+	GEN_SRWI(ppc, rt, rt, 31);
+	set_next_dst(ppc);
+	// rt += carry
+	GEN_ADDZE(ppc, rt, rt);
+	set_next_dst(ppc);
+	// rt &= 1 ( = (sign(rs) == sign(immed)) xor (rs < immed (unsigned)) ) 
+	GEN_RLWINM(ppc, rt, rt, 0, 31, 31);
+	set_next_dst(ppc);
+#endif
 	
 	return CONVERT_SUCCESS;
 }
 
 static int SLTIU(MIPS_instr mips){
+	PowerPC_instr ppc;
 	int rs = mapRegister( MIPS_GET_RS(mips) );
 	int rt = mapRegisterNew( MIPS_GET_RT(mips) );
-	PowerPC_instr ppc;
-	// rd <- rs - immed
-	GEN_ADDI(ppc, rt, rs, -MIPS_GET_IMMED(mips));
+	// rt = immed
+	GEN_ORI(ppc, rt, mapRegister(0), MIPS_GET_IMMED(mips));
 	set_next_dst(ppc);
-	// Shift the sign bit to the LSb
-	GEN_SRWI(ppc, rt, rt, 31);
+	// carry = rs < rt ? 0 : 1
+	GEN_SUBFC(ppc, rt, rs, rt);
+	set_next_dst(ppc);
+	// rt = carry - 1 ( = rs < immed ? -1 : 0 )
+	GEN_SUBFE(ppc, rt, rt, rt);
+	set_next_dst(ppc);
+	// rt = !carry ( = rs < immed ? 1 : 0 )
+	GEN_NEG(ppc, rt, rt);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -1878,38 +1923,57 @@ static int NOR(MIPS_instr mips){
 
 static int SLT(MIPS_instr mips){
 	PowerPC_instr ppc;
+#if 0
 	int shiftSrc;
 	// If rt != r0: rd <- rs - rt
 	if( MIPS_GET_RT(mips) ){
 		int rt = mapRegister( MIPS_GET_RT(mips) );
 		int rs = mapRegister( MIPS_GET_RS(mips) );
 		shiftSrc = mapRegisterNew( MIPS_GET_RD(mips) );
-		GEN_SUB(ppc,
-		        shiftSrc,
-		        rs,
-		        rt);
+		GEN_SUB(ppc, shiftSrc, rs, rt);
 		set_next_dst(ppc);
 	} else shiftSrc = mapRegister( MIPS_GET_RS(mips) );
 	// Shift the sign bit to the LSb
-	GEN_SRW(ppc, mapRegisterNew( MIPS_GET_RD(mips) ), shiftSrc, 31);
+	GEN_SRWI(ppc, mapRegisterNew( MIPS_GET_RD(mips) ), shiftSrc, 31);
 	set_next_dst(ppc);
+#else
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	int rd = mapRegisterNew( MIPS_GET_RD(mips) );
+	// TODO: rs < r0 can be done in one instruction
+	// carry = rs < rt ? 0 : 1 (unsigned)
+	GEN_SUBFC(ppc, rd, rt, rs);
+	set_next_dst(ppc);
+	// rd = ~(rs ^ rt)
+	GEN_EQV(ppc, rd, rt, rs);
+	set_next_dst(ppc);
+	// rd = sign(rs) == sign(rt) ? 1 : 0
+	GEN_SRWI(ppc, rd, rd, 31);
+	set_next_dst(ppc);
+	// rd += carry
+	GEN_ADDZE(ppc, rd, rd);
+	set_next_dst(ppc);
+	// rt &= 1 ( = (sign(rs) == sign(rt)) xor (rs < rt (unsigned)) ) 
+	GEN_RLWINM(ppc, rd, rd, 0, 31, 31);
+	set_next_dst(ppc);
+#endif
 	
 	return CONVERT_SUCCESS;
 }
 
 static int SLTU(MIPS_instr mips){
-	PowerPC_instr ppc;
+	PowerPC_instr ppc; 
 	int rt = mapRegister( MIPS_GET_RT(mips) );
 	int rs = mapRegister( MIPS_GET_RS(mips) );
 	int rd = mapRegisterNew( MIPS_GET_RD(mips) );
-	// rd <- rs - rt
-	GEN_SUB(ppc,
-	        rd,
-	        rs,
-	        rt);
+	// carry = rs < rt ? 0 : 1
+	GEN_SUBFC(ppc, rd, rt, rs);
 	set_next_dst(ppc);
-	// Shift the sign bit to the LSb
-	GEN_SRWI(ppc, rd, rd, 31);
+	// rd = carry - 1 ( = rs < rt ? -1 : 0 )
+	GEN_SUBFE(ppc, rd, rd, rd);
+	set_next_dst(ppc);
+	// rd = !carry ( = rs < rt ? 1 : 0 )
+	GEN_NEG(ppc, rd, rd);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -2329,13 +2393,15 @@ static void genCallInterp(MIPS_instr mips){
 	set_next_dst(ppc);
 	GEN_STW(ppc, 0, 8, 1);
 	set_next_dst(ppc);
+#if 0
 	// Load the address of decodeNInterpret
 	GEN_LIS(ppc, 3, ((unsigned int)decodeNInterpret)>>16);
 	set_next_dst(ppc);
 	GEN_ORI(ppc, 3, 3, (unsigned int)decodeNInterpret);
 	set_next_dst(ppc);
-	// Move it to ctr for a bctr
-	GEN_MTCTR(ppc, 3);
+#endif
+	// Move the address of decodeNInterpret to ctr for a bctr
+	GEN_MTCTR(ppc, 15);
 	set_next_dst(ppc);
 	// Load our argument into r3 (mips)
 	GEN_LIS(ppc, 3, mips>>16);

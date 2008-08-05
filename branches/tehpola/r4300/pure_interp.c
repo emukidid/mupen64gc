@@ -159,7 +159,8 @@ static void SYNC()
 #endif
 static void BREAK(){
 #ifdef DUMP_ON_BREAK
-	printf("-- BREAK: DUMPING N64 REGISTERS --\n");
+	if(dynacore){ _break(); return; }
+	printf("-- BREAK @ %08x: DUMPING N64 REGISTERS --\n", interp_addr);
 	int i;
 	for(i=0; i<32; i+=4)
 		printf("r%2d: %08x  r%2d: %08x  r%2d: %08x  r%2d: %08x\n",
@@ -3279,11 +3280,11 @@ void pure_interpreter()
    last_addr = interp_addr;
    while (!stop)
      {
-	if (interp_addr == 0x800001c8) stop = 1;
 	prefetch();
 #ifdef COMPARE_CORE
 	compare_core();
 #endif
+	//if(interp_addr == 0x80000194) _break();
 	//if (Count > 0x2000000) printf("inter:%x,%x\n", interp_addr,op);
 	//if ((Count+debug_count) > 0xabaa2c) stop=1;
 	interp_ops[((op >> 26) & 0x3F)]();
