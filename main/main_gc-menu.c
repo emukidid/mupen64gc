@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <malloc.h>
 #ifdef DEBUGON
 # include <debug.h>
 #endif
@@ -320,8 +321,8 @@ static void rsp_info_init(void){
 
 void ScanPADSandReset() {
 	PAD_ScanPads();
-	if(!((*(u32*)0xCC003000)>>16))
-		stop = 1;
+	/*if(!((*(u32*)0xCC003000)>>16))
+		stop = 1;*/
 }
 void ResetCallBack() {stop = 1;}
 
@@ -389,6 +390,7 @@ static void Initialise (void){
 /* Reinitialize GX */ 
 void ogc_video__reset()
 {
+#if 0
     GXRModeObj *rmode;
 	
     //clear the old framebuffer
@@ -430,6 +432,6 @@ void ogc_video__reset()
     VIDEO_WaitVSync();
     if (rmode->viTVMode & VI_NON_INTERLACE) VIDEO_WaitVSync();
     else while (VIDEO_GetNextField())  VIDEO_WaitVSync();
-
+#endif
 }
 

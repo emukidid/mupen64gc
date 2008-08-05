@@ -343,6 +343,7 @@ static void pass0(PowerPC_block* ppc_block){
 		int opcode = MIPS_GET_OPCODE(*src);
 		if(opcode == MIPS_OPCODE_J || opcode == MIPS_OPCODE_JAL){
 			unsigned int li = MIPS_GET_LI(*src);
+			++src; ++pc;
 			if(!is_j_out(li, 1)){
 				assert( ((li&0x3FF) >= 0) && ((li&0x3FF) < 1024) );
 				isJmpDst[ li & 0x3FF ] = 1;
@@ -357,10 +358,11 @@ static void pass0(PowerPC_block* ppc_block){
                   opcode == MIPS_OPCODE_BGTZL ||
                   opcode == MIPS_OPCODE_B     ){
         	int bd = MIPS_GET_IMMED(*src);
+        	++src; ++pc;
         	bd |= (bd & 0x8000) ? 0xFFFF0000 : 0; // sign extend
         	if(!is_j_out(bd, 0)){
-        		assert( (((pc+1) & 0x3FF) + bd >= 0) && (((pc+1) & 0x3FF) + bd < 1024) );
-        		isJmpDst[ ((pc+1) & 0x3FF) + bd ] = 1;
+        		assert( ((pc & 0x3FF) + bd >= 0) && ((pc & 0x3FF) + bd < 1024) );
+        		isJmpDst[ (pc & 0x3FF) + bd ] = 1;
         	}
 		}
 	}
@@ -473,6 +475,12 @@ static void genJumpPad(PowerPC_block* ppc_block){
 	set_next_dst(ppc);
 	// Restore r13
 	GEN_LWZ(ppc, 13, 12, 1);
+	set_next_dst(ppc);
+	// Restore r14
+	GEN_LWZ(ppc, 14, 16, 1);
+	set_next_dst(ppc);
+	// Restore r15
+	GEN_LWZ(ppc, 15, 20, 1);
 	set_next_dst(ppc);
 	// Restore the sp
 	GEN_LWZ(ppc, 1, 0, 1);

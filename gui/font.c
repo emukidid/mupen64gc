@@ -1,5 +1,5 @@
-/*
-	font functions	
+/* 
+	font.c - font functions	
 	modified by sepp256 to work as textures instead of writing to the xfb
 */
 
@@ -214,7 +214,7 @@ void write_font_init_GX(GXColor fontColor)
 
 	GX_InvalidateTexAll();
 	GX_InitTexObj(&fontTexObj, &fontFont, 512, 512, GX_TF_I4, GX_CLAMP, GX_CLAMP, GX_FALSE);
-	GX_LoadTexObj(&fontTexObj, GX_TEXMAP1);
+	GX_LoadTexObj(&fontTexObj, GX_TEXMAP0);
 
 	GX_SetTevColor(GX_TEVREG1,fontColor);
 	GX_SetTevKColor(GX_TEVPREV,fontColor);
@@ -223,7 +223,7 @@ void write_font_init_GX(GXColor fontColor)
 //	GX_SetTevKAlphaSel(GX_TEVSTAGE0,GX_TEV_KCSEL_K0_A);
 
 	GX_SetNumTevStages (1);
-	GX_SetTevOrder (GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP1, GX_COLOR0A0); // change to (u8) tile later
+	GX_SetTevOrder (GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0); // change to (u8) tile later
 	GX_SetTevColorIn (GX_TEVSTAGE0, GX_CC_C1, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
 //	GX_SetTevColorIn (GX_TEVSTAGE0, GX_CC_KONST, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
 	GX_SetTevColorOp (GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_ENABLE, GX_TEVPREV);

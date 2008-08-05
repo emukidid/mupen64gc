@@ -15,7 +15,8 @@ CFLAGS  = -g -O2 -Wall $(MACHDEP) $(INCLUDE) \
 	  -DCPU_SHUTDOWN -DSPC700_SHUTDOWN -DVAR_CYCLES -DSOUND \
 	  -DNOASM -DNGC -DNOASM -DPIXEL_FORMAT=RGB565  \
 	  -fno-exceptions -Wno-unused-parameter -pipe \
-	  -DUSE_GUI -DSHOW_DEBUG -DTHREADED_AUDIO -DEMBEDDED_FONTS -DUSE_TLB_CACHE
+	  -DUSE_GUI -DSHOW_DEBUG -DTHREADED_AUDIO -DUSE_RECOMP_CACHE -DUSE_TLB_CACHE \
+	  -DPPC_DYNAREC -DEMBEDDED_FONTS
 #	  -DDEBUGON  -DGLN64_SDLOG -DUSE_EXPANSION -DEMBEDDED_FONTS -DUSE_RECOMP_CACHE -DPPC_DYNAREC
 
 MACHDEP	= -DGEKKO -mcpu=750 -meabi -mhard-float 
@@ -74,10 +75,9 @@ OBJ		=main/rom_gc.o \
 		r4300/profile.o \
 		main/adler32.o
 		
-OBJ_PPC		=r4300/new-ppc/MIPS-to-PPC.o \
-		r4300/new-ppc/Recompile.o \
-		r4300/new-ppc/Wrappers.o 
-		#r4300/ppc/ppc_disasm.o
+OBJ_PPC		=r4300/ppc/MIPS-to-PPC.o \
+		r4300/ppc/Recompile.o \
+		r4300/ppc/Wrappers.o
 
 OBJ_X86         =r4300/x86/gr4300.o \
 		r4300/x86/gcop0.o \
@@ -158,9 +158,6 @@ OBJ_GLN64_GX	=glN64_GX/glN64.o \
 		glN64_GX/DepthBuffer.o \
 		glN64_GX/CRC.o \
 		glN64_GX/2xSAI.o \
-		glN64_GX/NV_register_combiners.o \
-		glN64_GX/texture_env.o \
-		glN64_GX/texture_env_combine.o \
 		glN64_GX/TEV_combiner.o \
 		glN64_GX/RDP.o \
 		glN64_GX/F3D.o \
@@ -188,7 +185,7 @@ HEADER		=main/rom.h \
 		gc_memory/pif.h
 
 #LIB		=	-logc -lm -lsdcard -ldb
-LIB		=	-lm -lfat -logc -lz
+LIB		=	-lm -lfat -ldb -logc -lz
 
 ifeq ($(strip mupen64_GX_gfx/main.cpp),)
 	export LD	:=	$(CC)
@@ -315,15 +312,6 @@ glN64_GX/CRC.o:			glN64_GX/CRC.cpp
 glN64_GX/2xSAI.o:			glN64_GX/2xSAI.cpp
 				$(CXX) $(CFLAGS) -D__LINUX__ -D__GX__ -c -o $@ $<
 
-glN64_GX/NV_register_combiners.o:	glN64_GX/NV_register_combiners.cpp
-				$(CXX) $(CFLAGS) -D__LINUX__ -D__GX__ -c -o $@ $<
-
-glN64_GX/texture_env.o:		glN64_GX/texture_env.cpp
-				$(CXX) $(CFLAGS) -D__LINUX__ -D__GX__ -c -o $@ $<
-
-glN64_GX/texture_env_combine.o:	glN64_GX/texture_env_combine.cpp
-				$(CXX) $(CFLAGS) -D__LINUX__ -D__GX__ -c -o $@ $<
-
 glN64_GX/TEV_combiner.o: glN64_GX/TEV_combiner.cpp
 				$(CXX) $(CFLAGS) -D__LINUX__ -D__GX__ -c -o $@ $<
 
@@ -363,11 +351,8 @@ glN64_GX/F3DDKR.o:			glN64_GX/F3DDKR.cpp
 glN64_GX/F3DWRUS.o:		glN64_GX/F3DWRUS.cpp
 				$(CXX) $(CFLAGS) -D__LINUX__ -D__GX__ -c -o $@ $<
 
-r4300/ppc/Wrappers.o:		r4300/new-ppc/Wrappers.s
-				$(AS) -o $@ $<
 
-
-mupen64gc-glN64.elf:	$(OBJ) $(OBJ_INPUT) $(OBJ_GLN64_GX) $(OBJ_AUDIO) $(OBJ_RSPHLE) main/main_gc-menu.o #$(OBJ_PPC)
+mupen64gc-glN64.elf:	$(OBJ) $(OBJ_INPUT) $(OBJ_GLN64_GX) $(OBJ_AUDIO) $(OBJ_RSPHLE) main/main_gc-menu.o $(OBJ_PPC)
 		$(LD) $^ $(LDFLAGS) $(LIBPATHS) $(LIB) -Wl -o $@
 		#strip --strip-all $@
 		powerpc-gekko-objcopy -O binary $@ mupen64gc-glN64.dol

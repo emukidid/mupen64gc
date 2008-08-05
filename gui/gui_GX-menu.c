@@ -1,4 +1,4 @@
-/* gui_GX.c - gui that uses GX graphics
+/* gui_GX-menu.c - gui that uses GX graphics
    by sepp256 for Mupen64-GC
  */
 
@@ -332,6 +332,10 @@ void GUI_drawWiiN64(float x0, float y0, float z, float scale){
 	uly = y0 - scale*42;
 	lry = y0 + scale*42;
 
+	//This is just for gcube, which only seems to be able to use TEXMAP0. 
+	GX_InitTexObj(&LOGOtex, LOGOtexture, (u16) 216, (u16) 84, GX_TF_RGB5A3, GX_CLAMP, GX_CLAMP, GX_FALSE); 
+	DCFlushRange(LOGOtexture, 216*84*2);
+	GX_LoadTexObj(&LOGOtex, GX_TEXMAP0); 
 
 	GX_SetCurrentMtx(GUI_TEST_PNMTX);
 	GX_DrawDone ();
@@ -355,7 +359,7 @@ void GUI_drawWiiN64(float x0, float y0, float z, float scale){
 	//enable textures
 	GX_SetNumChans (1);
 	GX_SetNumTexGens (1);
-	GX_SetTevOrder (GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP2, GX_COLOR0A0);
+	GX_SetTevOrder (GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
 	GX_SetTevOp (GX_TEVSTAGE0, GX_REPLACE);
 	//set blend mode
 	GX_SetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR); //Fix src alpha

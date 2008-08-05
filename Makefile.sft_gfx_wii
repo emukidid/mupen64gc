@@ -8,8 +8,9 @@ CFLAGS  = -g -O2 -Wall $(MACHDEP) $(INCLUDE) \
 	  -DCPU_SHUTDOWN -DSPC700_SHUTDOWN -DVAR_CYCLES -DSOUND \
 	  -DNOASM -DNGC -DNOASM -DPIXEL_FORMAT=RGB565  \
 	  -fno-exceptions -Wno-unused-parameter -pipe \
-	  -DUSE_GUI -DSHOW_DEBUG -DTHREADED_AUDIO -DWII -DUSE_TLB_CACHE
-#	  -DPRINTGECKO
+	  -DUSE_GUI -DSHOW_DEBUG -DWII -DTHREADED_AUDIO -DUSE_RECOMP_CACHE -DUSE_TLB_CACHE \
+	  -DPPC_DYNAREC -DNO_BT #-DDEBUGON #-DPRINTGECKO
+#	  -DDEBUGON -DUSE_ROM_CACHE_L1 -DPRINTGECKO -DGLN64_SDLOG -DEMBEDDED_FONTS -DUSE_EXPANSION -DPPC_DYNAREC
 
 MACHDEP	= -DGEKKO -mcpu=750 -meabi -mhard-float 
 LDFLAGS	=	$(MACHDEP) -mrvl -Wl,-Map,$(notdir $@).map -Wl,--cref
@@ -26,11 +27,11 @@ OBJ		=main/rom_gc.o \
 		main/gc_dvd.o \
 		main/ROM-Cache-MEM2.o \
 		fileBrowser/fileBrowser-DVD.o \
-		fileBrowser/fileBrowser-libfat.o \
+		fileBrowser/fileBrowser-CARD.o \
 		fileBrowser/fileBrowser-WiiFS.o \
+		fileBrowser/fileBrowser-libfat.o \
 		fileBrowser/HW64/customTitle.o \
 		fileBrowser/HW64/workaround.o \
-		fileBrowser/fileBrowser-CARD.o \
 		fileBrowser/fileBrowser.o \
 		gui/menu.o \
 		gui/menuFileBrowser.o \
@@ -46,6 +47,7 @@ OBJ		=main/rom_gc.o \
 		r4300/regimm.o \
 		r4300/exception.o \
 		r4300/Invalid_Code.o \
+		r4300/Recomp-Cache.o \
 		gc_memory/ARAM.o \
 		gc_memory/tlb.o \
 		gc_memory/TLB-Cache-hash.o \
@@ -71,8 +73,7 @@ OBJ		=main/rom_gc.o \
 		
 OBJ_PPC		=r4300/ppc/MIPS-to-PPC.o \
 		r4300/ppc/Recompile.o \
-		r4300/ppc/Wrappers.o \
-		r4300/ppc/ppc_disasm.o
+		r4300/ppc/Wrappers.o
 
 OBJ_X86         =r4300/x86/gr4300.o \
 		r4300/x86/gcop0.o \
@@ -221,14 +222,11 @@ mupen64_soft_gfx/main.o:	mupen64_soft_gfx/main.cpp
 mupen64_soft_gfx/vi_GX.o:	mupen64_soft_gfx/vi_GX.cpp
 				$(CXX) $(CFLAGS) -c -o $@ $<
 
-r4300/ppc/Wrappers.o:		r4300/ppc/Wrappers.s
-				$(CC) $(CFLAGS) -c -o $@ $<
 
 
-wii64-sft.elf:	$(OBJ) $(OBJ_INPUT) $(OBJ_SOFT_GFX) $(OBJ_AUDIO) $(OBJ_RSPHLE) main/main_gc-menu.o #$(OBJ_PPC)
+wii64-sft.elf:	$(OBJ) $(OBJ_INPUT) $(OBJ_SOFT_GFX) $(OBJ_AUDIO) $(OBJ_RSPHLE) main/main_gc-menu.o $(OBJ_PPC)
 		$(LD) $^ $(LDFLAGS) $(LIBPATHS) $(LIB) -Wl -o $@
 		powerpc-gekko-objcopy -O binary $@ wii64-sft.dol
-		powerpc-gekko-objcopy -O binary $@ mupen64.dol
 		dollz3 wii64-sft.dol wii64z.dol
 
 
