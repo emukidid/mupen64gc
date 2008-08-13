@@ -1,5 +1,5 @@
 #summary Graphics Programmer Needed
-#labels Featured
+#labels Deprecated
 
 We're looking for someone with some experience with OpenGL and/or GX (on the Gamecube) who would like to help out with the emulator to port a graphics plugin. Anyone interested should check out the sources for:
 
