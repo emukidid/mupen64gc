@@ -34,11 +34,6 @@ static unsigned int current_jump;
 static PowerPC_instr** code_addr;
 static unsigned char isJmpDst[1024];
 
-int    emu_reg[32]; // State of emulator
-double emu_fpr[32];
-int lr[8]; // link register stack
-int lr_i;
-
 static void pass0(PowerPC_block* ppc_block);
 static void pass2(PowerPC_block* ppc_block);
 //static void genRecompileBlock(PowerPC_block*);
@@ -266,7 +261,7 @@ int is_j_out(int branch, int is_aa){
 		        (branch << 2 | (addr_first & 0xF0000000)) > addr_last);
 	else {
 		int dst_instr = (src - src_first) + branch;
-		return (dst_instr < 0 || dst_instr > (addr_last-addr_first)>>2);
+		return (dst_instr < 0 || dst_instr >= (addr_last-addr_first)>>2);
 	}
 }
 
@@ -454,6 +449,7 @@ int resizeCode(PowerPC_block* block, int newSize){
 	return newSize;
 }
 
+extern unsigned long instructionCount;
 static void genJumpPad(PowerPC_block* ppc_block){
 	PowerPC_instr ppc = NEW_PPC_INSTR();
 	
@@ -481,6 +477,16 @@ static void genJumpPad(PowerPC_block* ppc_block){
 	set_next_dst(ppc);
 	// Restore r15
 	GEN_LWZ(ppc, 15, 20, 1);
+	set_next_dst(ppc);
+	// Actually set the instruction count
+	GEN_LIS(ppc, 4, (unsigned int)&instructionCount>>16);
+	set_next_dst(ppc);
+	GEN_ORI(ppc, 4, 4, (unsigned int)&instructionCount);
+	set_next_dst(ppc);
+	GEN_STW(ppc, 16, 0, 4);
+	set_next_dst(ppc);
+	// Restore r16
+	GEN_LWZ(ppc, 16, 24, 1);
 	set_next_dst(ppc);
 	// Restore the sp
 	GEN_LWZ(ppc, 1, 0, 1);

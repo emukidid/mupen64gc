@@ -15,28 +15,10 @@ extern unsigned long instructionCount;
 extern void (*interp_ops[64])(void);
 inline unsigned long update_invalid_addr(unsigned long addr);
 
-#define START_INSTRUCTION_COUNT() \
-	__asm__ __volatile__ ( \
-		/* Start up the instruction counter */ \
-		"mfmmcr0	%0 \n" \
-		"ori		%0, %0, 2 \n" \
-		"mtmmcr0	%0 \n" \
-		/* Get start value for the instruction counter */ \
-		"mfpmc2	%0 \n" \
-		: "=r" (instructionCount) )
-
-#define STOP_INSTRUCTION_COUNT() \
-	__asm__ __volatile__ ( \
-		/* Read the instruction counter and subtract from the previous */ \
-		"mfpmc2	9 \n" \
-		"subf	%0, %1, 9 \n" \
-		: "=r" (instructionCount) \
-		: "r" (instructionCount) \
-		: "r9" )
 
 /* Recompiled code stack frame:
  *  $sp+28  |
- *  $sp+24  |
+ *  $sp+24  | old r16 (new r16 holds instruction count)
  *  $sp+20  | old r15 (new r15 holds decodeNInterpret)
  *  $sp+16  | old r14 (new r14 holds 0)
  * 	$sp+12	| old r13 (new r13 holds reg)
@@ -56,6 +38,8 @@ inline unsigned long update_invalid_addr(unsigned long addr);
 		"addi	14, 0, 0  \n" \
 		"stw	15, 20(1) \n" \
 		"mr		15, %1    \n" \
+		"stw	16, 24(1) \n" \
+		"addi	16, 0, 0  \n" \
 		:: "r" (reg), "r" (decodeNInterpret) )
 
 
@@ -97,22 +81,16 @@ void dynarec(unsigned int address){
 		sprintf(txtbuffer, "Entering dynarec code @ 0x%08x\n", code);
 		DEBUG_print(txtbuffer, DBG_USBGECKO);
 		
-		// Start counting instructions
-		START_INSTRUCTION_COUNT();
 		DYNAREC_PRELUDE();
 		address = code();
-		// Update the value for the instruction count
-		STOP_INSTRUCTION_COUNT();
 	}
 }
 
-unsigned int decodeNInterpret(MIPS_instr mips, unsigned int PC){
+unsigned int decodeNInterpret(MIPS_instr mips, unsigned int PC, unsigned int count){
 	// Update the value for the instruction count
-	STOP_INSTRUCTION_COUNT();
+	instructionCount = count;
 	interp_addr = PC;
 	prefetch_opcode(mips);
 	interp_ops[MIPS_GET_OPCODE(mips)]();
-	// Resume counting instructions
-	START_INSTRUCTION_COUNT();
 	return interp_addr != PC + 4 ? interp_addr : 0;
 }

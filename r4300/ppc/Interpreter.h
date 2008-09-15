@@ -49,22 +49,12 @@ unsigned int decodeNInterpret();
 //#define INTERPRET_MOVN
 //#define INTERPRET_MOVZ
 
-#define INTERPRET_JAL
+//#define INTERPRET_J
+//#define INTERPRET_JAL
 #define INTERPRET_JR
 #define INTERPRET_JALR
-#define INTERPRET_REGIMM
-#if 1
-#define INTERPRET_J
-#define INTERPRET_BEQ
-#define INTERPRET_BNE
-#define INTERPRET_BLEZ
-#define INTERPRET_BGTZ
-#define INTERPRET_BEQL
-#define INTERPRET_BNEL
-#define INTERPRET_BLEZL
-#define INTERPRET_BGTZL
 #define INTERPRET_BC
-#endif
+//#define INTERPRET_BRANCH
 
 #define INTERPRET_SYSCALL
 #define INTERPRET_BREAK
