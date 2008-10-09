@@ -41,12 +41,21 @@
 #include "../main/ROM-Cache.h"
 #endif
 #include "../gui/DEBUG.h"
-#define MAX_PRINT (8*1024)
+#define MIN_PRINT (262*1024)
+#define MAX_PRINT (300*1024)
 static unsigned int numPrinted;
 
 #ifdef DBG
 extern int debugger_mode;
 extern void update_debugger();
+#endif
+
+#ifdef PPC_DYNAREC
+#include "Invalid_Code.h"
+#define check_memory() \
+	if(dynacore) invalid_code_set(address>>12, 1);
+#else
+#define check_memory()
 #endif
 
 unsigned long interp_addr;
@@ -62,7 +71,7 @@ extern unsigned long next_vi;
 static void NI()
 {
    printf("NI:%x\n", (unsigned int)op);
-   stop=1;
+   stop=1; _break();
 }
 
 static void SLL()
@@ -159,7 +168,9 @@ static void SYNC()
 #endif
 static void BREAK(){
 #ifdef DUMP_ON_BREAK
-	if(dynacore){ _break(); return; }
+#ifdef DEBUGON
+	_break(); return;
+#endif
 	printf("-- BREAK @ %08x: DUMPING N64 REGISTERS --\n", interp_addr);
 	int i;
 	for(i=0; i<32; i+=4)
@@ -452,6 +463,7 @@ static void TEQ()
      {
 	printf("trap exception in teq\n");
 	stop=1;
+	_break();
      }
    interp_addr+=4;
 }
@@ -805,14 +817,14 @@ static void TLBWI()
    
    if (tlb_e[Index&0x3F].v_even)
      {
-	for (i=tlb_e[Index&0x3F].start_even; i<tlb_e[Index&0x3F].end_even; i++)
+	for (i=tlb_e[Index&0x3F].start_even; i<tlb_e[Index&0x3F].end_even; i+=0x1000)
 #ifdef USE_TLB_CACHE
 	  TLBCache_set_r(i>>12, 0);
 #else
 	  tlb_LUT_r[i>>12] = 0;
 #endif
 	if (tlb_e[Index&0x3F].d_even)
-	  for (i=tlb_e[Index&0x3F].start_even; i<tlb_e[Index&0x3F].end_even; i++)
+	  for (i=tlb_e[Index&0x3F].start_even; i<tlb_e[Index&0x3F].end_even; i+=0x1000)
 #ifdef USE_TLB_CACHE
 	    TLBCache_set_w(i>>12, 0);
 #else
@@ -821,14 +833,14 @@ static void TLBWI()
      }
    if (tlb_e[Index&0x3F].v_odd)
      {
-	for (i=tlb_e[Index&0x3F].start_odd; i<tlb_e[Index&0x3F].end_odd; i++)
+	for (i=tlb_e[Index&0x3F].start_odd; i<tlb_e[Index&0x3F].end_odd; i+=0x1000)
 #ifdef USE_TLB_CACHE
 	  TLBCache_set_r(i>>12, 0);
 #else
 	  tlb_LUT_r[i>>12] = 0;
 #endif
 	if (tlb_e[Index&0x3F].d_odd)
-	  for (i=tlb_e[Index&0x3F].start_odd; i<tlb_e[Index&0x3F].end_odd; i++)
+	  for (i=tlb_e[Index&0x3F].start_odd; i<tlb_e[Index&0x3F].end_odd; i+=0x1000)
 #ifdef USE_TLB_CACHE
 	    TLBCache_set_w(i>>12, 0);
 #else
@@ -922,14 +934,14 @@ static void TLBWR()
 	Random = (Count/2 % (32 - Wired)) + Wired;
 	
 	if (tlb_e[Random].v_even){
-		for (i=tlb_e[Random].start_even; i<tlb_e[Random].end_even; i++)
+		for (i=tlb_e[Random].start_even; i<tlb_e[Random].end_even; i+=0x1000)
 #ifdef USE_TLB_CACHE
 			TLBCache_set_r(i>>12, 0);
 #else
 			tlb_LUT_r[i>>12] = 0;
 #endif
 		if (tlb_e[Random].d_even)
-			for (i=tlb_e[Random].start_even; i<tlb_e[Random].end_even; i++)
+			for (i=tlb_e[Random].start_even; i<tlb_e[Random].end_even; i+=0x1000)
 #ifdef USE_TLB_CACHE
 				TLBCache_set_w(i>>12, 0);
 #else
@@ -937,14 +949,14 @@ static void TLBWR()
 #endif
 	}
 	if (tlb_e[Random].v_odd){
-		for (i=tlb_e[Random].start_odd; i<tlb_e[Random].end_odd; i++)
+		for (i=tlb_e[Random].start_odd; i<tlb_e[Random].end_odd; i+=0x1000)
 #ifdef USE_TLB_CACHE
 			TLBCache_set_r(i>>12, 0);
 #else
 			tlb_LUT_r[i>>12] = 0;
 #endif
 	if (tlb_e[Random].d_odd)
-		for (i=tlb_e[Random].start_odd; i<tlb_e[Random].end_odd; i++)
+		for (i=tlb_e[Random].start_odd; i<tlb_e[Random].end_odd; i+=0x1000)
 #ifdef USE_TLB_CACHE
 			TLBCache_set_w(i>>12, 0);
 #else
@@ -1047,11 +1059,13 @@ static void TLBP()
 
 static void ERET()
 {
+	DEBUG_print("ERET\n", DBG_USBGECKO);
    update_count();
    if (Status & 0x4)
      {
 	printf("erreur dans ERET\n");
 	stop=1;
+	_break();
      }
    else
      {
@@ -1083,6 +1097,7 @@ static void MFC0()
       case 1:
 	printf("lecture de Random\n");
 	stop=1;
+	_break();
       default:
 	rrt32 = reg_cop0[PC->f.r.nrd];
 	sign_extended(rrt);
@@ -1100,6 +1115,7 @@ static void MTC0()
 	  {
 	     printf ("il y a plus de 32 TLB\n");
 	     stop=1;
+	     _break();
 	  }
 	break;
       case 1:    // Random
@@ -1186,6 +1202,7 @@ static void MTC0()
 	  {
 	     printf("�criture dans Cause\n");
 	     stop = 1;
+	     _break();
 	  }
 	else Cause = rrt;
 	break;
@@ -1214,6 +1231,7 @@ static void MTC0()
       default:
 	printf("unknown mtc0 write : %d\n", PC->f.r.nrd);
 	stop=1;
+	_break();
      }
    interp_addr+=4;
 }
@@ -1578,6 +1596,7 @@ static void C_SF_S()
      {
 	printf("Invalid operation exception in C opcode\n");
 	stop=1;
+	_break();
      }
    FCR31 &= ~0x800000;
    interp_addr+=4;
@@ -1589,6 +1608,7 @@ static void C_NGLE_S()
      {
 	printf("Invalid operation exception in C opcode\n");
 	stop=1;
+	_break();
      }
    FCR31 &= ~0x800000;
    interp_addr+=4;
@@ -1600,6 +1620,7 @@ static void C_SEQ_S()
      {
 	printf("Invalid operation exception in C opcode\n");
 	stop=1;
+	_break();
      }
    if (*reg_cop1_simple[cffs] == *reg_cop1_simple[cfft])
      FCR31 |= 0x800000;
@@ -1613,6 +1634,7 @@ static void C_NGL_S()
      {
 	printf("Invalid operation exception in C opcode\n");
 	stop=1;
+	_break();
      }
    if (*reg_cop1_simple[cffs] == *reg_cop1_simple[cfft])
      FCR31 |= 0x800000;
@@ -1626,6 +1648,7 @@ static void C_LT_S()
      {
 	printf("Invalid operation exception in C opcode\n");
 	stop=1;
+	_break();
      }
    if (*reg_cop1_simple[cffs] < *reg_cop1_simple[cfft])
      FCR31 |= 0x800000;
@@ -1639,6 +1662,7 @@ static void C_NGE_S()
      {
 	printf("Invalid operation exception in C opcode\n");
 	stop=1;
+	_break();
      }
    if (*reg_cop1_simple[cffs] < *reg_cop1_simple[cfft])
      FCR31 |= 0x800000;
@@ -1652,6 +1676,7 @@ static void C_LE_S()
      {
 	printf("Invalid operation exception in C opcode\n");
 	stop=1;
+	_break();
      }
    if (*reg_cop1_simple[cffs] <= *reg_cop1_simple[cfft])
      FCR31 |= 0x800000;
@@ -1665,6 +1690,7 @@ static void C_NGT_S()
      {
 	printf("Invalid operation exception in C opcode\n");
 	stop=1;
+	_break();
      }
    if (*reg_cop1_simple[cffs] <= *reg_cop1_simple[cfft])
      FCR31 |= 0x800000;
@@ -1904,6 +1930,7 @@ static void C_SF_D()
      {
 	printf("Invalid operation exception in C opcode\n");
 	stop=1;
+	_break();
      }
    FCR31 &= ~0x800000;
    interp_addr+=4;
@@ -1915,6 +1942,7 @@ static void C_NGLE_D()
      {
 	printf("Invalid operation exception in C opcode\n");
 	stop=1;
+	_break();
      }
    FCR31 &= ~0x800000;
    interp_addr+=4;
@@ -1926,6 +1954,7 @@ static void C_SEQ_D()
      {
 	printf("Invalid operation exception in C opcode\n");
 	stop=1;
+	_break();
      }
    if (*reg_cop1_double[cffs] == *reg_cop1_double[cfft])
      FCR31 |= 0x800000;
@@ -1939,6 +1968,7 @@ static void C_NGL_D()
      {
 	printf("Invalid operation exception in C opcode\n");
 	stop=1;
+	_break();
      }
    if (*reg_cop1_double[cffs] == *reg_cop1_double[cfft])
      FCR31 |= 0x800000;
@@ -1952,6 +1982,7 @@ static void C_LT_D()
      {
 	printf("Invalid operation exception in C opcode\n");
 	stop=1;
+	_break();
      }
    if (*reg_cop1_double[cffs] < *reg_cop1_double[cfft])
      FCR31 |= 0x800000;
@@ -1965,6 +1996,7 @@ static void C_NGE_D()
      {
 	printf("Invalid operation exception in C opcode\n");
 	stop=1;
+	_break();
      }
    if (*reg_cop1_double[cffs] < *reg_cop1_double[cfft])
      FCR31 |= 0x800000;
@@ -1978,6 +2010,7 @@ static void C_LE_D()
      {
 	printf("Invalid operation exception in C opcode\n");
 	stop=1;
+	_break();
      }
    if (*reg_cop1_double[cffs] <= *reg_cop1_double[cfft])
      FCR31 |= 0x800000;
@@ -1991,6 +2024,7 @@ static void C_NGT_D()
      {
 	printf("Invalid operation exception in C opcode\n");
 	stop=1;
+	_break();
      }
    if (*reg_cop1_double[cffs] <= *reg_cop1_double[cfft])
      FCR31 |= 0x800000;
@@ -2634,9 +2668,9 @@ static void LDL()
 	irt = (irt & 0xFFFFFFFFFFFFFFLL) | (word << 56);
 	break;
      }
-     if(numPrinted<MAX_PRINT) { 
-	     sprintf(txtbuffer,"LDL() address: %08X\n",address);
-	     DEBUG_print(txtbuffer,DBG_USBGECKO); numPrinted++; }
+     if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+	     sprintf(txtbuffer,"LDL() address: %08X @ %08x\n",address,interp_addr);
+	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;
 }
 
 static void LDR()
@@ -2693,9 +2727,9 @@ static void LDR()
 	read_dword_in_memory();
 	break;
      }
-     if(numPrinted<MAX_PRINT) { 
-	     sprintf(txtbuffer,"LDR() address: %08X\n",address);
-	     DEBUG_print(txtbuffer,DBG_USBGECKO); numPrinted++; }
+     if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+	     sprintf(txtbuffer,"LDR() address: %08X @ %08x\n",address,interp_addr);
+	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;
 }
 
 static void LB()
@@ -2705,7 +2739,7 @@ static void LB()
    rdword = &irt;
    read_byte_in_memory();
    sign_extendedb(irt);
-   if(numPrinted<MAX_PRINT) { DEBUG_print("LB()\n",DBG_USBGECKO); numPrinted++; }
+   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { DEBUG_print("LB()\n",DBG_USBGECKO); } numPrinted++;
 }
 
 static void LH()
@@ -2715,9 +2749,9 @@ static void LH()
    rdword = &irt;
    read_hword_in_memory();
    sign_extendedh(irt);
-   if(numPrinted<MAX_PRINT) { 
-	   sprintf(txtbuffer,"LH() address: %08X\n",address);
-	     DEBUG_print(txtbuffer,DBG_USBGECKO); numPrinted++; }
+   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+	   sprintf(txtbuffer,"LH() address: %08X @ %08x\n",address,interp_addr);
+	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;
 }
 
 static void LWL()
@@ -2751,9 +2785,9 @@ static void LWL()
 	break;
      }
    sign_extended(irt);
-   if(numPrinted<MAX_PRINT) { 
-	   sprintf(txtbuffer,"LWL() address: %08X\n",address);
-	     DEBUG_print(txtbuffer,DBG_USBGECKO); numPrinted++; }
+   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+	   sprintf(txtbuffer,"LWL() address: %08X @ %08x\n",address,interp_addr);
+	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;
 }
 
 static void LW()
@@ -2763,9 +2797,9 @@ static void LW()
    interp_addr+=4;
    read_word_in_memory();
    sign_extended(irt);
-   if(numPrinted<MAX_PRINT) { 
-	   sprintf(txtbuffer,"LW() address: %08X\n",address);
-	   DEBUG_print(txtbuffer,DBG_USBGECKO); numPrinted++; }
+   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+	   sprintf(txtbuffer,"LW() address: %08X @ %08x\n",address,interp_addr);
+	   DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;
 }
 
 static void LBU()
@@ -2774,9 +2808,9 @@ static void LBU()
    address = iimmediate + irs32;
    rdword = &irt;
    read_byte_in_memory();
-   if(numPrinted<MAX_PRINT) { 
-	   sprintf(txtbuffer,"LBU() address: %08X\n",address);
-	     DEBUG_print(txtbuffer,DBG_USBGECKO); numPrinted++; }
+   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+	   sprintf(txtbuffer,"LBU() address: %08X @ %08x\n",address,interp_addr);
+	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;
 }
 
 static void LHU()
@@ -2785,9 +2819,9 @@ static void LHU()
    address = iimmediate + irs32;
    rdword = &irt;
    read_hword_in_memory();
-   if(numPrinted<MAX_PRINT) { 
-	   sprintf(txtbuffer,"LHU() address: %08X\n",address);
-	     DEBUG_print(txtbuffer,DBG_USBGECKO); numPrinted++; }
+   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+	   sprintf(txtbuffer,"LHU() address: %08X @ %08x\n",address,interp_addr);
+	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;
 }
 
 static void LWR()
@@ -2820,9 +2854,9 @@ static void LWR()
 	read_word_in_memory();
 	sign_extended(irt);
      }
-	if(numPrinted<MAX_PRINT) { 
-		sprintf(txtbuffer,"LWR() address: %08X\n",address);
-	     DEBUG_print(txtbuffer,DBG_USBGECKO); numPrinted++; }
+	if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+		sprintf(txtbuffer,"LWR() address: %08X @ %08x\n",address,interp_addr);
+	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;
 }
 
 static void LWU()
@@ -2831,9 +2865,9 @@ static void LWU()
    rdword = &irt;
    interp_addr+=4;
    read_word_in_memory();
-   if(numPrinted<MAX_PRINT) { 
-	   sprintf(txtbuffer,"LWU() address: %08X\n",address);
-	     DEBUG_print(txtbuffer,DBG_USBGECKO); numPrinted++; }
+   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+	   sprintf(txtbuffer,"LWU() address: %08X @ %08x\n",address,interp_addr);
+	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;
 }
 
 static void SB()
@@ -2842,9 +2876,10 @@ static void SB()
    address = iimmediate + irs32;
    byte = (unsigned char)(irt & 0xFF);
    write_byte_in_memory();
-   if(numPrinted<MAX_PRINT) { 
-	   sprintf(txtbuffer,"SB() address: %08X\n",address);
-	     DEBUG_print(txtbuffer,DBG_USBGECKO); numPrinted++; }
+   check_memory();
+   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+	   sprintf(txtbuffer,"SB() address: %08X @ %08x\n",address,interp_addr);
+	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;
 }
 
 static void SH()
@@ -2853,9 +2888,10 @@ static void SH()
    address = iimmediate + irs32;
    hword = (unsigned short)(irt & 0xFFFF);
    write_hword_in_memory();
-   if(numPrinted<MAX_PRINT) { 
-	   sprintf(txtbuffer,"SH() address: %08X\n",address);
-	     DEBUG_print(txtbuffer,DBG_USBGECKO); numPrinted++; }
+   check_memory();
+   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+	   sprintf(txtbuffer,"SH() address: %08X @ %08x\n",address,interp_addr);
+	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;
 }
 static void SWL()
 {
@@ -2867,6 +2903,7 @@ static void SWL()
 	address = (iimmediate + irs32) & 0xFFFFFFFC;
 	word = (unsigned long)irt;
 	write_word_in_memory();
+	check_memory();
 	break;
       case 1:
 	address = (iimmediate + irs32) & 0xFFFFFFFC;
@@ -2874,6 +2911,7 @@ static void SWL()
 	read_word_in_memory();
 	word = ((unsigned long)irt >> 8) | (old_word & 0xFF000000);
 	write_word_in_memory();
+	check_memory();
 	break;
       case 2:
 	address = (iimmediate + irs32) & 0xFFFFFFFC;
@@ -2881,16 +2919,18 @@ static void SWL()
 	read_word_in_memory();
 	word = ((unsigned long)irt >> 16) | (old_word & 0xFFFF0000);
 	write_word_in_memory();
+	check_memory();
 	break;
       case 3:
 	address = iimmediate + irs32;
 	byte = (unsigned char)(irt >> 24);
 	write_byte_in_memory();
+	check_memory();
 	break;
      }
-  if(numPrinted<MAX_PRINT) { 
-	   sprintf(txtbuffer,"SWL() address: %08X\n",address);
-	     DEBUG_print(txtbuffer,DBG_USBGECKO); numPrinted++; }
+  if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+	   sprintf(txtbuffer,"SWL() address: %08X @ %08x\n",address,interp_addr);
+	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;
 }
 
 static void SW()
@@ -2899,9 +2939,10 @@ static void SW()
    address = iimmediate + irs32;
    word = (unsigned long)(irt & 0xFFFFFFFF);
    write_word_in_memory();
-   if(numPrinted<MAX_PRINT) { 
-	   sprintf(txtbuffer,"SW() address: %08X\n",address);
-	     DEBUG_print(txtbuffer,DBG_USBGECKO); numPrinted++; }
+   check_memory();
+   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+	   sprintf(txtbuffer,"SW() address: %08X @ %08x\n",address,interp_addr);
+	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;
 }
 
 static void SDL()
@@ -2914,6 +2955,7 @@ static void SDL()
 	address = (iimmediate + irs32) & 0xFFFFFFF8;
 	dword = irt;
 	write_dword_in_memory();
+	check_memory();
 	break;
       case 1:
 	address = (iimmediate + irs32) & 0xFFFFFFF8;
@@ -2921,6 +2963,7 @@ static void SDL()
 	read_dword_in_memory();
 	dword = ((unsigned long long)irt >> 8)|(old_word & 0xFF00000000000000LL);
 	write_dword_in_memory();
+	check_memory();
 	break;
       case 2:
 	address = (iimmediate + irs32) & 0xFFFFFFF8;
@@ -2928,6 +2971,7 @@ static void SDL()
 	read_dword_in_memory();
 	dword = ((unsigned long long)irt >> 16)|(old_word & 0xFFFF000000000000LL);
 	write_dword_in_memory();
+	check_memory();
 	break;
       case 3:
 	address = (iimmediate + irs32) & 0xFFFFFFF8;
@@ -2935,6 +2979,7 @@ static void SDL()
 	read_dword_in_memory();
 	dword = ((unsigned long long)irt >> 24)|(old_word & 0xFFFFFF0000000000LL);
 	write_dword_in_memory();
+	check_memory();
 	break;
       case 4:
 	address = (iimmediate + irs32) & 0xFFFFFFF8;
@@ -2942,6 +2987,7 @@ static void SDL()
 	read_dword_in_memory();
 	dword = ((unsigned long long)irt >> 32)|(old_word & 0xFFFFFFFF00000000LL);
 	write_dword_in_memory();
+	check_memory();
 	break;
       case 5:
 	address = (iimmediate + irs32) & 0xFFFFFFF8;
@@ -2949,6 +2995,7 @@ static void SDL()
 	read_dword_in_memory();
 	dword = ((unsigned long long)irt >> 40)|(old_word & 0xFFFFFFFFFF000000LL);
 	write_dword_in_memory();
+	check_memory();
 	break;
       case 6:
 	address = (iimmediate + irs32) & 0xFFFFFFF8;
@@ -2956,6 +3003,7 @@ static void SDL()
 	read_dword_in_memory();
 	dword = ((unsigned long long)irt >> 48)|(old_word & 0xFFFFFFFFFFFF0000LL);
 	write_dword_in_memory();
+	check_memory();
 	break;
       case 7:
 	address = (iimmediate + irs32) & 0xFFFFFFF8;
@@ -2963,11 +3011,12 @@ static void SDL()
 	read_dword_in_memory();
 	dword = ((unsigned long long)irt >> 56)|(old_word & 0xFFFFFFFFFFFFFF00LL);
 	write_dword_in_memory();
+	check_memory();
 	break;
      }
-  if(numPrinted<MAX_PRINT) { 
-	   sprintf(txtbuffer,"SDL() address: %08X\n",address);
-	     DEBUG_print(txtbuffer,DBG_USBGECKO); numPrinted++; }
+  if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+	   sprintf(txtbuffer,"SDL() address: %08X @ %08x\n",address,interp_addr);
+	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;
 }
 
 static void SDR()
@@ -2982,6 +3031,7 @@ static void SDR()
 	read_dword_in_memory();
 	dword = (irt << 56) | (old_word & 0x00FFFFFFFFFFFFFFLL);
 	write_dword_in_memory();
+	check_memory();
 	break;
       case 1:
 	address = (iimmediate + irs32) & 0xFFFFFFF8;
@@ -2989,6 +3039,7 @@ static void SDR()
 	read_dword_in_memory();
 	dword = (irt << 48) | (old_word & 0x0000FFFFFFFFFFFFLL);
 	write_dword_in_memory();
+	check_memory();
 	break;
       case 2:
 	address = (iimmediate + irs32) & 0xFFFFFFF8;
@@ -2996,6 +3047,7 @@ static void SDR()
 	read_dword_in_memory();
 	dword = (irt << 40) | (old_word & 0x000000FFFFFFFFFFLL);
 	write_dword_in_memory();
+	check_memory();
 	break;
       case 3:
 	address = (iimmediate + irs32) & 0xFFFFFFF8;
@@ -3003,6 +3055,7 @@ static void SDR()
 	read_dword_in_memory();
 	dword = (irt << 32) | (old_word & 0x00000000FFFFFFFFLL);
 	write_dword_in_memory();
+	check_memory();
 	break;
       case 4:
 	address = (iimmediate + irs32) & 0xFFFFFFF8;
@@ -3010,6 +3063,7 @@ static void SDR()
 	read_dword_in_memory();
 	dword = (irt << 24) | (old_word & 0x0000000000FFFFFFLL);
 	write_dword_in_memory();
+	check_memory();
 	break;
       case 5:
 	address = (iimmediate + irs32) & 0xFFFFFFF8;
@@ -3017,6 +3071,7 @@ static void SDR()
 	read_dword_in_memory();
 	dword = (irt << 16) | (old_word & 0x000000000000FFFFLL);
 	write_dword_in_memory();
+	check_memory();
 	break;
       case 6:
 	address = (iimmediate + irs32) & 0xFFFFFFF8;
@@ -3024,16 +3079,18 @@ static void SDR()
 	read_dword_in_memory();
 	dword = (irt << 8) | (old_word & 0x00000000000000FFLL);
 	write_dword_in_memory();
+	check_memory();
 	break;
       case 7:
 	address = (iimmediate + irs32) & 0xFFFFFFF8;
 	dword = irt;
 	write_dword_in_memory();
+	check_memory();
 	break;
      }
-  if(numPrinted<MAX_PRINT) { 
-	   sprintf(txtbuffer,"SDR() address: %08X\n",address);
-	     DEBUG_print(txtbuffer,DBG_USBGECKO); numPrinted++; }
+  if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+	   sprintf(txtbuffer,"SDR() address: %08X @ %08x\n",address,interp_addr);
+	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;
 }
 
 static void SWR()
@@ -3048,6 +3105,7 @@ static void SWR()
 	read_word_in_memory();
 	word = ((unsigned long)irt << 24) | (old_word & 0x00FFFFFF);
 	write_word_in_memory();
+	check_memory();
 	break;
       case 1:
 	address = (iimmediate + irs32) & 0xFFFFFFFC;
@@ -3055,6 +3113,7 @@ static void SWR()
 	read_word_in_memory();
 	word = ((unsigned long)irt << 16) | (old_word & 0x0000FFFF);
 	write_word_in_memory();
+	check_memory();
 	break;
       case 2:
 	address = (iimmediate + irs32) & 0xFFFFFFFC;
@@ -3062,16 +3121,18 @@ static void SWR()
 	read_word_in_memory();
 	word = ((unsigned long)irt << 8) | (old_word & 0x000000FF);
 	write_word_in_memory();
+	check_memory();
 	break;
       case 3:
 	address = (iimmediate + irs32) & 0xFFFFFFFC;
 	word = (unsigned long)irt;
 	write_word_in_memory();
+	check_memory();
 	break;
      }
-  if(numPrinted<MAX_PRINT) { 
-	   sprintf(txtbuffer,"SWR() address: %08X\n",address);
-	     DEBUG_print(txtbuffer,DBG_USBGECKO); numPrinted++; }
+  if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+	   sprintf(txtbuffer,"SWR() address: %08X @ %08x\n",address,interp_addr);
+	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;
 }
 
 static void CACHE()
@@ -3125,6 +3186,7 @@ static void SC()
 	address = iimmediate + irs32;
 	word = (unsigned long)(irt & 0xFFFFFFFF);
 	write_word_in_memory();
+	check_memory();
 	llbit = 0;
 	irt = 1;
      }
@@ -3141,6 +3203,7 @@ static void SWC1()
    address = lfoffset+reg[lfbase];
    word = *((long*)reg_cop1_simple[lfft]);
    write_word_in_memory();
+   check_memory();
 }
 
 static void SDC1()
@@ -3150,6 +3213,7 @@ static void SDC1()
    address = lfoffset+reg[lfbase];
    dword = *((unsigned long long*)reg_cop1_double[lfft]);
    write_dword_in_memory();
+   check_memory();
 }
 
 static void SD()
@@ -3158,6 +3222,7 @@ static void SD()
    address = iimmediate + irs32;
    dword = irt;
    write_dword_in_memory();
+   check_memory();
 }
 
 /*static*/ void (*interp_ops[64])(void) =
@@ -3245,6 +3310,7 @@ if ((interp_addr >= 0x80000000) && (interp_addr < 0xc0000000))
 	  {
 	     printf("execution &#65533; l'addresse :%x\n", (int)interp_addr);
 	     stop=1;
+	     _break();
 	  }
      }
    else
