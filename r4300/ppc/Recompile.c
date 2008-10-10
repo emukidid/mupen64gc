@@ -290,12 +290,18 @@ static void pass2(PowerPC_block* ppc_block){
 			unsigned int jump_address = (jump_table[i].old_jump << 2) |
 			                            ((unsigned int)ppc_block->start_address & 0xF0000000);
 			// We're jumping out of this block
-			sprintf(txtbuffer,"Trampolining out to 0x%08x\n", jump_address);
-			DEBUG_print(txtbuffer, DBG_USBGECKO);
+			/*sprintf(txtbuffer,"Trampolining out to 0x%08x\n", jump_address);
+			DEBUG_print(txtbuffer, DBG_USBGECKO);*/
 			
 			// b <jump_pad>
-			*current &= ~(PPC_BD_MASK << PPC_BD_SHIFT);
-			PPC_SET_BD(*current, ((unsigned int)jump_pad-(unsigned int)current)>>2);
+			int distance = ((unsigned int)jump_pad-(unsigned int)current)>>2;
+			if(jump_table[i].type & JUMP_TYPE_J){
+				*current &= ~(PPC_LI_MASK << PPC_LI_SHIFT);
+				PPC_SET_LI(*current, distance);
+			} else {
+				*current &= ~(PPC_BD_MASK << PPC_BD_SHIFT);
+				PPC_SET_BD(*current, distance);
+			}
 			
 		} else if(!(jump_table[i].type & JUMP_TYPE_J)){ // Branch instruction
 			int jump_offset = (unsigned int)jump_table[i].old_jump + 
@@ -303,9 +309,9 @@ static void pass2(PowerPC_block* ppc_block){
 			
 			jump_table[i].new_jump = ppc_block->code_addr[jump_offset] - current;
 
-			sprintf(txtbuffer,"Converting old_jump = %d, to new_jump = %d\n",
+			/*sprintf(txtbuffer,"Converting old_jump = %d, to new_jump = %d\n",
 			       jump_table[i].old_jump, jump_table[i].new_jump);
-			DEBUG_print(txtbuffer, DBG_USBGECKO);
+			DEBUG_print(txtbuffer, DBG_USBGECKO);*/
 			
 			*current &= ~(PPC_BD_MASK << PPC_BD_SHIFT);
 			PPC_SET_BD(*current, jump_table[i].new_jump);
@@ -319,8 +325,8 @@ static void pass2(PowerPC_block* ppc_block){
 			int jump_offset = (jump_address - ppc_block->start_address) >> 2;
 			jump_table[i].new_jump = ppc_block->code_addr[jump_offset] - current;
 
-			sprintf(txtbuffer,"Jumping to 0x%08x; jump_offset = %d\n", jump_address, jump_offset);
-			DEBUG_print(txtbuffer, DBG_USBGECKO);
+			/*sprintf(txtbuffer,"Jumping to 0x%08x; jump_offset = %d\n", jump_address, jump_offset);
+			DEBUG_print(txtbuffer, DBG_USBGECKO);*/
 			*current &= ~(PPC_LI_MASK << PPC_LI_SHIFT);
 			PPC_SET_LI(*current, jump_table[i].new_jump);
 			
@@ -455,7 +461,8 @@ static void genJumpPad(PowerPC_block* ppc_block){
 	
 	if(*code_length + 8 >= ppc_block->max_length)
 			resizeCode(ppc_block, ppc_block->max_length + 8);
-	
+	// Set the next address to the first address in the next block if
+	//   we've really reached the end of the block, not jumped to the pad
 	GEN_LIS(ppc, 3, ppc_block->end_address>>16);
 	set_next_dst(ppc);
 	GEN_LI(ppc, 3, 3, ppc_block->end_address);
@@ -465,28 +472,29 @@ static void genJumpPad(PowerPC_block* ppc_block){
 	
 	// Restore any saved registers
 	// Restore cr
-	GEN_LWZ(ppc, 13, 8, 1);
+	GEN_LWZ(ppc, DYNAREG_REG, DYNAOFF_CR, 1);
 	set_next_dst(ppc);
-	GEN_MTCR(ppc, 13);
-	set_next_dst(ppc);
-	// Restore r13
-	GEN_LWZ(ppc, 13, 12, 1);
+	GEN_MTCR(ppc, DYNAREG_REG);
 	set_next_dst(ppc);
 	// Restore r14
-	GEN_LWZ(ppc, 14, 16, 1);
+	GEN_LWZ(ppc, DYNAREG_REG, DYNAOFF_REG, 1);
 	set_next_dst(ppc);
 	// Restore r15
-	GEN_LWZ(ppc, 15, 20, 1);
+	GEN_LWZ(ppc, DYNAREG_ZERO, DYNAOFF_ZERO, 1);
+	set_next_dst(ppc);
+	// Restore r16
+	GEN_LWZ(ppc, DYNAREG_INTERP, DYNAOFF_INTERP, 1);
 	set_next_dst(ppc);
 	// Actually set the instruction count
 	GEN_LIS(ppc, 4, (unsigned int)&instructionCount>>16);
 	set_next_dst(ppc);
 	GEN_ORI(ppc, 4, 4, (unsigned int)&instructionCount);
 	set_next_dst(ppc);
-	GEN_STW(ppc, 16, 0, 4);
+	// Store the value to instructionCount
+	GEN_STW(ppc, DYNAREG_ICOUNT, 0, 4);
 	set_next_dst(ppc);
-	// Restore r16
-	GEN_LWZ(ppc, 16, 24, 1);
+	// Restore r17
+	GEN_LWZ(ppc, DYNAREG_ICOUNT, DYNAOFF_ICOUNT, 1);
 	set_next_dst(ppc);
 	// Restore the sp
 	GEN_LWZ(ppc, 1, 0, 1);
