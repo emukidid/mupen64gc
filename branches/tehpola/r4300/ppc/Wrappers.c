@@ -18,10 +18,10 @@ inline unsigned long update_invalid_addr(unsigned long addr);
 
 /* Recompiled code stack frame:
  *  $sp+28  |
- *  $sp+24  | old r16 (new r16 holds instruction count)
- *  $sp+20  | old r15 (new r15 holds decodeNInterpret)
- *  $sp+16  | old r14 (new r14 holds 0)
- * 	$sp+12	| old r13 (new r13 holds reg)
+ *  $sp+24  | old r17 (new r17 holds instruction count)
+ *  $sp+20  | old r16 (new r16 holds decodeNInterpret)
+ *  $sp+16  | old r15 (new r15 holds 0)
+ * 	$sp+12	| old r14 (new r14 holds reg)
  * 	$sp+8	| old lr
  * 	$sp+4	| old cr
  * 	$sp		| old sp
@@ -30,16 +30,16 @@ inline unsigned long update_invalid_addr(unsigned long addr);
 #define DYNAREC_PRELUDE() \
 	__asm__ __volatile__ ( \
 		"stwu	1, -32(1) \n" \
-		"stw	13, 12(1) \n" \
-		"mfcr	13        \n" \
-		"stw	13, 8(1)  \n" \
-		"mr		13, %0    \n" \
-		"stw	14, 16(1) \n" \
-		"addi	14, 0, 0  \n" \
-		"stw	15, 20(1) \n" \
-		"mr		15, %1    \n" \
-		"stw	16, 24(1) \n" \
-		"addi	16, 0, 0  \n" \
+		"stw	14, 12(1) \n" \
+		"mfcr	14        \n" \
+		"stw	14, 4(1)  \n" \
+		"mr		14, %0    \n" \
+		"stw	15, 16(1) \n" \
+		"addi	15, 0, 0  \n" \
+		"stw	16, 20(1) \n" \
+		"mr		16, %1    \n" \
+		"stw	17, 24(1) \n" \
+		"addi	17, 0, 0  \n" \
 		:: "r" (reg), "r" (decodeNInterpret) )
 
 
@@ -70,6 +70,8 @@ void dynarec(unsigned int address){
 		}
 		
 		if(invalid_code_get(address>>12)){
+			sprintf(txtbuffer, "block at %08x is invalid\n", address&~0xFFF);
+			DEBUG_print(txtbuffer, DBG_USBGECKO);
 			dst_block->length = 0;
 			recompile_block(dst_block);
 		}

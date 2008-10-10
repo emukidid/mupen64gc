@@ -53,10 +53,10 @@ static int flushRegisters(void){
 				GEN_SRAWI(ppc, 0, regMap[i], 31);
 				set_next_dst(ppc);
 				// Store the MSW
-				GEN_STW(ppc, 0, i*8, 13);
+				GEN_STW(ppc, 0, i*8, DYNAREG_REG);
 				set_next_dst(ppc);
 				// Store the LSW
-				GEN_STW(ppc, regMap[i], i*8+4, 13);
+				GEN_STW(ppc, regMap[i], i*8+4, DYNAREG_REG);
 				set_next_dst(ppc);
 			}
 			regMap[i] = -1; // Mark unmapped
@@ -80,10 +80,10 @@ static int flushLRURegister(void){
 		GEN_SRAWI(ppc, 0, regMap[i], 31);
 		set_next_dst(ppc);
 		// Store the MSW
-		GEN_STW(ppc, 0, i*8, 13);
+		GEN_STW(ppc, 0, i*8, DYNAREG_REG);
 		set_next_dst(ppc);
 		// Store the LSW
-		GEN_STW(ppc, map, lru_i*8+4, 13);
+		GEN_STW(ppc, map, lru_i*8+4, DYNAREG_REG);
 		set_next_dst(ppc);
 	}
 	regMap[lru_i] = -1; // Mark unmapped
@@ -118,7 +118,7 @@ static int mapRegisterNew(int reg){
 
 static int mapRegister(int reg){
 	PowerPC_instr ppc;
-	if(!reg) return 14; // Return r0 mapped to r14
+	if(!reg) return DYNAREG_ZERO; // Return r0 mapped to r14
 	regLRU[reg] = nextLRUVal++;
 	// If its already been mapped, just return that value
 	if(regMap[reg] >= 0) return regMap[reg];
@@ -128,7 +128,7 @@ static int mapRegister(int reg){
 	for(i=0; i<32; ++i)
 		if(availableRegs[i]){
 			if(reg != 0){
-				GEN_LWZ(ppc, i, reg*8+4, 13);
+				GEN_LWZ(ppc, i, reg*8+4, DYNAREG_REG);
 				set_next_dst(ppc);
 			} else {
 				GEN_LI(ppc, i, 0, 0);
@@ -140,7 +140,7 @@ static int mapRegister(int reg){
 	// We didn't find an available register, so flush one
 	i = flushLRURegister();
 	// And load the registers value to the register we flushed
-	GEN_LWZ(ppc, i, reg*8+4, 13);
+	GEN_LWZ(ppc, i, reg*8+4, DYNAREG_REG);
 	set_next_dst(ppc);
 	availableRegs[i] = 0;
 	return regMap[reg] = i;
@@ -224,7 +224,7 @@ static int branch(int offset, condition cond, int link, int likely){
 	flushRegisters();
 	
 	// Update the instruction count
-	GEN_ADDI(ppc, 16, 16, get_instruction_count());
+	GEN_ADDI(ppc, DYNAREG_ICOUNT, DYNAREG_ICOUNT, get_instruction_count());
 	set_next_dst(ppc);
 	
 	if(likely){
@@ -339,7 +339,7 @@ static int J(MIPS_instr mips){
 	int delaySlot = get_curr_dst() - preDelay;
 	
 	// Update the instruction count
-	GEN_ADDI(ppc, 16, 16, get_instruction_count());
+	GEN_ADDI(ppc, DYNAREG_ICOUNT, DYNAREG_ICOUNT, get_instruction_count());
 	set_next_dst(ppc);
 	
 #ifdef INTERPRET_J
@@ -389,7 +389,7 @@ static int JAL(MIPS_instr mips){
 	flushRegisters();
 	
 	// Update the instruction count
-	GEN_ADDI(ppc, 16, 16, get_instruction_count());
+	GEN_ADDI(ppc, DYNAREG_ICOUNT, DYNAREG_ICOUNT, get_instruction_count());
 	set_next_dst(ppc);
 	
 #ifdef INTERPRET_JAL
@@ -642,10 +642,10 @@ static int DADDI(MIPS_instr mips){
 
 static int LDL(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_DW
+#ifdef INTERPRET_LDL
 	genCallInterp(mips);
 	return INTERPRETED;
-#else // INTERPRET_DW
+#else // INTERPRET_LDL
 	// TODO: ldl
 	return CONVERT_ERROR;
 #endif
@@ -653,10 +653,10 @@ static int LDL(MIPS_instr mips){
 
 static int LDR(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_DW
+#ifdef INTERPRET_LDR
 	genCallInterp(mips);
 	return INTERPRETED;
-#else // INTERPRET_DW
+#else // INTERPRET_LDR
 	// TODO: ldr
 	return CONVERT_ERROR;
 #endif
@@ -1007,7 +1007,7 @@ static int JR(MIPS_instr mips){
 	int delaySlot = get_curr_dst() - preDelay;
 	
 	// Update the instruction count
-	GEN_ADDI(ppc, 16, 16, get_instruction_count());
+	GEN_ADDI(ppc, DYNAREG_ICOUNT, DYNAREG_ICOUNT, get_instruction_count());
 	set_next_dst(ppc);
 	
 #ifdef INTERPRET_JR
@@ -1051,7 +1051,7 @@ static int JALR(MIPS_instr mips){
 	flushRegisters();
 	
 	// Update the instruction count
-	GEN_ADDI(ppc, 16, 16, get_instruction_count());
+	GEN_ADDI(ppc, DYNAREG_ICOUNT, DYNAREG_ICOUNT, get_instruction_count());
 	set_next_dst(ppc);
 	
 #ifdef INTERPRET_JALR
@@ -1744,6 +1744,10 @@ static int CTC1(MIPS_instr mips){
 }
 
 static int BC(MIPS_instr mips){
+#ifdef INTERPRET_FP
+	genCallInterp(mips);
+	return INTERPRETED;
+#else
 	PowerPC_instr ppc;
 	int cond   = mips & 0x00010000;
 	int likely = mips & 0x00020000;
@@ -1856,6 +1860,7 @@ static int BC(MIPS_instr mips){
 #else // INTERPRET_BC
 	return CONVERT_SUCCESS;
 #endif
+#endif // INTERPRET_BC
 }
 
 static int S(MIPS_instr mips){
@@ -1928,9 +1933,9 @@ static void genCallInterp(MIPS_instr mips){
 	PowerPC_instr ppc = NEW_PPC_INSTR();
 	flushRegisters();
 	// Update the instruction count and pass it
-	GEN_ADDI(ppc, 5, 16, get_instruction_count());
+	GEN_ADDI(ppc, 5, DYNAREG_ICOUNT, get_instruction_count());
 	set_next_dst(ppc);
-	GEN_ADDI(ppc, 16, 0, 0);
+	GEN_ADDI(ppc, DYNAREG_ICOUNT, 0, 0);
 	set_next_dst(ppc);
 	// Save the lr
 	GEN_MFLR(ppc, 0);
@@ -1945,7 +1950,7 @@ static void genCallInterp(MIPS_instr mips){
 	set_next_dst(ppc);
 #endif
 	// Move the address of decodeNInterpret to ctr for a bctr
-	GEN_MTCTR(ppc, 15);
+	GEN_MTCTR(ppc, DYNAREG_INTERP);
 	set_next_dst(ppc);
 	// Load our argument into r3 (mips)
 	GEN_LIS(ppc, 3, mips>>16);
@@ -1961,7 +1966,7 @@ static void genCallInterp(MIPS_instr mips){
 	GEN_BCTRL(ppc);
 	set_next_dst(ppc);
 	// Restore the lr
-	GEN_LWZ(ppc, 0, 8, 1);
+	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
 	set_next_dst(ppc);
 	GEN_MTLR(ppc, 0);
 	set_next_dst(ppc);
@@ -1969,8 +1974,16 @@ static void genCallInterp(MIPS_instr mips){
 	//   jumpTo it
 	GEN_CMPI(ppc, 3, 0, 6);
 	set_next_dst(ppc);
+#if 0
+	// TODO: It would be nice to re-enable this when possible
 	GEN_BNE(ppc, 6, add_jump(-1, 0, 1), 0, 0);
 	set_next_dst(ppc);
+#else
+	GEN_BEQ(ppc, 6, 2, 0, 0);
+	set_next_dst(ppc);
+	GEN_B(ppc, add_jump(-1, 1, 1), 0, 0);
+	set_next_dst(ppc);
+#endif
 }
 
 static void genJumpTo(unsigned int loc, unsigned int type){
@@ -1978,7 +1991,7 @@ static void genJumpTo(unsigned int loc, unsigned int type){
 	
 	if(type == JUMPTO_REG){
 		// Load the register as the return value
-		GEN_LWZ(ppc, 3, loc*8+4, 13);
+		GEN_LWZ(ppc, 3, loc*8+4, DYNAREG_REG);
 		set_next_dst(ppc);
 	} else {
 		// Calculate the destination address
