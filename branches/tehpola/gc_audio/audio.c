@@ -92,15 +92,24 @@ static void inline play_buffer(void){
 	// This thread will keep giving buffers to the audio as they come
 	while(thread_running){
 	
-	// Wait for a buffer to be processed and the audio to be ready
+	// Wait for a buffer to be processed
 	LWP_SemWait(buffer_full);
+#endif
+	
+	// Make sure the buffer is in RAM, not the cache
+	DCFlushRange(buffer[thread_buffer], BUFFER_SIZE);
+	
+#ifdef THREADED_AUDIO
+	// Wait for the audio interface to be free before playing
 	LWP_SemWait(audio_free);
 #endif
 	
-	DCFlushRange (buffer[thread_buffer], BUFFER_SIZE);
+	// Actually send the buffer out to be played
 	AUDIO_InitDMA((unsigned int)&buffer[thread_buffer], BUFFER_SIZE);
 	AUDIO_StartDMA();
+	
 #ifdef THREADED_AUDIO
+	// Move the index to the next buffer
 	NEXT(thread_buffer);
 	}
 #endif
