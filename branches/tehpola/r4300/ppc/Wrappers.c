@@ -22,8 +22,8 @@ inline unsigned long update_invalid_addr(unsigned long addr);
  *  $sp+20  | old r16 (new r16 holds decodeNInterpret)
  *  $sp+16  | old r15 (new r15 holds 0)
  * 	$sp+12	| old r14 (new r14 holds reg)
- * 	$sp+8	| old lr
- * 	$sp+4	| old cr
+ * 	$sp+8	| old cr
+ * 	$sp+4	| old lr
  * 	$sp		| old sp
  */
 
@@ -32,7 +32,7 @@ inline unsigned long update_invalid_addr(unsigned long addr);
 		"stwu	1, -32(1) \n" \
 		"stw	14, 12(1) \n" \
 		"mfcr	14        \n" \
-		"stw	14, 4(1)  \n" \
+		"stw	14, 8(1)  \n" \
 		"mr		14, %0    \n" \
 		"stw	15, 16(1) \n" \
 		"addi	15, 0, 0  \n" \

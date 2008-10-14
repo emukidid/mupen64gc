@@ -1940,7 +1940,7 @@ static void genCallInterp(MIPS_instr mips){
 	// Save the lr
 	GEN_MFLR(ppc, 0);
 	set_next_dst(ppc);
-	GEN_STW(ppc, 0, 8, 1);
+	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
 	set_next_dst(ppc);
 #if 0
 	// Load the address of decodeNInterpret
