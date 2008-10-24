@@ -3,7 +3,7 @@
    ----------------------------------------------------
    MEMORY USAGE:
      STATIC:
-   	Audio Buffer: 2x BUFFER_SIZE (currently 4kb each)
+   	Audio Buffer: 4x BUFFER_SIZE (currently ~3kb each)
  */
 
 #include "../main/winlnxdefs.h"
@@ -24,11 +24,18 @@
 AUDIO_INFO AudioInfo;
 
 #define NUM_BUFFERS 4
-#define BUFFER_SIZE 2*1024
+#define BUFFER_SIZE 3200
 static char buffer[NUM_BUFFERS][BUFFER_SIZE] __attribute__((aligned(32)));
 static int which_buffer = 0;
 static unsigned int buffer_offset = 0;
 #define NEXT(x) (x=(x+1)%NUM_BUFFERS)
+static unsigned int freq;
+static unsigned int real_freq;
+static float freq_ratio;
+// FIXME: Also support 50 Hz
+// FIXME: 32khz actually uses 2132~2134 bytes/frame
+static enum { BUFFER_SIZE_32_60 = 2144, BUFFER_SIZE_48_60 = 3200,
+              BUFFER_SIZE_32_50 = 640,  BUFFER_SIZE_48_50 = 960 } buffer_size;
 
 #ifdef THREADED_AUDIO
 static lwp_t audio_thread;
@@ -51,27 +58,41 @@ EXPORT void CALL
 AiDacrateChanged( int SystemType )
 {
 	// Taken from mupen_audio
-	int f = 32000; //default to 32khz incase we get a bad systemtype
+	freq = 32000; //default to 32khz incase we get a bad systemtype
 	switch (SystemType){
 	      case SYSTEM_NTSC:
-		f = 48681812 / (*AudioInfo.AI_DACRATE_REG + 1);
+		freq = 48681812 / (*AudioInfo.AI_DACRATE_REG + 1);
 		break;
 	      case SYSTEM_PAL:
-		f = 49656530 / (*AudioInfo.AI_DACRATE_REG + 1);
+		freq = 49656530 / (*AudioInfo.AI_DACRATE_REG + 1);
 		break;
 	      case SYSTEM_MPAL:
-		f = 48628316 / (*AudioInfo.AI_DACRATE_REG + 1);
+		freq = 48628316 / (*AudioInfo.AI_DACRATE_REG + 1);
 		break;
 	}
 	
-	if      ( f == 32000 )
+	// Calculate the absolute differences from 32 and 48khz
+	int diff32 = freq - 32000;
+	int diff48 = freq - 48000;
+	diff32 = diff32 > 0 ? diff32 : -diff32;
+	diff48 = diff48 > 0 ? diff48 : -diff48;
+	// Choose the closest real frequency
+	real_freq = (diff32 < diff48) ? 32000 : 48000;
+	freq_ratio = (float)freq / real_freq;
+	
+	if( real_freq == 32000 ){
 		AUDIO_SetDSPSampleRate(AI_SAMPLERATE_32KHZ);
-	else if ( f == 48000 )
+		buffer_size = (SystemType == SYSTEM_NTSC) ?
+		               BUFFER_SIZE_32_60 : BUFFER_SIZE_32_50;
+	} else if( real_freq == 48000 ){
 		AUDIO_SetDSPSampleRate(AI_SAMPLERATE_48KHZ);
-	else {
-		 sprintf(txtbuffer,"error initializing frequency: %d", f);
-	   	 DEBUG_print(txtbuffer,DBG_AUDIOINFO); 
+		buffer_size = (SystemType == SYSTEM_NTSC) ?
+		               BUFFER_SIZE_48_60 : BUFFER_SIZE_48_50;
 	}
+	
+	sprintf(txtbuffer, "Initializing frequency: %d (resampling from %d)",
+	        real_freq, freq);
+	DEBUG_print(txtbuffer,DBG_AUDIOINFO);
 }
 
 #ifdef THREADED_AUDIO
@@ -97,7 +118,7 @@ static void inline play_buffer(void){
 #endif
 	
 	// Make sure the buffer is in RAM, not the cache
-	DCFlushRange(buffer[thread_buffer], BUFFER_SIZE);
+	DCFlushRange(buffer[thread_buffer], buffer_size);
 	
 #ifdef THREADED_AUDIO
 	// Wait for the audio interface to be free before playing
@@ -105,7 +126,7 @@ static void inline play_buffer(void){
 #endif
 	
 	// Actually send the buffer out to be played
-	AUDIO_InitDMA((unsigned int)&buffer[thread_buffer], BUFFER_SIZE);
+	AUDIO_InitDMA((unsigned int)&buffer[thread_buffer], buffer_size);
 	AUDIO_StartDMA();
 	
 #ifdef THREADED_AUDIO
@@ -115,28 +136,35 @@ static void inline play_buffer(void){
 #endif
 }
 
-static void inline copy_to_buffer(char* buffer, char* stream, unsigned int length){
-	memcpy(buffer, stream, length);
+static void inline copy_to_buffer(int* buffer, int* stream, unsigned int length){
+	int di;
+	float si;
+	// TODO: Linear interpolation
+	// Quick and dirty resampling: skip over or repeat samples
+	for(di = 0, si = 0.0f; di < length/4; ++di, si += freq_ratio)
+		buffer[di] = stream[(int)si];
 }
 
 static void inline add_to_buffer(void* stream, unsigned int length){
 	// This shouldn't lose any data and works for any size
-	unsigned int lengthi;
+	unsigned int lengthi, rlengthi;
 	unsigned int lengthLeft = length;
+	unsigned int rlengthLeft = length / freq_ratio;
 	unsigned int stream_offset = 0;
 	while(1){
-		lengthi = (buffer_offset + lengthLeft < BUFFER_SIZE) ?
-		           lengthLeft : (BUFFER_SIZE - buffer_offset);
+		rlengthi = (buffer_offset + rlengthLeft < buffer_size) ?
+		            rlengthLeft : (buffer_size - buffer_offset);
+		lengthi  = rlengthi * freq_ratio;
 	
 #ifdef THREADED_AUDIO
 		// Wait for a buffer we can copy into
 		LWP_SemWait(buffer_empty);
 #endif		
 		copy_to_buffer(buffer[which_buffer] + buffer_offset,
-		               stream + stream_offset, lengthi);
+		               stream + stream_offset, rlengthi);
 		
-		if(buffer_offset + lengthLeft < BUFFER_SIZE){
-			buffer_offset += lengthi;
+		if(buffer_offset + rlengthLeft < buffer_size){
+			buffer_offset += rlengthi;
 #ifdef THREADED_AUDIO
 			// This is a little weird, but we didn't fill this buffer.
 			//   So it is still considered 'empty', but since we 'decremented'
@@ -149,6 +177,7 @@ static void inline add_to_buffer(void* stream, unsigned int length){
 		
 		lengthLeft    -= lengthi;
 		stream_offset += lengthi;
+		rlengthLeft   -= rlengthi;
 		
 #ifdef THREADED_AUDIO
 		// Let the audio thread know that we've filled a new buffer
