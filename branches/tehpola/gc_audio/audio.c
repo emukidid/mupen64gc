@@ -137,11 +137,12 @@ static void inline play_buffer(void){
 }
 
 static void inline copy_to_buffer(int* buffer, int* stream, unsigned int length){
+	// NOTE: length is in samples (stereo (2) shorts)
 	int di;
 	float si;
 	// TODO: Linear interpolation
 	// Quick and dirty resampling: skip over or repeat samples
-	for(di = 0, si = 0.0f; di < length/4; ++di, si += freq_ratio){
+	for(di = 0, si = 0.0f; di < length; ++di, si += freq_ratio){
 		buffer[di] = stream[(int)si];
 	}
 }
@@ -149,13 +150,13 @@ static void inline copy_to_buffer(int* buffer, int* stream, unsigned int length)
 static void inline add_to_buffer(void* stream, unsigned int length){
 	// This shouldn't lose any data and works for any size
 	unsigned int stream_offset = 0;
+	// Length calculations are in samples (stereo (short) sample pairs)
 	unsigned int lengthi, rlengthi;
-	unsigned int lengthLeft = length;
-	unsigned int rlengthLeft = (length / freq_ratio);
-	rlengthLeft += (4 - (rlengthLeft&3)) & 3; // FIXME: This has to be wrong
+	unsigned int lengthLeft = length >> 2;
+	unsigned int rlengthLeft = ceilf(lengthLeft / freq_ratio);
 	while(1){
-		rlengthi = (buffer_offset + rlengthLeft < buffer_size) ?
-		            rlengthLeft : (buffer_size - buffer_offset);
+		rlengthi = (buffer_offset + (rlengthLeft << 2) < buffer_size) ?
+		            rlengthLeft : ((buffer_size - buffer_offset) >> 2);
 		lengthi  = rlengthi * freq_ratio;
 	
 #ifdef THREADED_AUDIO
@@ -165,8 +166,8 @@ static void inline add_to_buffer(void* stream, unsigned int length){
 		copy_to_buffer(buffer[which_buffer] + buffer_offset,
 		               stream + stream_offset, rlengthi);
 		
-		if(buffer_offset + rlengthLeft < buffer_size){
-			buffer_offset += rlengthi;
+		if(buffer_offset + (rlengthLeft << 2) < buffer_size){
+			buffer_offset += rlengthi << 2;
 #ifdef THREADED_AUDIO
 			// This is a little weird, but we didn't fill this buffer.
 			//   So it is still considered 'empty', but since we 'decremented'
@@ -178,7 +179,7 @@ static void inline add_to_buffer(void* stream, unsigned int length){
 		}
 		
 		lengthLeft    -= lengthi;
-		stream_offset += lengthi;
+		stream_offset += lengthi << 2;
 		rlengthLeft   -= rlengthi;
 		
 #ifdef THREADED_AUDIO
