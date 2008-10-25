@@ -24,7 +24,7 @@
 AUDIO_INFO AudioInfo;
 
 #define NUM_BUFFERS 4
-#define BUFFER_SIZE 3200
+#define BUFFER_SIZE 3840/2
 static char buffer[NUM_BUFFERS][BUFFER_SIZE] __attribute__((aligned(32)));
 static int which_buffer = 0;
 static unsigned int buffer_offset = 0;
@@ -34,8 +34,8 @@ static unsigned int real_freq;
 static float freq_ratio;
 // FIXME: Also support 50 Hz
 // FIXME: 32khz actually uses 2132~2134 bytes/frame
-static enum { BUFFER_SIZE_32_60 = 2144, BUFFER_SIZE_48_60 = 3200,
-              BUFFER_SIZE_32_50 = 640,  BUFFER_SIZE_48_50 = 960 } buffer_size;
+static enum { BUFFER_SIZE_32_60 = 2176/2, BUFFER_SIZE_48_60 = 3200/2,
+              BUFFER_SIZE_32_50 = 2560/2, BUFFER_SIZE_48_50 = 3840/2 } buffer_size;
 
 #ifdef THREADED_AUDIO
 static lwp_t audio_thread;
@@ -82,16 +82,16 @@ AiDacrateChanged( int SystemType )
 	
 	if( real_freq == 32000 ){
 		AUDIO_SetDSPSampleRate(AI_SAMPLERATE_32KHZ);
-		buffer_size = (SystemType == SYSTEM_NTSC) ?
+		buffer_size = (SystemType != SYSTEM_PAL) ?
 		               BUFFER_SIZE_32_60 : BUFFER_SIZE_32_50;
 	} else if( real_freq == 48000 ){
 		AUDIO_SetDSPSampleRate(AI_SAMPLERATE_48KHZ);
-		buffer_size = (SystemType == SYSTEM_NTSC) ?
+		buffer_size = (SystemType != SYSTEM_PAL) ?
 		               BUFFER_SIZE_48_60 : BUFFER_SIZE_48_50;
 	}
 	
-	sprintf(txtbuffer, "Initializing frequency: %d (resampling from %d)",
-	        real_freq, freq);
+	sprintf(txtbuffer, "Initializing frequency: %d (resampling ratio %f)",
+	        real_freq, freq_ratio);
 	DEBUG_print(txtbuffer,DBG_AUDIOINFO);
 }
 
@@ -141,16 +141,18 @@ static void inline copy_to_buffer(int* buffer, int* stream, unsigned int length)
 	float si;
 	// TODO: Linear interpolation
 	// Quick and dirty resampling: skip over or repeat samples
-	for(di = 0, si = 0.0f; di < length/4; ++di, si += freq_ratio)
+	for(di = 0, si = 0.0f; di < length/4; ++di, si += freq_ratio){
 		buffer[di] = stream[(int)si];
+	}
 }
 
 static void inline add_to_buffer(void* stream, unsigned int length){
 	// This shouldn't lose any data and works for any size
+	unsigned int stream_offset = 0;
 	unsigned int lengthi, rlengthi;
 	unsigned int lengthLeft = length;
-	unsigned int rlengthLeft = length / freq_ratio;
-	unsigned int stream_offset = 0;
+	unsigned int rlengthLeft = (length / freq_ratio);
+	rlengthLeft += (4 - (rlengthLeft&3)) & 3; // FIXME: This has to be wrong
 	while(1){
 		rlengthi = (buffer_offset + rlengthLeft < buffer_size) ?
 		            rlengthLeft : (buffer_size - buffer_offset);
