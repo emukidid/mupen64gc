@@ -32,8 +32,7 @@ static unsigned int buffer_offset = 0;
 static unsigned int freq;
 static unsigned int real_freq;
 static float freq_ratio;
-// FIXME: Also support 50 Hz
-// FIXME: 32khz actually uses 2132~2134 bytes/frame
+// NOTE: 32khz actually uses ~2136 bytes/frame @ 60hz
 static enum { BUFFER_SIZE_32_60 = 2176/2, BUFFER_SIZE_48_60 = 3200/2,
               BUFFER_SIZE_32_50 = 2560/2, BUFFER_SIZE_48_50 = 3840/2 } buffer_size;
 
@@ -140,10 +139,20 @@ static void inline copy_to_buffer(int* buffer, int* stream, unsigned int length)
 	// NOTE: length is in samples (stereo (2) shorts)
 	int di;
 	float si;
-	// TODO: Linear interpolation
-	// Quick and dirty resampling: skip over or repeat samples
 	for(di = 0, si = 0.0f; di < length; ++di, si += freq_ratio){
+#if 1
+		// Linear interpolation between current and next sample
+		float t = si - floorf(si);
+		short* osample  = (short*)(buffer + di);
+		short* isample1 = (short*)(stream + (int)si);
+		short* isample2 = (short*)(stream + (int)ceilf(si));
+		// Left and right
+		osample[0] = (1.0f - t)*isample1[0] + t*isample2[0];
+		osample[1] = (1.0f - t)*isample1[1] + t*isample2[1];
+#else
+		// Quick and dirty resampling: skip over or repeat samples
 		buffer[di] = stream[(int)si];
+#endif
 	}
 }
 
