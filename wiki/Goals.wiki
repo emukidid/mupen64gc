@@ -6,7 +6,7 @@ Listed in order of importance:
   * *Dynamic Recompilation* _It's coming_
   * *Sound* _Interpolated - WIP_
   * *8mb Expansion Pak Games* _4Mb for now_
-  * *512mbit ROMS* _WIP_
+  * *512mbit ROMS* _done_
   * *Input (Gamecube & Classic Controller)* _done_
   * *Configurable input methods* _todo_
   * *DVD/SD/Front-SD Loading* _done_
