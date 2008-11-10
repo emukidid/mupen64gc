@@ -20,6 +20,7 @@ unsigned int decodeNInterpret();
 #define INTERPRET_LH
 #define INTERPRET_LHU
 #define INTERPRET_LW
+#define INTERPRET_LWU
 #define INTERPRET_LWL
 #define INTERPRET_LWR
 

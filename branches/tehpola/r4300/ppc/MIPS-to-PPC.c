@@ -127,13 +127,9 @@ static int mapRegister(int reg){
 	// Iterate over the HW registers and find one that's available
 	for(i=0; i<32; ++i)
 		if(availableRegs[i]){
-			if(reg != 0){
-				GEN_LWZ(ppc, i, reg*8+4, DYNAREG_REG);
-				set_next_dst(ppc);
-			} else {
-				GEN_LI(ppc, i, 0, 0);
-				set_next_dst(ppc);
-			}
+			GEN_LWZ(ppc, i, reg*8+4, DYNAREG_REG);
+			set_next_dst(ppc);
+			
 			availableRegs[i] = 0;
 			return regMap[reg] = i;
 		}
