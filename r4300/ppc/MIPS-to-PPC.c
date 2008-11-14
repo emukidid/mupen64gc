@@ -80,7 +80,7 @@ static int flushLRURegister(void){
 		GEN_SRAWI(ppc, 0, map, 31);
 		set_next_dst(ppc);
 		// Store the MSW
-		GEN_STW(ppc, 0, i*8, DYNAREG_REG);
+		GEN_STW(ppc, 0, lru_i*8, DYNAREG_REG);
 		set_next_dst(ppc);
 		// Store the LSW
 		GEN_STW(ppc, map, lru_i*8+4, DYNAREG_REG);
@@ -112,7 +112,7 @@ static int mapRegisterNew(int reg){
 		}
 	// We didn't find an available register, so flush one
 	i = flushLRURegister();
-	availableRegs[i] = 0;
+	//availableRegs[i] = 0; // Redundant, as this wasn't available
 	return regMap[reg] = i;
 }
 
@@ -138,7 +138,7 @@ static int mapRegister(int reg){
 	// And load the registers value to the register we flushed
 	GEN_LWZ(ppc, i, reg*8+4, DYNAREG_REG);
 	set_next_dst(ppc);
-	availableRegs[i] = 0;
+	//availableRegs[i] = 0; // Redundant, as this wasn't available
 	return regMap[reg] = i;
 }
 
