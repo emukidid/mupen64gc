@@ -77,7 +77,7 @@ static int flushLRURegister(void){
 	int map = regMap[lru_i];
 	if(lru_i && regDirty[lru_i]){
 		// Sign extend to 64-bits
-		GEN_SRAWI(ppc, 0, regMap[i], 31);
+		GEN_SRAWI(ppc, 0, map, 31);
 		set_next_dst(ppc);
 		// Store the MSW
 		GEN_STW(ppc, 0, i*8, DYNAREG_REG);
