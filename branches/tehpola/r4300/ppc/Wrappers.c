@@ -83,16 +83,19 @@ void dynarec(unsigned int address){
 		sprintf(txtbuffer, "Entering dynarec code @ 0x%08x\n", code);
 		DEBUG_print(txtbuffer, DBG_USBGECKO);
 		
+		// FIXME: Try actually saving the lr now: use &&label after code() and then mr %address, 3
 		DYNAREC_PRELUDE();
 		address = code();
 	}
 }
 
-unsigned int decodeNInterpret(MIPS_instr mips, unsigned int PC, unsigned int count){
-	// Update the value for the instruction count
-	instructionCount = count;
+unsigned int decodeNInterpret(MIPS_instr mips, unsigned int PC,
+                              unsigned int count, int isDelaySlot){
+	instructionCount = count; // Update the value for the instruction count
+	delay_slot = isDelaySlot; // Make sure we set delay_slot properly
 	interp_addr = PC;
 	prefetch_opcode(mips);
 	interp_ops[MIPS_GET_OPCODE(mips)]();
 	return interp_addr != PC + 4 ? interp_addr : 0;
 }
+

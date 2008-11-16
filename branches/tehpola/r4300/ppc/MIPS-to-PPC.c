@@ -1933,6 +1933,9 @@ static void genCallInterp(MIPS_instr mips){
 	set_next_dst(ppc);
 	GEN_ADDI(ppc, DYNAREG_ICOUNT, 0, 0);
 	set_next_dst(ppc);
+	// Pass in whether this instruction is in the delay slot
+	GEN_LI(ppc, 6, 0, isDelaySlot ? 1 : 0);
+	set_next_dst(ppc);
 	// Save the lr
 	GEN_MFLR(ppc, 0);
 	set_next_dst(ppc);
