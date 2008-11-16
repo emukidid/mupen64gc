@@ -22,7 +22,7 @@
 extern long long int reg[34]; // game's registers
 extern long long int reg_cop1_fgr_64[32];
 
-unsigned int decodeNInterpret(MIPS_instr, unsigned int, unsigned int);
+unsigned int decodeNInterpret(MIPS_instr, unsigned int, unsigned int, int);
 
 #endif
 
