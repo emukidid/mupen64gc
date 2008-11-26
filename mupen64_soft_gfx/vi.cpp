@@ -83,33 +83,8 @@ void VI::widthChanged()
    initMode();*/
 }
 
-unsigned int convert_pixels(short src1, short src2){
-	char b1 = ((src1 >>  0) & 0x1F) * (256/32);
-	char g1 = ((src1 >>  5) & 0x1F) * (256/32);
-	char r1 = ((src1 >> 10) & 0x1F) * (256/32);
-	char b2 = ((src2 >>  0) & 0x1F) * (256/32);
-	char g2 = ((src2 >>  5) & 0x1F) * (256/32);
-	char r2 = ((src2 >> 10) & 0x1F) * (256/32);
-	
-	int y1, cb1, cr1, y2, cb2, cr2, cb, cr;
-	
-	y1 = (299 * r1 + 587 * g1 + 114 * b1) / 1000;
-	cb1 = (-16874 * r1 - 33126 * g1 + 50000 * b1 + 12800000) / 100000;
-	cr1 = (50000 * r1 - 41869 * g1 - 8131 * b1 + 12800000) / 100000;
-	
-	y2 = (299 * r2 + 587 * g2 + 114 * b2) / 1000;
-	cb2 = (-16874 * r2 - 33126 * g2 + 50000 * b2 + 12800000) / 100000;
-	cr2 = (50000 * r2 - 41869 * g2 - 8131 * b2 + 12800000) / 100000;
-	 
-	cb = (cb1 + cb2) >> 1;
-	cr = (cr1 + cr2) >> 1;
-	 
-	return (y1 << 24) | (cb << 16) | (y2 << 8) | cr;
-}
-
 void VI::updateScreen()
 {
-   //printf("Should be updating screen: bpp = %d, width_reg = %d\n", bpp, *gfxInfo.VI_WIDTH_REG);
    if (!bpp) return;
    if (!*gfxInfo.VI_WIDTH_REG) return;
    int h_end = *gfxInfo.VI_H_START_REG & 0x3FF;
@@ -121,44 +96,33 @@ void VI::updateScreen()
    
    short *im16 = (short*)((char*)gfxInfo.RDRAM +
 			  (*gfxInfo.VI_ORIGIN_REG & 0x7FFFFF));
-   int *buf16 = (int*)getScreenPointer();
-   int minx = 0;//(640-(h_end-h_start))/2;
+   short *buf16 = (short*)getScreenPointer();
+   int minx = (640-(h_end-h_start))/2;
    int maxx = 640-minx;
-   int miny = 0;//(480-(v_end-v_start))/2;
+   int miny = (480-(v_end-v_start))/2;
    int maxy = 480-miny;
    float px, py;
-   py=0.0f;
-   //printf("Beginning to copy framebuffer... N64FB offset = %08x", *gfxInfo.VI_ORIGIN_REG & 0x7FFFFF);
-   //printf("\nmin: (%d,%d) max: (%d,%d), GCFB = %08x, N64FB = %08x\n",
-   //        minx, miny, maxx, maxy, buf16, im16);
-   //printf("scale_x = %f, scale_y = %f\n", scale_x, scale_y);
-   //fflush(stdout);
-   // Here I'm disabling antialiasing to try to track down the bug
-   if (TRUE || (*gfxInfo.VI_STATUS_REG & 0x30) == 0x30) // not antialiased
+   py=0;
+   if ((*gfxInfo.VI_STATUS_REG & 0x30) == 0x30) // not antialiased
      {
-     	//printf(" Not antialiased ");
-     	//fflush(stdout);
 	for (int j=0; j<480; j++)
 	  {
 	     if (j < miny || j > maxy)
-	       for (int i=0; i<640/2; i++)
-		 buf16[j*640/2+i] = 0;
+	       for (int i=0; i<640; i++)
+		 buf16[j*640+i] = 0;
 	     else
 	       {
-		  px=0.0f;
-		  for (int i=0; i<640/2; i++)
+		  px=0;
+		  for (int i=0; i<640; i++)
 		    {
 		       if (i < minx || i > maxx)
-			 buf16[j*640/2+i] = 0;
+			 buf16[j*640+i] = 0;
 		       else
 			 {
-			    short pix1 = im16[((int)py*(*gfxInfo.VI_WIDTH_REG)+(int)px)]>>1;
+			    buf16[j*640+i] = 
+			      im16[((int)py*(*gfxInfo.VI_WIDTH_REG)+(int)px)^S16]>>1;
 			    px += scale_x;
-			    short pix2 = im16[((int)py*(*gfxInfo.VI_WIDTH_REG)+(int)px)]>>1;
-			    px += scale_x;
-			    buf16[j*640/2+i] = convert_pixels(pix1, pix2);
 			 }
-			//printf(" (%d,%d) ", i, j); fflush(stdout);
 		    }
 		  py += scale_y;
 	       }
@@ -166,8 +130,6 @@ void VI::updateScreen()
      }
    else
      {
-     	//printf(" Antialiased ");
-     	//fflush(stdout);
 	for (int j=0; j<480; j++)
 	  {
 	     if (j < miny || j > maxy)
@@ -226,10 +188,7 @@ void VI::updateScreen()
 	       }
 	  }
      }
-   //printf(" done.\nBlitting...");
-   //fflush(stdout);
    blit();
-   //printf(" done.\n");
 }
 
 void VI::debug_plot(int x, int y, int c)

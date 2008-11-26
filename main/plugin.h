@@ -29,7 +29,6 @@
 
 #ifndef PLUGIN_H
 #define PLUGIN_H
-#include "winlnxdefs.h"
 
 void  plugin_scan_directory(const char *directory);
 void  plugin_load_plugins(const char *gfx_name, 
@@ -236,43 +235,43 @@ extern void (*dllConfig)(HWND hParent);
 extern void (*dllTest)(HWND hParent);
 extern void (*dllAbout)(HWND hParent);
 
-extern void changeWindow();
-extern void closeDLL_gfx();
-extern BOOL initiateGFX(GFX_INFO Gfx_Info);
-extern void processDList();
-extern void processRDPList();
-extern void romClosed_gfx();
-extern void romOpen_gfx();
-extern void showCFB();
-extern void updateScreen();
-extern void viStatusChanged();
-extern void viWidthChanged();
-extern void readScreen(void **dest, long *width, long *height);
+extern void (*changeWindow)();
+extern void (*closeDLL_gfx)();
+extern BOOL (*initiateGFX)(GFX_INFO Gfx_Info);
+extern void (*processDList)();
+extern void (*processRDPList)();
+extern void (*romClosed_gfx)();
+extern void (*romOpen_gfx)();
+extern void (*showCFB)();
+extern void (*updateScreen)();
+extern void (*viStatusChanged)();
+extern void (*viWidthChanged)();
+extern void (*readScreen)(void **dest, long *width, long *height);
 
-extern void aiDacrateChanged(int SystemType);
-extern void aiLenChanged();
-extern DWORD aiReadLength();
-//extern void aiUpdate(BOOL Wait);
-extern void closeDLL_audio();
-extern BOOL initiateAudio(AUDIO_INFO Audio_Info);
-extern void processAList();
-extern void romClosed_audio();
-extern void romOpen_audio();
+extern void (*aiDacrateChanged)(int SystemType);
+extern void (*aiLenChanged)();
+extern DWORD (*aiReadLength)();
+//extern void (*aiUpdate)(BOOL Wait);
+extern void (*closeDLL_audio)();
+extern BOOL (*initiateAudio)(AUDIO_INFO Audio_Info);
+extern void (*processAList)();
+extern void (*romClosed_audio)();
+extern void (*romOpen_audio)();
 
-extern void closeDLL_input();
-extern void controllerCommand(int Control, BYTE * Command);
-extern void getKeys(int Control, BUTTONS *Keys);
-extern void initiateControllers(CONTROL_INFO ControlInfo);
-extern void readController(int Control, BYTE *Command);
-extern void romClosed_input();
-extern void romOpen_input();
-extern void keyDown(WPARAM wParam, LPARAM lParam);
-extern void keyUp(WPARAM wParam, LPARAM lParam);
+extern void (*closeDLL_input)();
+extern void (*controllerCommand)(int Control, BYTE * Command);
+extern void (*getKeys)(int Control, BUTTONS *Keys);
+extern void (*initiateControllers)(CONTROL_INFO ControlInfo);
+extern void (*readController)(int Control, BYTE *Command);
+extern void (*romClosed_input)();
+extern void (*romOpen_input)();
+extern void (*keyDown)(WPARAM wParam, LPARAM lParam);
+extern void (*keyUp)(WPARAM wParam, LPARAM lParam);
 
-extern void closeDLL_RSP();
-extern DWORD doRspCycles(DWORD Cycles);
-extern void initiateRSP(RSP_INFO Rsp_Info, DWORD * CycleCount);
-extern void romClosed_RSP();
+extern void (*closeDLL_RSP)();
+extern DWORD (*doRspCycles)(DWORD Cycles);
+extern void (*initiateRSP)(RSP_INFO Rsp_Info, DWORD * CycleCount);
+extern void (*romClosed_RSP)();
 
 // frame buffer plugin spec extension
 

@@ -25,4 +25,5 @@
 #  define PATH_MAX 1024
 #endif
 
+char g_WorkingDir[];
 #endif // __MAIN_H__

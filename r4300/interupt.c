@@ -32,20 +32,23 @@
 #include <stdio.h>
 #include <stdlib.h>
 #ifndef __WIN32__
-//#include <SDL.h>
+#include <SDL.h>
 #include "../main/winlnxdefs.h"
 #else
 #include <windows.h>
 #endif
 
 #include "interupt.h"
-#include "../gc_memory/memory.h"
+#include "../memory/memory.h"
 #include "r4300.h"
 #include "macros.h"
 #include "exception.h"
 #include "../main/plugin.h"
 #include "../main/guifuncs.h"
 #include "../main/savestates.h"
+#include "../main/vcr.h"
+
+#define dyna_stop()
 
 unsigned long next_vi;
 int vi_field=0;
@@ -344,7 +347,7 @@ void gen_interupt()
 	  next_interupt = q->count;
 	else
 	  next_interupt = 0;
-	if (interpcore)
+	if(dynacore || interpcore)
 	  {
 	     /*if ((Cause & (2 << 2)) && (Cause & 0x80000000))
 	       interp_addr = skip_jump+4;
@@ -381,7 +384,8 @@ void gen_interupt()
 #else
 	updateScreen();
 #endif
-#ifdef PROFILE
+#ifndef __WIN32__
+	SDL_PumpEvents();
 	refresh_stat();
 #endif
 	new_vi();
@@ -420,7 +424,7 @@ void gen_interupt()
 	
       case SI_INT:
 #ifndef __WIN32__
-	//SDL_PumpEvents();
+	SDL_PumpEvents();
 #endif
 	PIF_RAMb[0x3F] = 0x0;
 	remove_interupt_event();

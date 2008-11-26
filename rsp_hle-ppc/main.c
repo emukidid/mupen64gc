@@ -12,10 +12,6 @@
 #endif
 #include <stdio.h>
 
-#ifdef __PPC__
-#include "RSPPlugin.h"
-#endif
-
 #include "Rsp_#1.1.h"
 #include "hle.h"
 

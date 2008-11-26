@@ -29,7 +29,7 @@
 
 #include <sys/stat.h>
 #include "r4300.h"
-#include "../gc_memory/memory.h"
+#include "../memory/memory.h"
 #include "../main/winlnxdefs.h"
 #include "../main/plugin.h"
 #include "../r4300/recomph.h"

@@ -1,10 +1,6 @@
 #include <string.h>
 #include <stdio.h>
 
-#ifdef __PPC__
-#include "SoftGFXPlugin.h"
-#endif
-
 #ifndef _WIN32
 #include "../main/winlnxdefs.h"
 #else
@@ -13,28 +9,15 @@
 #include "Gfx_#1.3.h"
 #include "rsp.h"
 
-#ifdef __PPC__
-#include "vi_GX.h"
-#else // __PPC__
 #ifndef _WIN32
 #include "vi_SDL.h"
 #else
 #include "./win/vi.win.h"
 #endif
-#endif
 
 static GFX_INFO gfxInfo;
 
 VI *vi;
-
-void gfx_set_fb(unsigned int* fb1, unsigned int* fb2){
-	vi->setFB(fb1, fb2);
-}
-
-void showLoadProgress(float percent){
-	//This function is implemented in the GX_gfx plugin
-	//vi->showLoadProg(percent);
-}
 
 /******************************************************************
   Function: CaptureScreen
@@ -262,9 +245,6 @@ EXPORT void CALL RomClosed (void)
 *******************************************************************/ 
 EXPORT void CALL RomOpen (void)
 {
-#ifdef __PPC__
-   vi = new VI_GX(gfxInfo);
-#else // __PPC__
 #ifndef _WIN32
    vi = new VI_SDL(gfxInfo);
    //vi->setGamma(2.222);
@@ -273,7 +253,6 @@ EXPORT void CALL RomOpen (void)
    vi = new VI_WIN(gfxInfo);
    //vi->setGamma(2.222);
    vi->setGamma(1.0);
-#endif
 #endif
 }
 
@@ -325,4 +304,3 @@ EXPORT void CALL ViWidthChanged (void)
 {
    vi->widthChanged();
 }
-

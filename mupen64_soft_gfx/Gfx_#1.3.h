@@ -86,9 +86,6 @@ typedef struct {
 	void (*CheckInterrupts)( void );
 } GFX_INFO;
 
-void gfx_set_fb(unsigned int*, unsigned int*);
-void showLoadProgress(float);
-
 /******************************************************************
   Function: CaptureScreen
   Purpose:  This function dumps the current frame to a file

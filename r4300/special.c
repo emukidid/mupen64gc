@@ -29,7 +29,7 @@
 
 #include "r4300.h"
 #include "interupt.h"
-#include "../gc_memory/memory.h"
+#include "../memory/memory.h"
 #include "ops.h"
 #include "exception.h"
 #include "macros.h"

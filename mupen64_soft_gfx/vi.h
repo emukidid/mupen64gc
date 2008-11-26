@@ -49,7 +49,6 @@ class VI
    VI(GFX_INFO);
    virtual ~VI();
    
-   virtual void setFB(unsigned int*, unsigned int*) = 0;
    virtual void switchFullScreenMode() = 0;
    virtual void switchWindowMode() = 0;
    virtual void setGamma(float gamma) = 0;

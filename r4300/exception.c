@@ -30,8 +30,10 @@
 #include "exception.h"
 #include "r4300.h"
 #include "macros.h"
-#include "../gc_memory/memory.h"
+#include "../memory/memory.h"
 #include "recomph.h"
+
+#define dyna_jump()
 
 extern unsigned long interp_addr;
 
@@ -71,14 +73,14 @@ void TLB_refill_exception(unsigned long address, int w)
    EntryHi = address & 0xFFFFE000;
    if (Status & 0x2) // Test de EXL
      {
-	if (interpcore) interp_addr = 0x80000180;
+	if(dynacore || interpcore) interp_addr = 0x80000180;
 	else jump_to(0x80000180);
 	if(delay_slot==1 || delay_slot==3) Cause |= 0x80000000;
 	else Cause &= 0x7FFFFFFF;
      }
    else
      {
-	if (!interpcore) 
+	if (!interpcore && !dynacore) 
 	  {
 	     if (w!=2)
 	       EPC = PC->addr;
@@ -103,12 +105,12 @@ void TLB_refill_exception(unsigned long address, int w)
 	  }
 	if (usual_handler)
 	  {
-	     if (interpcore) interp_addr = 0x80000180;
+	     if(dynacore || interpcore) interp_addr = 0x80000180;
 	     else jump_to(0x80000180);
 	  }
 	else
 	  {
-	     if (interpcore) interp_addr = 0x80000000;
+	     if(dynacore || interpcore) interp_addr = 0x80000000;
 	     else jump_to(0x80000000);
 	  }
      }
@@ -123,10 +125,11 @@ void TLB_refill_exception(unsigned long address, int w)
      }
    if(w != 2) EPC-=4;
    
-   if (interpcore) last_addr = interp_addr;
+   if(dynacore || interpcore) last_addr = interp_addr;
    else last_addr = PC->addr;
    
-   if (dynacore) 
+   // XXX: I'm not sure if this does any good, WTF is dyna_interp?
+   /*if (dynacore) 
      {
 	dyna_jump();
 	if (!dyna_interp) delay_slot = 0;
@@ -141,7 +144,7 @@ void TLB_refill_exception(unsigned long address, int w)
 	     else skip_jump = PC->addr;
 	     next_interupt = 0;
 	  }
-     }
+     }*/
 }
 
 void TLB_mod_exception()
@@ -167,7 +170,7 @@ void exception_general()
    update_count();
    Status |= 2;
    
-   if (!interpcore) EPC = PC->addr;
+   if(!dynacore && !interpcore) EPC = PC->addr;
    else EPC = interp_addr;
    
    if(delay_slot==1 || delay_slot==3)
@@ -179,7 +182,7 @@ void exception_general()
      {
 	Cause &= 0x7FFFFFFF;
      }
-   if (interpcore)
+   if(dynacore || interpcore)
      {
 	interp_addr = 0x80000180;
 	last_addr = interp_addr;
@@ -189,7 +192,8 @@ void exception_general()
 	jump_to(0x80000180);
 	last_addr = PC->addr;
      }
-   if (dynacore)
+   // XXX: Again, WTF?
+   /*if (dynacore)
      {
 	dyna_jump();
 	if (!dyna_interp) delay_slot = 0;
@@ -204,4 +208,5 @@ void exception_general()
 	     next_interupt = 0;
 	  }
      }
+     */
 }

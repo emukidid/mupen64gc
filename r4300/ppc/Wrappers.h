@@ -7,20 +7,25 @@
 
 #include "Recompile.h"
 
-// Set return_address to where the N64 should return to 
-extern void (*return_address)(void);
-extern long long int reg[32]; // game's registers
-extern long long int reg_cop1_fgr_64[32];
-extern int emu_reg[32]; // emulators registers
-extern double emu_fpr[32];
-extern int fpu_in_use;
-extern int lr[8]; // link register stack
-extern int lr_i;
+#define DYNAREG_REG    14
+#define DYNAREG_ZERO   15
+#define DYNAREG_INTERP 16
+#define DYNAREG_ICOUNT 17
 
-void start(PowerPC_block*, unsigned int offset);
-void return_from_code(void);
-void decodeNInterpret(); // instr passed through r0
-void fp_restore(void); // Restore's N64 FPRs and sets fpu_in_use
+#define DYNAOFF_LR     36 // This is weird, but it belongs in the last frame
+#define DYNAOFF_CR     8
+#define DYNAOFF_REG    12
+#define DYNAOFF_ZERO   16
+#define DYNAOFF_INTERP 20
+#define DYNAOFF_ICOUNT 24
+
+extern long long int reg[34]; // game's registers
+extern long long int reg_cop1_fgr_64[32];
+
+unsigned int decodeNInterpret(MIPS_instr, unsigned int, unsigned int, int);
+
+#define invalid_code_set(page,invalid) invalid_code[page] = invalid
+#define invalid_code_get(page) (invalid_code[page])
 
 #endif
 

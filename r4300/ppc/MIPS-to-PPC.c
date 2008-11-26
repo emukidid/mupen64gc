@@ -1,81 +1,178 @@
-/* MIPS-to-PPC.c - convert MIPS code into PPC
+/* MIPS-to-PPC.c - convert MIPS code into PPC (take 2 1/2)
    by Mike Slegeir for Mupen64-GC
  ************************************************
-   TODO: Finish all the important instructions
-         Confirm hi/lo work properly for each case
-           it probably breaks if a mult is followed by a madd
-           it definitely breaks if they do an operation, mutate
-           the registers, then mfhi or mflo
-         If the lr is used in anything besides
-           lw/sw/add(move) that should be supported
-         Verify likely branches work properly
-         Maybe accesses to the stack can be recompiled
-         Add a flag: FPU_in_use to let the wrappers know to save
-           and restore FPRs
-         This file is getting big, it should probably be split
-	     Finish supporting branch interpretation via jump_to
-    FIXME: Likely branches will break if they branch out;
-             however, I doubt they're used or at least not often
+   FIXME: Review all branch destinations
+   TODO: Create FP register mapping and recompile those
+         If possible (and not too complicated), it would be nice to leave out
+           the in-place delay slot which is skipped if it is not branched to
  */
 
+#include <string.h>
 #include "MIPS-to-PPC.h"
 #include "Interpreter.h"
 #include "Wrappers.h"
 
-// If this is defined true, delay slots will get moved
-#define SUPPORT_DELAY_SLOT 1
-
-// These are my do-anything variables
-static int temp;
-// Support for seperated mult/div and mfhi/lo
-// Number of instructions to execute on mfhi/lo
-static int hi_instr_count, lo_instr_count;
-// Instructions to execute
-static PowerPC_instr hi_instr[4], lo_instr[4];
-// If rd is used in instruction, shift it this amount (if > 0)
-static signed char hi_shift[4][2], lo_shift[4][2];
-// Booleans: Do the addresses in the respective registers
-//             refer to recompiled code or N64 addresses
-static char isGCAddr[32];
-void jump_to(unsigned int);
-/* We want to avoid the overhead of saving/restoring FPRs
-     when we don't have to during the context switch
-     if we need to use the FPRs when this is false, we
-     have to restore, and they will be saved next switch
- */
-int fpu_in_use;
-
-static int convert_R  (MIPS_instr);
-static int convert_B  (MIPS_instr);
-static int convert_M  (MIPS_instr);
-static int convert_CoP(MIPS_instr, int z);
-static int convert_FP (MIPS_instr, int precision);
+// Prototypes for functions used and defined in this file
 static void genCallInterp(MIPS_instr);
 #define JUMPTO_REG  0
 #define JUMPTO_OFF  1
 #define JUMPTO_ADDR 2
-#define JUMPTO_REG_SIZE  14
-#define JUMPTO_OFF_SIZE  (JUMPTO_REG_SIZE+2)
-#define JUMPTO_ADDR_SIZE (JUMPTO_REG_SIZE+2)
+#define JUMPTO_REG_SIZE  2
+#define JUMPTO_OFF_SIZE  3
+#define JUMPTO_ADDR_SIZE 3
 static void genJumpTo(unsigned int loc, unsigned int type);
 static int inline mips_is_jump(MIPS_instr);
+void jump_to(unsigned int);
 
+// Register Mapping
+// r13 holds reg
+#define MIPS_REG_HI 32
+#define MIPS_REG_LO 33
+static int regMap[34]; // Holds the value of the physical reg or -1
+static int regDirty[34]; // Nonzero means the register must be flushed to RAM
+static unsigned int regLRU[34]; // LRU value for flushing; higher is newer
+static unsigned int nextLRUVal;
+static int availableRegsDefault[32] = {
+	0, /* r0 is mostly used for saving/restoring lr: used as a temp */
+	0, /* sp: leave alone! */
+	0, /* gp: leave alone! */
+	1,1,1,1,1,1,1,1, /* Volatile argument registers */
+	0,0, /* Volatile registers used for special purposes: dunno */
+	/* Non-volatile registers: using might be too costly */
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	};
+static int availableRegs[32];
+
+static int flushRegisters(void){
+	PowerPC_instr ppc;
+	int i, flushed = 0;
+	for(i=0; i<34; ++i)
+		if(regMap[i] >= 0){
+			if(i && regDirty[i]){
+				// Sign extend to 64-bits
+				GEN_SRAWI(ppc, 0, regMap[i], 31);
+				set_next_dst(ppc);
+				// Store the MSW
+				GEN_STW(ppc, 0, i*8, DYNAREG_REG);
+				set_next_dst(ppc);
+				// Store the LSW
+				GEN_STW(ppc, regMap[i], i*8+4, DYNAREG_REG);
+				set_next_dst(ppc);
+			}
+			regMap[i] = -1; // Mark unmapped
+			++flushed;
+		}
+	memcpy(availableRegs, availableRegsDefault, 32*sizeof(int));
+	return flushed;
+}
+
+static int flushLRURegister(void){
+	PowerPC_instr ppc;
+	int i, lru_i = 0, lru_v = 0x7fffffff;
+	for(i=0; i<34; ++i)
+		if(regMap[i] >= 0 && regLRU[i] < lru_v){
+			lru_i = i; lru_v = regLRU[i];
+		}
+	
+	int map = regMap[lru_i];
+	if(lru_i && regDirty[lru_i]){
+		// Sign extend to 64-bits
+		GEN_SRAWI(ppc, 0, map, 31);
+		set_next_dst(ppc);
+		// Store the MSW
+		GEN_STW(ppc, 0, lru_i*8, DYNAREG_REG);
+		set_next_dst(ppc);
+		// Store the LSW
+		GEN_STW(ppc, map, lru_i*8+4, DYNAREG_REG);
+		set_next_dst(ppc);
+	}
+	regMap[lru_i] = -1; // Mark unmapped
+	return map;
+}
+
+static void invalidateRegisters(void){
+	int i;
+	for(i=0; i<34; ++i)
+		regMap[i] = -1; // Mark unmapped
+	memcpy(availableRegs, availableRegsDefault, 32*sizeof(int));
+}
+
+static int mapRegisterNew(int reg){
+	if(!reg) return 0; // Discard any writes to r0
+	regLRU[reg] = nextLRUVal++;
+	regDirty[reg] = 1; // Since we're writing to this reg, its dirty
+	// If its already been mapped, just return that value
+	if(regMap[reg] >= 0) return regMap[reg];
+	int i;
+	// Iterate over the HW registers and find one that's available
+	for(i=0; i<32; ++i)
+		if(availableRegs[i]){
+			availableRegs[i] = 0;
+			return regMap[reg] = i;
+		}
+	// We didn't find an available register, so flush one
+	i = flushLRURegister();
+	//availableRegs[i] = 0; // Redundant, as this wasn't available
+	return regMap[reg] = i;
+}
+
+static int mapRegister(int reg){
+	PowerPC_instr ppc;
+	if(!reg) return DYNAREG_ZERO; // Return r0 mapped to r14
+	regLRU[reg] = nextLRUVal++;
+	// If its already been mapped, just return that value
+	if(regMap[reg] >= 0) return regMap[reg];
+	regDirty[reg] = 0; // If it hasn't previously been mapped, its clean
+	int i;
+	// Iterate over the HW registers and find one that's available
+	for(i=0; i<32; ++i)
+		if(availableRegs[i]){
+			GEN_LWZ(ppc, i, reg*8+4, DYNAREG_REG);
+			set_next_dst(ppc);
+			
+			availableRegs[i] = 0;
+			return regMap[reg] = i;
+		}
+	// We didn't find an available register, so flush one
+	i = flushLRURegister();
+	// And load the registers value to the register we flushed
+	GEN_LWZ(ppc, i, reg*8+4, DYNAREG_REG);
+	set_next_dst(ppc);
+	//availableRegs[i] = 0; // Redundant, as this wasn't available
+	return regMap[reg] = i;
+}
+
+// Initialize register mappings
+void start_new_block(void){
+	invalidateRegisters();
+	nextLRUVal = 0;
+}
+void start_new_mapping(void){
+	flushRegisters();
+}
+
+// Number of instructions executed in current fragment
+static unsigned int fragment_instruction_count;
+unsigned int get_instruction_count(void){
+	unsigned int t = fragment_instruction_count;
+	fragment_instruction_count = 0;
+	return t;
+}
+
+// Variable to indicate whether the current recompiled instruction
+//   is a delay slot (which needs to have its registers flushed)
+static int isDelaySlot;
 // This should be called before the jump is recompiled
-// FIXME: If the delay slot contains a jump
-//        the branch destination will be off by 1
 static inline int check_delaySlot(void){
-#if SUPPORT_DELAY_SLOT
 	if(peek_next_src() == 0){ // MIPS uses 0 as a NOP
 		get_next_src();   // Get rid of the NOP
 		return 0;
 	} else {
 		if(mips_is_jump(peek_next_src())) return CONVERT_WARNING;
+		isDelaySlot = 1;
 		convert(); // This just moves the delay slot instruction ahead of the branch
 		return 1;
 	}
-#else // SUPPORT_DELAY_SLOT
-	return 0;
-#endif
 }
 
 static inline int signExtend(int value, int size){
@@ -85,2544 +182,1830 @@ static inline int signExtend(int value, int size){
 	return value;
 }
 
-#define CONVERT_I_TYPE(ppc,mips) \
-	do { PPC_SET_RD   (ppc, MIPS_GET_RT(mips));    \
-	     PPC_SET_RA   (ppc, MIPS_GET_RS(mips));    \
-	     PPC_SET_IMMED(ppc, MIPS_GET_IMMED(mips)); } while(0)
+typedef enum { NONE, EQ, NE, LT, GT, LE, GE } condition;
+// Branch a certain offset (possibly conditionally, linking, or likely)
+//   offset: N64 instructions from current N64 instruction to branch
+//   cond: type of branch to execute depending on cr 7
+//   link: if nonzero, branch and link
+//   likely: if nonzero, the delay slot will only be executed when cond is true
+static int branch(int offset, condition cond, int link, int likely){
+	PowerPC_instr ppc;
+	int likely_id;
+	// Condition codes for bc (and their negations)
+	int bo, bi, nbo;
+	switch(cond){
+		case EQ:
+			bo = 0xc, nbo = 0x4, bi = 18;
+			break;
+		case NE:
+			bo = 0x4, nbo = 0xc, bi = 18;
+			break;
+		case LT:
+			bo = 0xc, nbo = 0x4, bi = 16;
+			break;
+		case GE:
+			bo = 0x4, nbo = 0xc, bi = 16;
+			break;
+		case GT:
+			bo = 0xc, nbo = 0x4, bi = 17;
+			break;
+		case LE:
+			bo = 0x4, nbo = 0xc, bi = 17;
+			break;
+		default:
+			bo = 0x14; nbo = 0x4; bi = 19;
+			break;
+	}
+	
+	flushRegisters();
+	
+	// Update the instruction count
+	GEN_ADDI(ppc, DYNAREG_ICOUNT, DYNAREG_ICOUNT, get_instruction_count());
+	set_next_dst(ppc);
+	
+	if(likely){
+		// b[!cond] <past jumpto & delay>
+		likely_id = add_jump_special(0);
+		GEN_BC(ppc, likely_id, 0, 0, nbo, bi); 
+		set_next_dst(ppc);
+	}
+	
+	// Check the delay slot, and note how big it is
+	PowerPC_instr* preDelay = get_curr_dst();
+	check_delaySlot();
+	int delaySlot = get_curr_dst() - preDelay;
+	
+#ifndef INTERPRET_BRANCH
+	// If we're jumping out, we need to trampoline using genJumpTo
+	if(is_j_out(offset, 0)){
+#endif // INTEPRET_BRANCH
 
-#define CONVERT_I_TYPE2(ppc,mips) \
-	do { PPC_SET_RD   (ppc, MIPS_GET_RS(mips));    \
-	     PPC_SET_RA   (ppc, MIPS_GET_RT(mips));    \
-	     PPC_SET_IMMED(ppc, MIPS_GET_IMMED(mips)); } while(0)
+		if(likely)
+			// Note: if there's a delay slot, I will branch to the branch over it
+			set_jump_special(likely_id, JUMPTO_OFF_SIZE+delaySlot+1+(link?3:0));
+		else {
+			// b[!cond] <past jumpto & delay>
+			//   Note: if there's a delay slot, I will branch to the branch over it
+			GEN_BC(ppc, JUMPTO_OFF_SIZE+1+(link?3:0), 0, 0, nbo, bi);
+			set_next_dst(ppc);
+		}
+		if(link){
+			// Set LR to next instruction
+			int lr = mapRegisterNew(MIPS_REG_LR);
+			// lis	lr, pc@ha(0)
+			GEN_LIS(ppc, lr, (get_src_pc()+4)>>16);
+			set_next_dst(ppc);
+			// la	lr, pc@l(lr)
+			GEN_ORI(ppc, lr, lr, get_src_pc()+4);
+			set_next_dst(ppc);
+			
+			flushRegisters();
+		}
+		
+		genJumpTo(offset, JUMPTO_OFF);
+		
+#ifndef INTERPRET_BRANCH		
+	} else {
+		if(likely)
+			// Note: if there's a delay slot, I will branch to the branch over it
+			set_jump_special(likely_id, 1+delaySlot+1+(link?3:0));
+		if(link){
+			// Set LR to next instruction
+			int lr = mapRegisterNew(MIPS_REG_LR);
+			// lis	lr, pc@ha(0)
+			GEN_LIS(ppc, lr, (get_src_pc()+4)>>16);
+			set_next_dst(ppc);
+			// la	lr, pc@l(lr)
+			GEN_ORI(ppc, lr, lr, get_src_pc()+4);
+			set_next_dst(ppc);
+			
+			flushRegisters();
+		}	
+	
+		// The actual branch
+		GEN_BC(ppc, add_jump(offset, 0, 0), 0, 0, bo, bi);
+		set_next_dst(ppc);
+	}
+#endif // INTERPRET_BRANCH
+	
+	// Let's still recompile the delay slot in place in case its branched to
+	if(delaySlot){
+		// Step over the already executed delay slot if the branch isn't taken
+		// b delaySlot+1
+		GEN_B(ppc, delaySlot+1, 0, 0);
+		set_next_dst(ppc); 
+		
+		unget_last_src();
+		isDelaySlot = 1;
+	} else nop_ignored();
+	
+#ifdef INTERPRET_BRANCH
+	return INTERPRETED;
+#else // INTERPRET_BRANCH
+	return CONVERT_SUCCESS;
+#endif
+}
+
+
+static int (*gen_ops[64])(MIPS_instr);
 
 int convert(void){
-	MIPS_instr    mips = get_next_src();
-	PowerPC_instr ppc  = NEW_PPC_INSTR();
-	int bo, temp2;
+	MIPS_instr mips = get_next_src();
+	int needFlush = isDelaySlot; isDelaySlot = 0;
+	int result = gen_ops[MIPS_GET_OPCODE(mips)](mips);
+	if(needFlush) flushRegisters();
+	++fragment_instruction_count;
+	return result;
+}
+
+static int NI(MIPS_instr mips){
+	return CONVERT_ERROR;
+}
+
+// -- Primary Opcodes --
+
+static int J(MIPS_instr mips){
+	PowerPC_instr  ppc;
 	
-	switch(MIPS_GET_OPCODE(mips)){
+	flushRegisters();
 	
-	case MIPS_OPCODE_R:
-		return convert_R(mips);
-	case MIPS_OPCODE_B:
-		return convert_B(mips);
-	case MIPS_OPCODE_M:
-		return convert_M(mips);
-	case MIPS_OPCODE_JAL:
-	case MIPS_OPCODE_J:
-		temp2 = (int)get_curr_dst();
-		check_delaySlot();
-		temp2 = (int)get_curr_dst() - temp2;
-#if defined(INTERPRET_J) || defined(INTERPRET_JAL)
-		if(MIPS_GET_OPCODE(mips) == MIPS_OPCODE_JAL){
-			// Set LR to next instruction
-			// lis	lr, pc@ha(0)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-			PPC_SET_RD    (ppc, MIPS_REG_LR);
-			PPC_SET_IMMED (ppc, get_src_pc()>>16);
-			set_next_dst(ppc);
-			// la	lr, pc@l(lr)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-			PPC_SET_RD    (ppc, MIPS_REG_LR);
-			PPC_SET_RA    (ppc, MIPS_REG_LR);
-			PPC_SET_IMMED (ppc, get_src_pc());
-			set_next_dst(ppc);
-		}
+	// Check the delay slot, and note how big it is
+	PowerPC_instr* preDelay = get_curr_dst();
+	check_delaySlot();
+	int delaySlot = get_curr_dst() - preDelay;
+	
+	// Update the instruction count
+	GEN_ADDI(ppc, DYNAREG_ICOUNT, DYNAREG_ICOUNT, get_instruction_count());
+	set_next_dst(ppc);
+	
+#ifdef INTERPRET_J
+	genJumpTo(MIPS_GET_LI(mips), JUMPTO_ADDR);
+#else // INTERPRET_J
+	// If we're jumping out, we can't just use a branch instruction
+	if(is_j_out(MIPS_GET_LI(mips), 1)){
 		genJumpTo(MIPS_GET_LI(mips), JUMPTO_ADDR);
-#else
-		// temp is used for is_out
-		temp = 0;
-		if(is_j_out(MIPS_GET_LI(mips), 1)){
-			temp = 1;
-			// Allocate space for jumping out, 4 instrs
-			set_next_dst(0);
-			set_next_dst(0);
-			set_next_dst(0);
-			set_next_dst(0);
-		}
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_B);
-		if(MIPS_GET_OPCODE(mips) == MIPS_OPCODE_JAL){
-			PPC_SET_LK(ppc, 1);
-			isGCAddr[MIPS_REG_LR] = 1;
-		}
-		PPC_SET_LI(ppc, add_jump(MIPS_GET_LI(mips), 1, temp));
+	} else {
+		// Even though this is an absolute branch
+		//   in pass 2, we generate a relative branch
+		GEN_B(ppc, add_jump(MIPS_GET_LI(mips), 1, 0), 0, 0);
 		set_next_dst(ppc);
-		// Add space to zero r0 if its not taken
-		if(temp){
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ANDI);
-			set_next_dst(ppc);
-		}
+	}
 #endif
-		
-		// If there's something in the delay slot, it will also be after the branch
-		//   so we must skip over it so its not done twice if we jal
-		if(temp2 &&
-		     MIPS_GET_OPCODE(mips) == MIPS_OPCODE_JAL){
-			unget_last_src(); // Let's still recompile the delay slot in place in case its branched to
-			
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_B);
-			PPC_SET_LI    (ppc, ((temp2>>2)+1));
-			set_next_dst(ppc);
-		} else nop_ignored();
-		
-		return CONVERT_SUCCESS;
-	case MIPS_OPCODE_BEQL:
-	case MIPS_OPCODE_BNEL:
-	case MIPS_OPCODE_BEQ:
-	case MIPS_OPCODE_BNE:
-		bo = (MIPS_GET_OPCODE(mips) == MIPS_OPCODE_BEQ  ||
-		      MIPS_GET_OPCODE(mips) == MIPS_OPCODE_BEQL) ?
-		           0xc : 0x4;
-		// cmp
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_CMP);
-		PPC_SET_RA    (ppc, MIPS_GET_RA(mips));
-		PPC_SET_RB    (ppc, MIPS_GET_RB(mips));
-		PPC_SET_CRF   (ppc, 7); // Use CR7
-		set_next_dst(ppc);
-		// Likely branches skip the delay slot if they're not taken
-		if(MIPS_GET_OPCODE(mips) == MIPS_OPCODE_BEQL ||
-		   MIPS_GET_OPCODE(mips) == MIPS_OPCODE_BNEL ){
-			// b[!cond] <past delay & branch>
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-			PPC_SET_BD(ppc, (peek_next_src() == 0) ? 2 : 3); // past delay & branch
-			PPC_SET_BO(ppc, (bo^0x8)); // !cond
-			PPC_SET_BI(ppc, 30);     // Check CR bit 30 (CR7, EQ FIELD)
-			set_next_dst(ppc);
-		}
-		// delay slot
-		temp2 = (int)get_curr_dst();
-		check_delaySlot();
-		temp2 = (int)get_curr_dst() - temp2;
-#if defined(INTERPRET_BEQ) || defined(INTERPRET_BNE)
-		// b[!cond] <past delay & jumpto>
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-		PPC_SET_BD(ppc, (JUMPTO_OFF_SIZE+1+temp2)); // past delay & jumpto
-		PPC_SET_BO(ppc, (bo^0x8)); // !cond
-		PPC_SET_BI(ppc, 30);     // Check CR bit 30 (CR7, EQ FIELD)
-		set_next_dst(ppc);
-		genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
-#else
-		// temp is used for is_out
-		temp = 0;
-		if(is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
-			temp = 1;
-			// Allocate space for jumping out, 4 instrs
-			set_next_dst(0);
-			set_next_dst(0);
-			set_next_dst(0);
-			set_next_dst(0);
-		}
-		// bc
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-		PPC_SET_BD(ppc, add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, temp));
-		PPC_SET_BO(ppc, bo);  // Test if CR is 1 or 0
-		PPC_SET_BI(ppc, 30);  // Check CR bit 30 (CR7, EQ FIELD)
-		set_next_dst(ppc);
-		// Add space to zero r0 if its not taken
-		if(temp){
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-			set_next_dst(ppc);
-		}
+	
+	// Let's still recompile the delay slot in place in case its branched to
+	if(delaySlot){ unget_last_src(); isDelaySlot = 1; }
+	else nop_ignored();
+	
+#ifdef INTERPRET_J
+	return INTERPRETED;
+#else // INTERPRET_J
+	return CONVERT_SUCCESS;
 #endif
-		
-		// If there's something in the delay slot, it will also be after the branch
-		//   so we must skip over it so its not done twice if don't branch
-		if(temp2){
-			unget_last_src(); // Let's still recompile the delay slot in place in case its branched to
-			
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_B);
-			PPC_SET_LI    (ppc, ((temp2>>2)+1));
-			set_next_dst(ppc);
-		} else nop_ignored();
-		
-		return CONVERT_SUCCESS;
-	case MIPS_OPCODE_BLEZL:
-	case MIPS_OPCODE_BGTZL:
-	case MIPS_OPCODE_BLEZ:
-	case MIPS_OPCODE_BGTZ:
-		bo = (MIPS_GET_OPCODE(mips) == MIPS_OPCODE_BLEZ  ||
-		      MIPS_GET_OPCODE(mips) == MIPS_OPCODE_BLEZL) ?
-		           0x4 : 0xc;
-		// cmpi to 0
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_CMPI);
-		PPC_SET_RA    (ppc, MIPS_GET_RA(mips));
-		PPC_SET_IMMED (ppc, 0);
-		PPC_SET_CRF   (ppc, 7); // Use CR7
+}
+
+static int JAL(MIPS_instr mips){
+	PowerPC_instr  ppc;
+	
+	flushRegisters();
+	
+	// Check the delay slot, and note how big it is
+	PowerPC_instr* preDelay = get_curr_dst();
+	check_delaySlot();
+	int delaySlot = get_curr_dst() - preDelay;
+	
+	// Set LR to next instruction
+	int lr = mapRegisterNew(MIPS_REG_LR);
+	// lis	lr, pc@ha(0)
+	GEN_LIS(ppc, lr, (get_src_pc()+4)>>16);
+	set_next_dst(ppc);
+	// la	lr, pc@l(lr)
+	GEN_ORI(ppc, lr, lr, get_src_pc()+4);
+	set_next_dst(ppc);
+	
+	flushRegisters();
+	
+	// Update the instruction count
+	GEN_ADDI(ppc, DYNAREG_ICOUNT, DYNAREG_ICOUNT, get_instruction_count());
+	set_next_dst(ppc);
+	
+#ifdef INTERPRET_JAL
+	genJumpTo(MIPS_GET_LI(mips), JUMPTO_ADDR);
+#else // INTERPRET_JAL
+	// If we're jumping out, we can't just use a branch instruction
+	if(is_j_out(MIPS_GET_LI(mips), 1)){
+		genJumpTo(MIPS_GET_LI(mips), JUMPTO_ADDR);
+	} else {
+		// Even though this is an absolute branch
+		//   in pass 2, we generate a relative branch
+		// TODO: If I can figure out using the LR, use it!
+		GEN_B(ppc, add_jump(MIPS_GET_LI(mips), 1, 0), 0, 0);
 		set_next_dst(ppc);
-		// Likely branches skip the delay slot if they're not taken
-		if(MIPS_GET_OPCODE(mips) == MIPS_OPCODE_BLEZL ||
-		   MIPS_GET_OPCODE(mips) == MIPS_OPCODE_BGTZL ){
-			// b[!cond] <past delay & branch>
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-			PPC_SET_BD(ppc, (peek_next_src() == 0) ? 2 : 3); // past delay & branch
-			PPC_SET_BO(ppc, (bo^0x8)); // !cond
-			PPC_SET_BI(ppc, 29);     // Check CR bit 29 (CR7, GT FIELD)
-			set_next_dst(ppc);
-		}
-		// delay slot
-		temp2 = (int)get_curr_dst();
-		check_delaySlot();
-		temp2 = (int)get_curr_dst() - temp2;
-#if defined(INTERPRET_BLEZ) || defined(INTERPRET_BGTZ)
-		// b[!cond] <past delay & jumpto>
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-		PPC_SET_BD(ppc, (JUMPTO_OFF_SIZE+1+temp2)); // past delay & jumpto
-		PPC_SET_BO(ppc, (bo^0x8)); // !cond
-		PPC_SET_BI(ppc, 29);     // Check CR bit 29 (CR7, GT FIELD)
-		set_next_dst(ppc);
-		genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
-#else
-		// temp is used for is_out
-		temp = 0;
-		if(is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
-			temp = 1;
-			// Allocate space for jumping out, 4 instrs
-			set_next_dst(0);
-			set_next_dst(0);
-			set_next_dst(0);
-			set_next_dst(0);
-		}
-		// bc
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-		PPC_SET_BD(ppc, add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, temp));
-		PPC_SET_BO(ppc, bo);  // Test if CR is 1 or 0
-		PPC_SET_BI(ppc, 29);  // Check CR bit 29 (CR7, GT FIELD)
-		set_next_dst(ppc);
-		// Add space to zero r0 if its not taken
-		if(temp){
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-			set_next_dst(ppc);
-		}
+	}
 #endif
-		
-		// If there's something in the delay slot, it will also be after the branch
-		//   so we must skip over it so its not done twice if don't branch
-		if(temp2){
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_B);
-			PPC_SET_LI    (ppc, ((temp2>>2)+1));
-			set_next_dst(ppc);
-		}
-		
-		return CONVERT_SUCCESS;
-	case MIPS_OPCODE_ADDIU:
-		// Oddly, addiu uses a signed immediate
-		// I don't think it's a big deal that we
-		//   won't throw an overflow exception
-	case MIPS_OPCODE_ADDI:
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDI);
-		CONVERT_I_TYPE(ppc, mips);
+	
+	// Let's still recompile the delay slot in place in case its branched to
+	if(delaySlot){
+		unget_last_src();
+		isDelaySlot = 1;
+		// Step over the already executed delay slot if we ever
+		//   actually use the real LR for JAL
+		// b delaySlot+1
+		GEN_B(ppc, delaySlot+1, 0, 0);
 		set_next_dst(ppc);
-		
-		// Only allow it to maintain it's status if it's an addi rd, rs, 0
-		isGCAddr[MIPS_GET_RT(mips)] = (!MIPS_GET_IMMED(mips)) && isGCAddr[MIPS_GET_RS(mips)];
-		
-		return CONVERT_SUCCESS;
-	case MIPS_OPCODE_SLTI:
-	case MIPS_OPCODE_SLTIU:
-		// cmpi
-		PPC_SET_OPCODE(ppc, (MIPS_GET_OPCODE(mips) == MIPS_OPCODE_SLTI)
-		                     ? PPC_OPCODE_CMPI : PPC_OPCODE_CMPLI);
-		PPC_SET_RA    (ppc, MIPS_GET_RS(mips));
-		PPC_SET_CRF   (ppc, 7); // Use CR7
-		PPC_SET_IMMED (ppc, MIPS_GET_IMMED(mips));
-		set_next_dst(ppc);
-		// mfcr
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_MFCR);
-		PPC_SET_RD    (ppc, MIPS_GET_RT(mips));
-		set_next_dst(ppc);
-		// rlwinm
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_RLWINM);
-		PPC_SET_RD    (ppc, MIPS_GET_RT(mips));
-		PPC_SET_RA    (ppc, MIPS_GET_RT(mips));
-		PPC_SET_SH    (ppc, 29); // Rotate LT bit to position 0
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_OPCODE_ANDI:
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ANDI);
-		CONVERT_I_TYPE2(ppc, mips);
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_OPCODE_ORI:
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-		CONVERT_I_TYPE2(ppc, mips);
-		set_next_dst(ppc);
-		
-		// Only allow it to maintain it's status if it's an ori rd, rs, 0
-		isGCAddr[MIPS_GET_RS(mips)] = (!MIPS_GET_IMMED(mips)) && isGCAddr[MIPS_GET_RT(mips)];
-		
-		return CONVERT_SUCCESS;
-	case MIPS_OPCODE_XORI:
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_XORI);
-		CONVERT_I_TYPE2(ppc, mips);
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_OPCODE_LUI:
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-		PPC_SET_RD    (ppc, MIPS_GET_RT(mips));
-		PPC_SET_IMMED (ppc, MIPS_GET_IMMED(mips));
-		set_next_dst(ppc);
-		
-		// lui guarantees this is an N64 addr
-		isGCAddr[MIPS_GET_RT(mips)] = 0;
-		
-		return CONVERT_SUCCESS;
-	case MIPS_OPCODE_DADDI:
-	case MIPS_OPCODE_DADDIU:
+	} else nop_ignored();
+	
+#ifdef INTERPRET_JAL
+	return INTERPRETED;
+#else // INTERPRET_JAL
+	return CONVERT_SUCCESS;
+#endif
+}
+
+static int BEQ(MIPS_instr mips){
+	PowerPC_instr  ppc;
+	
+	// cmp ra, rb
+	GEN_CMP(ppc,
+	        mapRegister(MIPS_GET_RA(mips)),
+	        mapRegister(MIPS_GET_RB(mips)),
+	        4);
+	set_next_dst(ppc);
+	
+	return branch(signExtend(MIPS_GET_IMMED(mips),16), EQ, 0, 0);
+}
+
+static int BNE(MIPS_instr mips){
+	PowerPC_instr  ppc;
+	
+	// cmp ra, rb
+	GEN_CMP(ppc,
+	        mapRegister(MIPS_GET_RA(mips)),
+	        mapRegister(MIPS_GET_RB(mips)),
+	        4);
+	set_next_dst(ppc);
+	
+	return branch(signExtend(MIPS_GET_IMMED(mips),16), NE, 0, 0);
+}
+
+static int BLEZ(MIPS_instr mips){
+	PowerPC_instr  ppc;
+	
+	// cmpi ra, 0
+	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 4);
+	set_next_dst(ppc);
+	
+	return branch(signExtend(MIPS_GET_IMMED(mips),16), LE, 0, 0);
+}
+
+static int BGTZ(MIPS_instr mips){
+	PowerPC_instr  ppc;
+	
+	// cmpi ra, 0
+	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 4);
+	set_next_dst(ppc);
+	
+	return branch(signExtend(MIPS_GET_IMMED(mips),16), GT, 0, 0);
+}
+
+static int ADDIU(MIPS_instr mips){
+	PowerPC_instr ppc;
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	GEN_ADDI(ppc,
+	         mapRegisterNew( MIPS_GET_RT(mips) ),
+	         rs,
+	         MIPS_GET_IMMED(mips));
+	set_next_dst(ppc);
+	return CONVERT_SUCCESS;
+}
+
+static int ADDI(MIPS_instr mips){
+	return ADDIU(mips);
+}
+
+static int SLTI(MIPS_instr mips){
+	PowerPC_instr ppc;
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	int rt = mapRegisterNew( MIPS_GET_RT(mips) );
+	// r0 = immed (sign extended)
+	GEN_ADDI(ppc, 0, 0, signExtend(MIPS_GET_IMMED(mips),16));
+	set_next_dst(ppc);
+	// rt = ~(rs ^ immed)
+	GEN_EQV(ppc, rt, 0, rs);
+	set_next_dst(ppc);
+	// carry = rs < immed ? 0 : 1 (unsigned)
+	GEN_SUBFC(ppc, 0, 0, rs);
+	set_next_dst(ppc);
+	// rt = sign(rs) == sign(immed) ? 1 : 0
+	GEN_SRWI(ppc, rt, rt, 31);
+	set_next_dst(ppc);
+	// rt += carry
+	GEN_ADDZE(ppc, rt, rt);
+	set_next_dst(ppc);
+	// rt &= 1 ( = (sign(rs) == sign(immed)) xor (rs < immed (unsigned)) ) 
+	GEN_RLWINM(ppc, rt, rt, 0, 31, 31);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+}
+
+static int SLTIU(MIPS_instr mips){
+	PowerPC_instr ppc;
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	int rt = mapRegisterNew( MIPS_GET_RT(mips) );
+	// rt = immed
+	GEN_ORI(ppc, rt, mapRegister(0), MIPS_GET_IMMED(mips));
+	set_next_dst(ppc);
+	// carry = rs < rt ? 0 : 1
+	GEN_SUBFC(ppc, rt, rs, rt);
+	set_next_dst(ppc);
+	// rt = carry - 1 ( = rs < immed ? -1 : 0 )
+	GEN_SUBFE(ppc, rt, rt, rt);
+	set_next_dst(ppc);
+	// rt = !carry ( = rs < immed ? 1 : 0 )
+	GEN_NEG(ppc, rt, rt);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+}
+
+static int ANDI(MIPS_instr mips){
+	PowerPC_instr ppc;
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	GEN_ANDI(ppc,
+	         mapRegisterNew( MIPS_GET_RT(mips) ),
+	         rs,
+	         MIPS_GET_IMMED(mips));
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+}
+
+static int ORI(MIPS_instr mips){
+	PowerPC_instr ppc;
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	GEN_ORI(ppc,
+	        mapRegisterNew( MIPS_GET_RT(mips) ),
+	        rs,
+	        MIPS_GET_IMMED(mips));
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+}
+
+static int XORI(MIPS_instr mips){
+	PowerPC_instr ppc;
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	GEN_XORI(ppc,
+	         mapRegisterNew( MIPS_GET_RT(mips) ),
+	         rs,
+	         MIPS_GET_IMMED(mips));
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+}
+
+static int LUI(MIPS_instr mips){
+	PowerPC_instr ppc;
+	GEN_LIS(ppc,
+	        mapRegisterNew( MIPS_GET_RT(mips) ),
+	        MIPS_GET_IMMED(mips));
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+}
+
+static int BEQL(MIPS_instr mips){
+	PowerPC_instr  ppc;
+	
+	// cmp ra, rb
+	GEN_CMP(ppc,
+	        mapRegister(MIPS_GET_RA(mips)),
+	        mapRegister(MIPS_GET_RB(mips)),
+	        4);
+	set_next_dst(ppc);
+	
+	return branch(signExtend(MIPS_GET_IMMED(mips),16), EQ, 0, 1);
+}
+
+static int BNEL(MIPS_instr mips){
+	PowerPC_instr  ppc;
+	
+	// cmp ra, rb
+	GEN_CMP(ppc,
+	        mapRegister(MIPS_GET_RA(mips)),
+	        mapRegister(MIPS_GET_RB(mips)),
+	        4);
+	set_next_dst(ppc);
+	
+	return branch(signExtend(MIPS_GET_IMMED(mips),16), NE, 0, 1);
+}
+
+static int BLEZL(MIPS_instr mips){
+	PowerPC_instr  ppc;
+	
+	// cmpi ra, 0
+	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 4);
+	set_next_dst(ppc);
+	
+	return branch(signExtend(MIPS_GET_IMMED(mips),16), LE, 0, 1);
+}
+
+static int BGTZL(MIPS_instr mips){
+	PowerPC_instr  ppc;
+	
+	// cmpi ra, 0
+	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 4);
+	set_next_dst(ppc);
+	
+	return branch(signExtend(MIPS_GET_IMMED(mips),16), GT, 0, 1);
+}
+
+static int DADDIU(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_DW
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		return CONVERT_ERROR;
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_DW
+	// TODO: daddiu
+	return CONVERT_ERROR;
 #endif
-	case MIPS_OPCODE_COP0:
-		return convert_CoP(mips, 0);
-	case MIPS_OPCODE_COP1:
-		return convert_CoP(mips, 1);
-	case MIPS_OPCODE_COP2:
-		return convert_CoP(mips, 2);
-	case MIPS_OPCODE_LB:
+}
+
+static int DADDI(MIPS_instr mips){
+	// FIXME: Is there a difference?
+	return DADDIU(mips);
+}
+
+static int LDL(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_LDL
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_LDL
+	// TODO: ldl
+	return CONVERT_ERROR;
+#endif
+}
+
+static int LDR(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_LDR
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_LDR
+	// TODO: ldr
+	return CONVERT_ERROR;
+#endif
+}
+
+static int LB(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_LB
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_LBZ);
-		CONVERT_I_TYPE(ppc, mips);
-		set_next_dst(ppc);
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_EXTSB);
-		PPC_SET_RD    (ppc, MIPS_GET_RT(mips));
-		PPC_SET_RA    (ppc, MIPS_GET_RT(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_LB
+	// TODO: lb
+	return CONVERT_ERROR;
 #endif
-	case MIPS_OPCODE_LH:
+}
+
+static int LH(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_LH
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_LHA);
-		CONVERT_I_TYPE(ppc, mips);
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_LH
+	// TODO: lh
+	return CONVERT_ERROR;
 #endif
-	case MIPS_OPCODE_LWL:
+}
+
+static int LWL(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_LWL
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		return CONVERT_ERROR;
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_LWL
+	// TODO: lwl
+	return CONVERT_ERROR;
 #endif
-	case MIPS_OPCODE_LW:
+}
+
+static int LW(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_LW
-		// We don't have to worry about moving to the lr
-		// because this is handled in the call to the interpreter
-		genCallInterp(mips);
-		// Assuming that any load from the stack is a return address
-		isGCAddr[MIPS_GET_RT(mips)] = MIPS_GET_RS(mips) == MIPS_REG_SP;
-		return INTERPRETED;
-#else
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_LWZ);
-		CONVERT_I_TYPE(ppc, mips);
-		set_next_dst(ppc);
-		// If we're loading into the LR, do that in PPC
-		if(MIPS_GET_RD(mips)==MIPS_REG_LR){
-			// mtlr mips_lr
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-			PPC_SET_FUNC  (ppc, PPC_FUNC_MTSPR);
-			PPC_SET_RD    (ppc, MIPS_REG_LR);
-			PPC_SET_SPR   (ppc, 0x100);
-			set_next_dst(ppc);
-		}
-		
-		// Assuming that any load from the stack is a return address
-		isGCAddr[MIPS_GET_RT(mips)] = MIPS_GET_RS(mips) == MIPS_REG_SP;
-		
-		return CONVERT_SUCCESS;
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_LW
+	// TODO: lw
+	return CONVERT_ERROR;
 #endif
-	case MIPS_OPCODE_LBU:
+}
+
+static int LBU(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_LBU
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_LBZ);
-		CONVERT_I_TYPE(ppc, mips);
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_LBU
+	// TODO: lbu
+	return CONVERT_ERROR;
 #endif
-	case MIPS_OPCODE_LHU:
+}
+
+static int LHU(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_LHU
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_LHZ);
-		CONVERT_I_TYPE(ppc, mips);
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_LHU
+	// TODO: lhu
+	return CONVERT_ERROR;
 #endif
-	case MIPS_OPCODE_LWR:
+}
+
+static int LWR(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_LWR
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		return CONVERT_ERROR;
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_LWR
+	// TODO: lwr
+	return CONVERT_ERROR;
 #endif
-	case MIPS_OPCODE_LD:
-	case MIPS_OPCODE_LDL:
-	case MIPS_OPCODE_LDR:
-	case MIPS_OPCODE_LLD:
-#ifdef INTERPRET_DW
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		return CONVERT_ERROR;
+}
+
+static int LWU(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_LWU
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_LWU
+	// TODO: lwu
+	return CONVERT_ERROR;
 #endif
-	case MIPS_OPCODE_SB:
+}
+
+static int SB(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_SB
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_STB);
-		CONVERT_I_TYPE(ppc, mips);
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_SB
+	// TODO: sb
+	return CONVERT_ERROR;
 #endif
-	case MIPS_OPCODE_SH:
+}
+
+static int SH(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_SH
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_STH);
-		CONVERT_I_TYPE(ppc, mips);
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_SH
+	// TODO: sh
+	return CONVERT_ERROR;
 #endif
-	case MIPS_OPCODE_SWL:
+}
+
+static int SWL(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_SWL
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		return CONVERT_ERROR;
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_SWL
+	// TODO: swl
+	return CONVERT_ERROR;
 #endif
-	case MIPS_OPCODE_SW:
+}
+
+static int SW(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_SW
-		// We don't have to worry about moving from the lr
-		// because this is handled in the call to the interpreter
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		// Check to see if we're trying to save the lr
-		if(MIPS_GET_RD(mips)==MIPS_REG_LR){
-			// mflr mips_lr
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-			PPC_SET_FUNC  (ppc, PPC_FUNC_MFSPR);
-			PPC_SET_RD    (ppc, MIPS_REG_LR);
-			PPC_SET_SPR   (ppc, 0x100);
-			set_next_dst(ppc);
-			ppc = NEW_PPC_INSTR();
-		}
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_STW);
-		CONVERT_I_TYPE(ppc, mips);
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_SW
+	// TODO: sw
+	return CONVERT_ERROR;
 #endif
-	case MIPS_OPCODE_SWR:
+}
+
+static int SDL(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_SDL
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_SDL
+	// TODO: sdl
+	return CONVERT_ERROR;
+#endif
+}
+
+static int SDR(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_SDR
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_SDR
+	// TODO: sdr
+	return CONVERT_ERROR;
+#endif
+}
+
+static int SWR(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_SWR
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		return CONVERT_ERROR;
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_SWR
+	// TODO: swr
+	return CONVERT_ERROR;
 #endif
-	case MIPS_OPCODE_SD:
-	case MIPS_OPCODE_SDL:
-	case MIPS_OPCODE_SDR:
-	case MIPS_OPCODE_SCD:
-#ifdef INTERPRET_DW
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		return CONVERT_ERROR;
+}
+
+static int LD(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_LD
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_LD
+	// TODO: ld
+	return CONVERT_ERROR;
 #endif
-	case MIPS_OPCODE_CACHE:
-		return CONVERT_ERROR;
-	case MIPS_OPCODE_LL:
+}
+
+static int SD(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_SD
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_SD
+	// TODO: sd
+	return CONVERT_ERROR;
+#endif
+}
+
+static int LWC1(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_LWC1
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_LWC1
+	// TODO: lwc1
+	return CONVERT_ERROR;
+#endif
+}
+
+static int LDC1(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_LDC1
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_LDC1
+	// TODO: ldc1
+	return CONVERT_ERROR;
+#endif
+}
+
+static int SWC1(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_SWC1
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_SWC1
+	// TODO: swc1
+	return CONVERT_ERROR;
+#endif
+}
+
+static int SDC1(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_SDC1
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_SDC1
+	// TODO: sdc1
+	return CONVERT_ERROR;
+#endif
+}
+
+static int CACHE(MIPS_instr mips){
+	return CONVERT_ERROR;
+}
+
+static int LL(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_LL
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		return CONVERT_ERROR;
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_LL
+	// TODO: ll
+	return CONVERT_ERROR;
 #endif
-	case MIPS_OPCODE_LWC1:
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_LFS);
-		CONVERT_I_TYPE(ppc, mips);
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_OPCODE_LWC2:
-		return CONVERT_ERROR;
-	case MIPS_OPCODE_PREF:
-		return CONVERT_ERROR;
-	case MIPS_OPCODE_LDC1:
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_LFD);
-		CONVERT_I_TYPE(ppc, mips);
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_OPCODE_LDC2:
-		return CONVERT_ERROR;
-	case MIPS_OPCODE_SC:
+}
+
+static int SC(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_SC
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		return CONVERT_ERROR;
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_SC
+	// TODO: sc
+	return CONVERT_ERROR;
 #endif
-	case MIPS_OPCODE_SWC1:
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_STFS);
-		CONVERT_I_TYPE(ppc, mips);
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_OPCODE_SWC2:
-		return CONVERT_ERROR;
-	case MIPS_OPCODE_SDC1:
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_STFD);
-		CONVERT_I_TYPE(ppc, mips);
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_OPCODE_SDC2:
-		return CONVERT_ERROR;
-	
-	default:
-		return CONVERT_ERROR;
-	}
 }
 
-#define CONVERT_REGS(ppc,mips)  \
-	do { PPC_SET_RD(ppc, MIPS_GET_RD(mips)); \
-	     PPC_SET_RA(ppc, MIPS_GET_RS(mips)); \
-	     PPC_SET_RB(ppc, MIPS_GET_RT(mips)); } while(0)
+// -- Special Functions --
 
-static int convert_R(MIPS_instr mips){
-	PowerPC_instr ppc = NEW_PPC_INSTR();
-	int temp2;
+static int SLL(MIPS_instr mips){
+	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	GEN_SLWI(ppc,
+	         mapRegisterNew( MIPS_GET_RD(mips) ),
+	         rt,
+	         MIPS_GET_SA(mips));
+	set_next_dst(ppc);
 	
-	switch(MIPS_GET_FUNC(mips)){
+	return CONVERT_SUCCESS;
+}
+
+static int SRL(MIPS_instr mips){
+	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	GEN_SRWI(ppc,
+	         mapRegisterNew( MIPS_GET_RD(mips) ),
+	         rt,
+	         MIPS_GET_SA(mips));
+	set_next_dst(ppc);
 	
-	case MIPS_FUNC_SLL:
-		PPC_SET_OPCODE(ppc,     PPC_OPCODE_RLWINM);
-		PPC_SET_RA    (ppc,     MIPS_GET_RD(mips));
-		PPC_SET_RD    (ppc,     MIPS_GET_RT(mips));
-		PPC_SET_SH    (ppc,     MIPS_GET_SA(mips));
-		PPC_SET_ME    (ppc, (31-MIPS_GET_SA(mips)));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_MOV:
-		// movt/movf
-		// beq <past addi>
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-		PPC_SET_BD(ppc, 2);
-		PPC_SET_BO(ppc, (mips&0x10000) ? 0xc : 0x4);  // Test if cc is t/f
-		PPC_SET_BI(ppc, (20 + MIPS_GET_CC(mips)));      // Check cc (CR5/6)
-		set_next_dst(ppc);
-		// addi rd, rs, 0
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDI);
-		PPC_SET_RD    (ppc, MIPS_GET_RD(mips));
-		PPC_SET_RA    (ppc, MIPS_GET_RS(mips));
-		PPC_SET_IMMED (ppc, 0);
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_SRL:
-		PPC_SET_OPCODE(ppc,     PPC_OPCODE_RLWINM);
-		PPC_SET_RA    (ppc,     MIPS_GET_RD(mips));
-		PPC_SET_RD    (ppc,     MIPS_GET_RT(mips));
-		PPC_SET_SH    (ppc, (32-MIPS_GET_SA(mips)));
-		PPC_SET_MB    (ppc,     MIPS_GET_SA(mips));
-		PPC_SET_ME    (ppc,  31);
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_SRA:
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_SRAWI);
-		PPC_SET_RD    (ppc, MIPS_GET_RT(mips));
-		PPC_SET_RA    (ppc, MIPS_GET_RD(mips));
-		PPC_SET_SH    (ppc, MIPS_GET_SA(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_SLLV:
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_SLW);
-		PPC_SET_RD    (ppc, MIPS_GET_RT(mips));
-		PPC_SET_RA    (ppc, MIPS_GET_RD(mips));
-		PPC_SET_RB    (ppc, MIPS_GET_RS(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_SRLV:
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_SRW);
-		PPC_SET_RD    (ppc, MIPS_GET_RT(mips));
-		PPC_SET_RA    (ppc, MIPS_GET_RD(mips));
-		PPC_SET_RB    (ppc, MIPS_GET_RS(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_SRAV:
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_SRAW);
-		PPC_SET_RD    (ppc, MIPS_GET_RT(mips));
-		PPC_SET_RA    (ppc, MIPS_GET_RD(mips));
-		PPC_SET_RB    (ppc, MIPS_GET_RS(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	// FIXME: This is necessary to get any games running past the apploader
-	/* Issues: Must support lui rx, yyyy
-	                        li  rx, zzzz (or loading a value such as the PC)
-	                        jr  rx
-	             (currently don't!)
-	           
-	           Must support sw  r31, some_address
-	                        lw  rx,  same_address
-	                        jr  rx
-	              (currently support)
-	           
-	           Must support jal some_addr
-	             some_addr: mov rx, r31
-	                        jr  rx
-	             (currently support)
-	           
-	           I'd also like for returns from functions
-	             to not have to call the emulator in any way
-	             (currently support)
-	   Ideas: Create a boolean array of whether registers
-	            are N64/GC addresses
-	            Drawback: We would have to update the array
-	            		every lw, li, etc
-	            Major flaw: How would we know if we are loading
-	                          an N64 address, or a saved stack ptr?
-	                        Possible solution: Loads from stack are GC
-	                                           Otherwise, N64
-	          
-	          Calculate the LR as an N64 address
-	            Drawback: Every jr $31 (return)
-	                        will need to call jump_to
-	*/
-	case MIPS_FUNC_JR:
-		temp2 = (int)get_curr_dst();
-		check_delaySlot();
-		temp2 = (int)get_curr_dst() - temp2;
-		
-		// Quick hack since this is never explicity set
-		//isGCAddr[MIPS_REG_LR] = 1;
-#ifndef INTEPRET_JR
-		// If this is an N64 address, we have to use jump_to
-		if(!isGCAddr[MIPS_GET_RS(mips)])
+	return CONVERT_SUCCESS;
+}
+
+static int SRA(MIPS_instr mips){
+	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	GEN_SRAWI(ppc,
+	          mapRegisterNew( MIPS_GET_RD(mips) ),
+	          rt,
+	          MIPS_GET_SA(mips));
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+}
+
+static int SLLV(MIPS_instr mips){
+	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	GEN_SLW(ppc,
+	        mapRegisterNew( MIPS_GET_RD(mips) ),
+	        rt,
+	        rs);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+}
+
+static int SRLV(MIPS_instr mips){
+	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	GEN_SRW(ppc,
+	        mapRegisterNew( MIPS_GET_RD(mips) ),
+	        rt,
+	        rs);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+}
+
+static int SRAV(MIPS_instr mips){
+	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	GEN_SRAW(ppc,
+	         mapRegisterNew( MIPS_GET_RD(mips) ),
+	         rt,
+	         rs);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+}
+
+static int JR(MIPS_instr mips){
+	PowerPC_instr ppc;
+	
+	flushRegisters();
+	
+	// Check the delay slot, and note how big it is
+	PowerPC_instr* preDelay = get_curr_dst();
+	check_delaySlot();
+	int delaySlot = get_curr_dst() - preDelay;
+	
+	// Update the instruction count
+	GEN_ADDI(ppc, DYNAREG_ICOUNT, DYNAREG_ICOUNT, get_instruction_count());
+	set_next_dst(ppc);
+	
+#ifdef INTERPRET_JR
+	genJumpTo(MIPS_GET_RS(mips), JUMPTO_REG);
+#else // INTERPRET_JR
+	// TODO: jr
 #endif
-		{
-			genJumpTo(MIPS_GET_RS(mips), JUMPTO_REG);
-			
-			// Allow the delay slot to be branched to
-			if(temp2) unget_last_src();
-			else nop_ignored();
-			
-			return INTERPRETED;
-		}
-		
-		// Check to see if this is a jlr
-		if(MIPS_GET_RS(mips)==MIPS_REG_LR){
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_XL);
-			PPC_SET_FUNC  (ppc, PPC_FUNC_BCLR);
-			PPC_SET_BO    (ppc, 0x14);
-			set_next_dst(ppc);
-			
-			// Allow the delay slot to be branched to
-			if(temp2) unget_last_src();
-			else nop_ignored();
-			
-			return CONVERT_SUCCESS;
-		} else {
-			// mtctr
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-			PPC_SET_FUNC  (ppc, PPC_FUNC_MTSPR);
-			PPC_SET_RD    (ppc, MIPS_GET_RS(mips));
-			PPC_SET_SPR   (ppc, 0x120);
-			set_next_dst(ppc);
-			// bcctr
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_XL);
-			PPC_SET_FUNC  (ppc, PPC_FUNC_BCCTR);
-			PPC_SET_BO    (ppc, 0x14);
-			set_next_dst(ppc);
-			
-			// Allow the delay slot to be branched to
-			if(temp2) unget_last_src();
-			else nop_ignored();
-			
-			return CONVERT_SUCCESS;
-		}
-	case MIPS_FUNC_JALR:
-		temp2 = (int)get_curr_dst();
-		check_delaySlot();
-		temp2 = (int)get_curr_dst() - temp2;
-		
-		// Quick hack since this is never explicity set
-		//isGCAddr[MIPS_REG_LR] = 1;
-#ifndef INTERPRET_JALR
-		// If this is an N64 address, we have to use jump_to
-		if(!isGCAddr[MIPS_GET_RS(mips)])
+	
+	// Let's still recompile the delay slot in place in case its branched to
+	if(delaySlot){ unget_last_src(); isDelaySlot = 1; }
+	else nop_ignored();
+	
+#ifdef INTERPRET_JR
+	return INTERPRETED;
+#else // INTERPRET_JR
+	return CONVER_ERROR;
 #endif
-		{
-#if 0
-			//mtctr	r1
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-			PPC_SET_FUNC  (ppc, PPC_FUNC_MTSPR);
-			PPC_SET_RD    (ppc, 1);
-			PPC_SET_SPR   (ppc, 0x120);
-			set_next_dst(ppc);
-			//lis	r1, emu_reg@ha(0)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-			PPC_SET_RD    (ppc, 1);
-			PPC_SET_IMMED (ppc, (unsigned int)emu_reg>>16);
-			set_next_dst(ppc);
-			//la	r1, emu_reg@l(r1)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-			PPC_SET_RD    (ppc, 1);
-			PPC_SET_RA    (ppc, 1);
-			PPC_SET_IMMED (ppc, (unsigned int)emu_reg);
-			set_next_dst(ppc);
-			//stw	r0, 3*4(r1)       // pass dest address as arg0
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_STW);
-			PPC_SET_RD    (ppc, MIPS_GET_RS(mips));
-			PPC_SET_RA    (ppc, 1);
-			PPC_SET_IMMED (ppc, 3*4);
-			set_next_dst(ppc);
-			//lis	r1, jump_to@ha(0)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-			PPC_SET_RD    (ppc, 1);
-			PPC_SET_IMMED (ppc, (unsigned int)jump_to>>16);
-			set_next_dst(ppc);
-			//la	r0, jump_to@l(r1)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-			PPC_SET_RD    (ppc, 1);
-			PPC_SET_RA    (ppc, 0);
-			PPC_SET_IMMED (ppc, (unsigned int)jump_to);
-			set_next_dst(ppc);
-			//lis	r1, &return_address@ha(0)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-			PPC_SET_RD    (ppc, 1);
-			PPC_SET_IMMED (ppc, (unsigned int)&return_address>>16);
-			set_next_dst(ppc);
-			//la	r1, &return_address@l(r1)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-			PPC_SET_RD    (ppc, 1);
-			PPC_SET_RA    (ppc, 1);
-			PPC_SET_IMMED (ppc, (unsigned int)&return_address);
-			set_next_dst(ppc);
-			//stw	r0, 0(r1) // return to jump_to(dest)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_STW);
-			PPC_SET_RA    (ppc, 1);
-			set_next_dst(ppc);
-			//lis	r1, return_from_code@ha(0)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-			PPC_SET_RD    (ppc, 1);
-			PPC_SET_IMMED (ppc, (unsigned int)return_from_code>>16);
-			set_next_dst(ppc);
-			//la	r0, return_from_code@l(r1)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-			PPC_SET_RD    (ppc, 1);
-			PPC_SET_RA    (ppc, 0);
-			PPC_SET_IMMED (ppc, (unsigned int)return_from_code);
-			set_next_dst(ppc);
-			//mfctr	r1
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-			PPC_SET_FUNC  (ppc, PPC_FUNC_MFSPR);
-			PPC_SET_RD    (ppc, 1);
-			PPC_SET_SPR   (ppc, 0x120);
-			set_next_dst(ppc);
-			//mtctr	r0
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-			PPC_SET_FUNC  (ppc, PPC_FUNC_MTSPR);
-			PPC_SET_SPR   (ppc, 0x120);
-			set_next_dst(ppc);
-			//bctrl		// return_from_code();
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_XL);
-			PPC_SET_FUNC  (ppc, PPC_FUNC_BCCTR);
-			PPC_SET_BO    (ppc, 0x14);
-			PPC_SET_LK    (ppc, 1);
-			set_next_dst(ppc);
-#else
-			// Set LR to next instruction
-			// lis	lr, pc@ha(0)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-			PPC_SET_RD    (ppc, MIPS_REG_LR);
-			PPC_SET_IMMED (ppc, get_src_pc()>>16);
-			set_next_dst(ppc);
-			// la	lr, pc@l(lr)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-			PPC_SET_RD    (ppc, MIPS_REG_LR);
-			PPC_SET_RA    (ppc, MIPS_REG_LR);
-			PPC_SET_IMMED (ppc, get_src_pc());
-			set_next_dst(ppc);
-			genJumpTo(MIPS_GET_RS(mips), JUMPTO_REG);
+}
+
+static int JALR(MIPS_instr mips){
+	PowerPC_instr  ppc;
+	
+	flushRegisters();
+	
+	// Check the delay slot, and note how big it is
+	PowerPC_instr* preDelay = get_curr_dst();
+	check_delaySlot();
+	int delaySlot = get_curr_dst() - preDelay;
+	
+	// TODO: If I can figure out using the LR,
+	//         this might only be necessary for interp
+	// Set LR to next instruction
+	int rd = mapRegisterNew(MIPS_GET_RD(mips));
+	// lis	lr, pc@ha(0)
+	GEN_LIS(ppc, rd, get_src_pc()>>16);
+	set_next_dst(ppc);
+	// la	lr, pc@l(lr)
+	GEN_ORI(ppc, rd, rd, get_src_pc());
+	set_next_dst(ppc);
+	
+	flushRegisters();
+	
+	// Update the instruction count
+	GEN_ADDI(ppc, DYNAREG_ICOUNT, DYNAREG_ICOUNT, get_instruction_count());
+	set_next_dst(ppc);
+	
+#ifdef INTERPRET_JALR
+	genJumpTo(MIPS_GET_RS(mips), JUMPTO_REG);
+#else // INTERPRET_JALR
+	// TODO: jalr
 #endif
-			
-			isGCAddr[MIPS_REG_LR] = 1;
-			// Allow the delay slot to be branched to
-			if(temp2) unget_last_src();
-			else nop_ignored();
-			
-			return INTERPRETED;
-		}
-		
-		// Check to see if this is a jlr
-		if(MIPS_GET_RS(mips)!=MIPS_REG_LR){ // If its not, move the appropriate reg
-			// mtlr
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-			PPC_SET_FUNC  (ppc, PPC_FUNC_MTSPR);
-			PPC_SET_RD    (ppc, MIPS_GET_RS(mips));
-			PPC_SET_SPR   (ppc, 0x100);
-			set_next_dst(ppc);
-			ppc = NEW_PPC_INSTR();
-		}
-		// bclr
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_XL);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_BCLR);
-		PPC_SET_BO    (ppc, 0x14);
-		PPC_SET_LK    (ppc, 1);
+	
+	// Let's still recompile the delay slot in place in case its branched to
+	if(delaySlot){
+		unget_last_src();
+		isDelaySlot = 1;
+		// Step over the already executed delay slot if we ever
+		//   actually use the real LR for JAL
+		// b delaySlot+1
+		GEN_B(ppc, delaySlot+1, 0, 0);
 		set_next_dst(ppc);
-		
-		// If there's something in the delay slot, it will also be after the branch
-		//   so we must skip over it so its not done twice since we link
-		if(temp2){
-			// Allow the delay slot to be branched to
-			unget_last_src();
-		
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_B);
-			PPC_SET_LI    (ppc, ((temp2>>2)+1));
-			set_next_dst(ppc);
-		} else nop_ignored();
-		
-		isGCAddr[MIPS_REG_LR] = 1;
-		
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_MOVN:
-#ifdef INTERPRET_MOVN
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		// cmpi rt, 0
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_CMPI);
-		PPC_SET_RA    (ppc, MIPS_GET_RT(mips));
-		PPC_SET_IMMED (ppc, 0);
-		PPC_SET_CRF   (ppc, 7); // Use CR7
-		set_next_dst(ppc);
-		// beq <past addi>
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-		PPC_SET_BD(ppc, 2);
-		PPC_SET_BO(ppc, 0x4);  // Test if CR is 0
-		PPC_SET_BI(ppc, 30);  // Check CR bit 30 (CR7, EQ FIELD)
-		set_next_dst(ppc);
-		// addi rd, rs, 0
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDI);
-		PPC_SET_RD    (ppc, MIPS_GET_RD(mips));
-		PPC_SET_RA    (ppc, MIPS_GET_RS(mips));
-		PPC_SET_IMMED (ppc, 0);
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
+	} else nop_ignored();
+	
+#ifdef INTERPRET_JALR
+	return INTERPRETED;
+#else // INTERPRET_JALR
+	return CONVERT_ERROR;
 #endif
-	case MIPS_FUNC_MOVZ:
-#ifdef INTERPRET_MOVZ
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		// cmpi rt, 0
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_CMPI);
-		PPC_SET_RA    (ppc, MIPS_GET_RT(mips));
-		PPC_SET_IMMED (ppc, 0);
-		PPC_SET_CRF   (ppc, 7); // Use CR7
-		set_next_dst(ppc);
-		// bne <past addi>
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-		PPC_SET_BD(ppc, 2);
-		PPC_SET_BO(ppc, 0xc);  // Test if CR is 1
-		PPC_SET_BI(ppc, 30);  // Check CR bit 30 (CR7, EQ FIELD)
-		set_next_dst(ppc);
-		// addi rd, rs, 0
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDI);
-		PPC_SET_RD    (ppc, MIPS_GET_RD(mips));
-		PPC_SET_RA    (ppc, MIPS_GET_RS(mips));
-		PPC_SET_IMMED (ppc, 0);
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-#endif
-	case MIPS_FUNC_SYSCALL:
+}
+
+static int SYSCALL(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_SYSCALL
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		return CONVERT_ERROR;
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_SYSCALL
+	// TODO: syscall
+	return CONVERT_ERROR;
 #endif
-	case MIPS_FUNC_BREAK:
+}
+
+static int BREAK(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_BREAK
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		return CONVERT_ERROR;
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_BREAK
+	return CONVERT_ERROR;
 #endif
-	case MIPS_FUNC_SYNC:
-		return CONVERT_ERROR;
-	case MIPS_FUNC_MFHI:
-		if(hi_instr_count){
-			for(temp=0; temp<hi_instr_count; ++temp){
-				ppc = hi_instr[temp];
-				if(hi_shift[temp][0] >= 0)
-					ppc |= MIPS_GET_RD(mips) << hi_shift[temp][0];
-				if(hi_shift[temp][1] >= 0)
-					ppc |= MIPS_GET_RD(mips) << hi_shift[temp][1];
-				set_next_dst(ppc);
-			}
-		} else {
+}
+
+static int SYNC(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_SYNC
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_SYNC
+	return CONVERT_ERROR;
+#endif
+}
+
+static int MFHI(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_HILO
-			genCallInterp(mips);
-			return INTERPRETED;
-#else
-			// TODO: Can simply do a load/store
-			return CONVERT_ERROR;
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_HILO
+	
+	// mr rd, hi
+	GEN_ORI(ppc,
+	        mapRegisterNew( MIPS_GET_RD(mips) ),
+	        mapRegister( MIPS_REG_HI ),
+	        0);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
-		}
-// -------------------------------------------
-	case MIPS_FUNC_MFLO:
-		if(lo_instr_count){
-			for(temp=0; temp<lo_instr_count; ++temp){
-				ppc = lo_instr[temp];
-				if(lo_shift[temp][0] >= 0)
-					ppc |= MIPS_GET_RD(mips) << lo_shift[temp][0];
-				if(lo_shift[temp][1] >= 0)
-					ppc |= MIPS_GET_RD(mips) << lo_shift[temp][1];
-				set_next_dst(ppc);
-			}
-		} else {
+}
+
+static int MTHI(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_HILO
-			genCallInterp(mips);
-			return INTERPRETED;
-#else
-			// TODO: Can simply do a load/store
-			return CONVERT_ERROR;
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_HILO
+	
+	// mr hi, rs
+	GEN_ORI(ppc,
+	        mapRegisterNew( MIPS_REG_HI ),
+	        mapRegister( MIPS_GET_RS(mips) ),
+	        0);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
-		}
-// -------------------------------------------
-	case MIPS_FUNC_MTHI:
-		hi_instr_count = 0;
+}
+
+static int MFLO(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_HILO
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		// TODO: Can simply do a load/store
-		return CONVERT_ERROR;
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_HILO
+	
+	// mr rd, lo
+	GEN_ORI(ppc,
+	        mapRegisterNew( MIPS_GET_RD(mips) ),
+	        mapRegister( MIPS_REG_LO ),
+	        0);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
-// -------------------------------------------
-	case MIPS_FUNC_MTLO:
-		lo_instr_count = 0;
+}
+
+static int MTLO(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_HILO
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		// TODO: Can simply do a load/store
-		return CONVERT_ERROR;
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_HILO
+	
+	// mr lo, rs
+	GEN_ORI(ppc,
+	        mapRegisterNew( MIPS_REG_LO ),
+	        mapRegister( MIPS_GET_RS(mips) ),
+	        0);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
-	case MIPS_FUNC_MULT:
-	case MIPS_FUNC_MULTU:
-		
-		hi_instr_count = lo_instr_count = 1;
-		
-		hi_instr[0] = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(hi_instr[0], PPC_OPCODE_X);
-		PPC_SET_FUNC  (hi_instr[0], (MIPS_GET_FUNC(mips) == MIPS_FUNC_MULT)
-		                             ? PPC_FUNC_MULHW : PPC_FUNC_MULHWU);
-		PPC_SET_RA    (hi_instr[0], MIPS_GET_RA(mips));
-		PPC_SET_RB    (hi_instr[0], MIPS_GET_RB(mips));
-		hi_shift[0][0] = PPC_RD_SHIFT;
-		hi_shift[0][1] = -1;
-		
-		lo_instr[0] = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(lo_instr[0], PPC_OPCODE_X);
-		PPC_SET_FUNC  (lo_instr[0], PPC_FUNC_MULLW);
-		PPC_SET_RA    (lo_instr[0], MIPS_GET_RA(mips));
-		PPC_SET_RB    (lo_instr[0], MIPS_GET_RB(mips));
-		lo_shift[0][0] = PPC_RD_SHIFT;
-		lo_shift[0][1] = -1;
-		/*
-		// mullw   | Mult instructions will be paired with mfhi/lo
-		// mulhw   | so they can be converted appropriately
-		// FIXME: This assumes that the move from hi/lo comes
-		//         immediately after the mult, or never at all.
-		//         This may be a fair assumption... It's not
-		//        It may be a good idea to store hi/lo if they aren't used
-		i = 2;
-		while(i){
-		MIPS_instr next = peek_next_src();
-		if(MIPS_GET_OPCODE(next) == MIPS_OPCODE_R){
-			int func = MIPS_GET_FUNC(next);
-			if(func == MIPS_FUNC_MFHI){
-				get_next_src(); // Since we're using next, pop it
-				PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-				PPC_SET_FUNC  (ppc, (MIPS_GET_FUNC(mips) == MIPS_FUNC_MULT)
-				                      ? PPC_FUNC_MULHW : PPC_FUNC_MULHWU);
-				PPC_SET_RD    (ppc, MIPS_GET_RD(next));
-				PPC_SET_RA    (ppc, MIPS_GET_RA(mips));
-				PPC_SET_RB    (ppc, MIPS_GET_RB(mips));
-				PPC_SET_OE    (ppc, (MIPS_GET_FUNC(mips) == MIPS_FUNC_MULT) ? 1 : 0);
-				set_next_dst  (ppc);
-			} else if(func == MIPS_FUNC_MFLO){
-				get_next_src(); // Since we're using next, pop it
-				PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-				PPC_SET_FUNC  (ppc, PPC_FUNC_MULLW);
-				PPC_SET_RD    (ppc, MIPS_GET_RD(next));
-				PPC_SET_RA    (ppc, MIPS_GET_RA(mips));
-				PPC_SET_RB    (ppc, MIPS_GET_RB(mips));
-				set_next_dst  (ppc);
-			} else if(i == 2) return CONVERT_WARNING; // Warning because the mfhi/lo is later
-		} else if(i == 2) return CONVERT_WARNING;
-		--i;
-		}*/
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_DIV:
-	case MIPS_FUNC_DIVU:
-		hi_instr_count = 3;
-		//int rs, rt;
-		#define ra MIPS_GET_RA(mips)
-		#define rb MIPS_GET_RB(mips)
-		
-		// divw  rD, rA, rB
-		hi_instr[0] = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(hi_instr[0], PPC_OPCODE_X);
-		PPC_SET_FUNC  (hi_instr[0], (MIPS_GET_FUNC(mips) == MIPS_FUNC_DIV)
-		                             ? PPC_FUNC_DIVW : PPC_FUNC_DIVWU);
-		PPC_SET_RA    (hi_instr[0], ra);
-		PPC_SET_RB    (hi_instr[0], rb);
-		hi_shift[0][0] = PPC_RD_SHIFT;
-		hi_shift[0][1] = -1;
-		
-		// mullw rD, rD, rB
-		hi_instr[1] = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(hi_instr[1], PPC_OPCODE_X);
-		PPC_SET_FUNC  (hi_instr[1], PPC_FUNC_MULLW);
-		PPC_SET_RB    (hi_instr[1], rb);
-		hi_shift[1][0] = PPC_RD_SHIFT;
-		hi_shift[1][1] = PPC_RA_SHIFT;
-		
-		// subf rD, rD, rA
-		hi_instr[2] = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(hi_instr[2], PPC_OPCODE_X);
-		PPC_SET_FUNC  (hi_instr[2], PPC_FUNC_SUBF);
-		PPC_SET_RB    (hi_instr[2], ra);
-		hi_shift[2][0] = PPC_RD_SHIFT;
-		hi_shift[2][1] = PPC_RA_SHIFT;
-		
-		#undef ra
-		#undef rb
-		
-		lo_instr_count = 1;
-		lo_instr[0] = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(lo_instr[0], PPC_OPCODE_X);
-		PPC_SET_FUNC  (lo_instr[0], (MIPS_GET_FUNC(mips) == MIPS_FUNC_DIV)
-		                      ? PPC_FUNC_DIVW : PPC_FUNC_DIVWU);
-		PPC_SET_RA    (lo_instr[0], MIPS_GET_RA(mips));
-		PPC_SET_RB    (lo_instr[0], MIPS_GET_RB(mips));
-		lo_shift[0][0] = PPC_RD_SHIFT;
-		lo_shift[0][1] = -1;
-		
-		/*
-		// FIXME:  This assumes that the move from hi/lo comes
-		//         immediately after the div, or never at all.
-		//         This may be a fair assumption... It's not
-		i = 2;
-		while(i){
-		MIPS_instr next = peek_next_src();
-		if(MIPS_GET_OPCODE(next) == MIPS_OPCODE_R){
-			int func = MIPS_GET_FUNC(next);
-			if(func == MIPS_FUNC_MFHI){ // Getting the remainder
-				get_next_src();     // Since we're using next, pop it
-				//int rd, rs, rt;
-				#define rd MIPS_GET_RD(next)
-				#define ra MIPS_GET_RA(mips)
-				#define rb MIPS_GET_RB(mips)
-				// divw  rD, rA, rB
-				PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-				PPC_SET_FUNC  (ppc, (MIPS_GET_FUNC(mips) == MIPS_FUNC_DIV)
-				                      ? PPC_FUNC_DIVW : PPC_FUNC_DIVWU);
-				PPC_SET_RD    (ppc, rd);
-				PPC_SET_RA    (ppc, ra);
-				PPC_SET_RB    (ppc, rb);
-				set_next_dst  (ppc);
-				// mullw rD, rD, rB
-				ppc = NEW_PPC_INSTR();
-				PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-				PPC_SET_FUNC  (ppc, PPC_FUNC_MULLW);
-				PPC_SET_RD    (ppc, rd);
-				PPC_SET_RA    (ppc, rd);
-				PPC_SET_RB    (ppc, rb);
-				set_next_dst  (ppc);
-				// subf rD, rD, rA
-				ppc = NEW_PPC_INSTR();
-				PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-				PPC_SET_FUNC  (ppc, PPC_FUNC_SUBF);
-				PPC_SET_RD    (ppc, rd);
-				PPC_SET_RA    (ppc, rd);
-				PPC_SET_RB    (ppc, ra);
-				set_next_dst  (ppc);
-				#undef rd
-				#undef ra
-				#undef rb
-			} else if(func == MIPS_FUNC_MFLO){ // Getting the quotient
-				get_next_src();            // Since we're using next, pop it
-				PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-				PPC_SET_FUNC  (ppc, (MIPS_GET_FUNC(mips) == MIPS_FUNC_DIV)
-				                      ? PPC_FUNC_DIVW : PPC_FUNC_DIVWU);
-				PPC_SET_RD    (ppc, MIPS_GET_RD(next));
-				PPC_SET_RA    (ppc, MIPS_GET_RA(mips));
-				PPC_SET_RB    (ppc, MIPS_GET_RB(mips));
-				set_next_dst  (ppc);
-			} else if(i == 2) return CONVERT_WARNING; // Warning because the mfhi/lo is later
-		} else if(i == 2) return CONVERT_WARNING;
-		--i;
-		}
-		*/
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_ADD:
-		PPC_SET_OE    (ppc, 1);
-	case MIPS_FUNC_ADDU:
-		// Check to see if we're moving the lr
-		if(MIPS_GET_RT(mips) == MIPS_REG_LR){
-			// mflr mips_lr
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-			PPC_SET_FUNC  (ppc, PPC_FUNC_MFSPR);
-			PPC_SET_RD    (ppc, MIPS_REG_LR);
-			PPC_SET_SPR   (ppc, 0x100);
-			set_next_dst(ppc);
-			
-			isGCAddr[MIPS_REG_LR] = 1;
-			
-			ppc = NEW_PPC_INSTR();
-		}
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_ADD);
-		CONVERT_REGS  (ppc, mips);
+}
+
+static int MULT(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_MULT
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_MULT
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int hi = mapRegisterNew( MIPS_REG_HI );
+	int lo = mapRegisterNew( MIPS_REG_LO );
+	
+	// Don't multiply if they're using r0
+	if(rs && rt){
+		// mullw lo, rs, rt
+		GEN_MULLW(ppc, lo, rs, rt);
 		set_next_dst(ppc);
-		
-		isGCAddr[MIPS_GET_RD(mips)] = isGCAddr[MIPS_GET_RT(mips)];
-		
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_SUB:
-		PPC_SET_OE    (ppc, 1);
-	case MIPS_FUNC_SUBU:
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_SUBF);
-		PPC_SET_RD    (ppc, MIPS_GET_RD(mips));
-		PPC_SET_RA    (ppc, MIPS_GET_RB(mips));
-		PPC_SET_RB    (ppc, MIPS_GET_RA(mips));
+		// mulhw hi, rs, rt
+		GEN_MULHW(ppc, hi, rs, rt);
 		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_AND:
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_AND);
-		CONVERT_REGS  (ppc, mips);
+	} else {
+		// li lo, 0
+		GEN_LI(ppc, lo, 0, 0);
 		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_OR:
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_OR);
-		PPC_SET_RA    (ppc, MIPS_GET_RD(mips));
-		PPC_SET_RD    (ppc, MIPS_GET_RS(mips));
-		PPC_SET_RB    (ppc, MIPS_GET_RT(mips));
+		// li hi, 0
+		GEN_LI(ppc, hi, 0, 0);
 		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_XOR:
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_XOR);
-		PPC_SET_RA    (ppc, MIPS_GET_RD(mips));
-		PPC_SET_RD    (ppc, MIPS_GET_RS(mips));
-		PPC_SET_RB    (ppc, MIPS_GET_RT(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_NOR:
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_NOR);
-		PPC_SET_RA    (ppc, MIPS_GET_RD(mips));
-		PPC_SET_RD    (ppc, MIPS_GET_RS(mips));
-		PPC_SET_RB    (ppc, MIPS_GET_RT(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_SLT:
-	case MIPS_FUNC_SLTU:
-		// cmp
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-		PPC_SET_FUNC  (ppc, (MIPS_GET_FUNC(mips) == MIPS_FUNC_SLT)
-		                     ? PPC_FUNC_CMP : PPC_FUNC_CMPL);
-		PPC_SET_RA    (ppc, MIPS_GET_RS(mips));
-		PPC_SET_RB    (ppc, MIPS_GET_RT(mips));
-		PPC_SET_CRF   (ppc, 7); // Use CR7
-		set_next_dst(ppc);
-		// mfcr
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_MFCR);
-		PPC_SET_RD    (ppc, MIPS_GET_RD(mips));
-		set_next_dst(ppc);
-		// rlwinm
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_RLWINM);
-		PPC_SET_RD    (ppc, MIPS_GET_RD(mips));
-		PPC_SET_RA    (ppc, MIPS_GET_RD(mips));
-		PPC_SET_SH    (ppc, 29); // Rotate LT bit to position 0
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_TGE:
-	case MIPS_FUNC_TGEU:
-	case MIPS_FUNC_TLT:
-	case MIPS_FUNC_TLTU:
-	case MIPS_FUNC_TEQ:
-	case MIPS_FUNC_TNE:
-#ifdef INTERPRET_TRAPS
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		return CONVERT_ERROR;
+	}
+	
+	return CONVERT_SUCCESS;
 #endif
-	// TODO: Some of these can be recompiled with some work
-	case MIPS_FUNC_DADD:
-	case MIPS_FUNC_DADDU:
-	case MIPS_FUNC_DDIV:
-	case MIPS_FUNC_DDIVU:
-	case MIPS_FUNC_DMULT:
-	case MIPS_FUNC_DMULTU:
-	case MIPS_FUNC_DSLL:
-	case MIPS_FUNC_DSLL32:
-	case MIPS_FUNC_DSLLV:
-	case MIPS_FUNC_DSRA:
-	case MIPS_FUNC_DSRA32:
-	case MIPS_FUNC_DSRAV:
-	case MIPS_FUNC_DSRL:
-	case MIPS_FUNC_DSRL32:
-	case MIPS_FUNC_DSRLV:
-	case MIPS_FUNC_DSUB:
-	case MIPS_FUNC_DSUBU:
+}
+
+static int MULTU(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_MULTU
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_MULTU
+	int rs = MIPS_GET_RS(mips);
+	int rt = MIPS_GET_RT(mips);
+	int hi = mapRegisterNew( MIPS_REG_HI );
+	int lo = mapRegisterNew( MIPS_REG_LO );
+	
+	// Don't multiply if they're using r0
+	if(rs && rt){
+		// mullw lo, rs, rt
+		GEN_MULLW(ppc, lo, rs, rt);
+		set_next_dst(ppc);
+		// mulhwu hi, rs, rt
+		GEN_MULHWU(ppc, hi, rs, rt);
+		set_next_dst(ppc);
+	} else {
+		// li lo, 0
+		GEN_LI(ppc, lo, 0, 0);
+		set_next_dst(ppc);
+		// li hi, 0
+		GEN_LI(ppc, hi, 0, 0);
+		set_next_dst(ppc);
+	}
+	
+	return CONVERT_SUCCESS;
+#endif
+}
+
+static int DIV(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_DIV
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_DIV
+	// This instruction computes the quotient and remainder
+	//   and stores the results in lo and hi respectively
+	int rs = MIPS_GET_RS(mips);
+	int rt = MIPS_GET_RT(mips);
+	int hi = mapRegisterNew( MIPS_REG_HI );
+	int lo = mapRegisterNew( MIPS_REG_LO );
+	
+	// Don't divide if they're using r0
+	if(rs && rt){
+		// divw lo, rs, rt
+		GEN_DIVW(ppc, lo, rs, rt);
+		set_next_dst(ppc);
+		// This is how you perform a mod in PPC
+		// divw lo, rs, rt
+		// NOTE: We already did that
+		// mullw hi, lo, rt
+		GEN_MULLW(ppc, hi, lo, rt);
+		set_next_dst(ppc);
+		// subf hi, hi, rs
+		GEN_SUBF(ppc, hi, hi, rs);
+		set_next_dst(ppc);
+	}
+	
+	return CONVERT_SUCCESS;
+#endif
+}
+
+static int DIVU(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_DIVU
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_DIVU
+	// This instruction computes the quotient and remainder
+	//   and stores the results in lo and hi respectively
+	int rs = MIPS_GET_RS(mips);
+	int rt = MIPS_GET_RT(mips);
+	int hi = mapRegisterNew( MIPS_REG_HI );
+	int lo = mapRegisterNew( MIPS_REG_LO );
+	
+	// Don't divide if they're using r0
+	if(rs && rt){
+		// divwu lo, rs, rt
+		GEN_DIVWU(ppc, lo, rs, rt);
+		set_next_dst(ppc);
+		// This is how you perform a mod in PPC
+		// divw lo, rs, rt
+		// NOTE: We already did that
+		// mullw hi, lo, rt
+		GEN_MULLW(ppc, hi, lo, rt);
+		set_next_dst(ppc);
+		// subf hi, hi, rs
+		GEN_SUBF(ppc, hi, hi, rs);
+		set_next_dst(ppc);
+	}
+	
+	return CONVERT_SUCCESS;
+#endif
+}
+
+static int DSLLV(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_DW
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		return CONVERT_ERROR;
+	genCallInterp(mips);
+	return INTERPRETED;
+#else  // INTERPRET_DW
+	// TODO: dsllv
+	return CONVERT_ERROR;
 #endif
-
-	default:
-		return CONVERT_ERROR;
-	}
 }
 
-static int convert_B(MIPS_instr mips){
-	PowerPC_instr ppc = NEW_PPC_INSTR();
-	int bo, temp2;
-
-	switch(MIPS_GET_RT(mips)){
-
-	case MIPS_RT_BLTZL:
-	case MIPS_RT_BGEZL:
-	case MIPS_RT_BLTZ:
-	case MIPS_RT_BGEZ:
-		bo = (MIPS_GET_OPCODE(mips) == MIPS_RT_BLTZ  ||
-		      MIPS_GET_OPCODE(mips) == MIPS_RT_BLTZL) ?
-		           0xc : 0x4;
-		// cmpi to 0
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_CMPI);
-		PPC_SET_RA    (ppc, MIPS_GET_RA(mips));
-		PPC_SET_IMMED (ppc, 0);
-		PPC_SET_CRF   (ppc, 7); // Use CR7
-		set_next_dst(ppc);
-		// Likely branches skip the delay slot if they're not taken
-		if(MIPS_GET_RT(mips) == MIPS_RT_BLTZL ||
-		   MIPS_GET_RT(mips) == MIPS_RT_BGEZL ){
-			// b[!cond] <past delay & branch>
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-			PPC_SET_BD(ppc, (peek_next_src() == 0) ? 2 : 3); // past delay & branch
-			PPC_SET_BO(ppc, (bo^0x8)); // !cond
-			PPC_SET_BI(ppc, 28);     // Check CR bit 28 (CR7, LT FIELD)
-			set_next_dst(ppc);
-		}
-		// delay slot
-		temp2 = (int)get_curr_dst();
-		check_delaySlot();
-		temp2 = (int)get_curr_dst() - temp2;
-#if defined(INTERPRET_BLTZ) || defined(INTERPRET_BGEZ)
-		// b[!cond] <past delay & jumpto>
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-		PPC_SET_BD(ppc, (JUMPTO_OFF_SIZE+1+temp2)); // past delay & jumpto
-		PPC_SET_BO(ppc, (bo^0x8)); // !cond
-		PPC_SET_BI(ppc, 28);     // Check CR bit 28 (CR7, LT FIELD)
-		set_next_dst(ppc);
-		genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
-#else
-		// temp is used for is_out
-		temp = 0;
-		ppc = NEW_PPC_INSTR();
-		if(is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
-			temp = 1;
-			// Allocate space for jumping out, 4 instrs
-			set_next_dst(0);
-			set_next_dst(0);
-			set_next_dst(0);
-			set_next_dst(0);
-		}
-		// bc
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-		PPC_SET_BD(ppc, add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, temp));
-		PPC_SET_BO(ppc, bo);  // Test if CR is 1 or 0
-		PPC_SET_BI(ppc, 28);  // Check CR bit 28 (CR7, LT FIELD)
-		set_next_dst(ppc);
-		// Add space to zero r0 if its not taken
-		if(temp){
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-			set_next_dst(ppc);
-		}
+static int DSRLV(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_DW
+	genCallInterp(mips);
+	return INTERPRETED;
+#else  // INTERPRET_DW
+	// TODO: dsrlv
+	return CONVERT_ERROR;
 #endif
-		
-		// If there's something in the delay slot, it will also be after the branch
-		//   so we must skip over it so its not done twice if don't branch
-		if(temp2){
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_B);
-			PPC_SET_LI    (ppc, ((temp2>>2)+1));
-			set_next_dst(ppc);
-		}
-		
-		return CONVERT_SUCCESS;
-	case MIPS_RT_TGEI:
-	case MIPS_RT_TGEIU:
-	case MIPS_RT_TLTI:
-	case MIPS_RT_TLTIU:
-	case MIPS_RT_TEGI:
-	case MIPS_RT_TNEI:
+}
+
+static int DSRAV(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_DW
+	genCallInterp(mips);
+	return INTERPRETED;
+#else  // INTERPRET_DW
+	// TODO: dsrav
+	return CONVERT_ERROR;
+#endif
+}
+
+static int DMULT(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_DW
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_DW
+	// TODO: dmult
+	return CONVERT_ERROR;
+#endif
+}
+
+static int DMULTU(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_DW
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_DW
+	// TODO: dmultu
+	return CONVERT_ERROR;
+#endif
+}
+
+static int DDIV(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_DW
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_DW
+	// TODO: ddiv
+	return CONVERT_ERROR;
+#endif
+}
+
+static int DDIVU(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_DW
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_DW
+	// TODO: ddivu
+	return CONVERT_ERROR;
+#endif
+}
+
+static int DADDU(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_DW
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_DW
+	// TODO: daddu
+	return CONVERT_ERROR;
+#endif
+}
+
+static int DADD(MIPS_instr mips){
+	return DADDU(mips);
+}
+
+static int DSUBU(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_DW
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_DW
+	// TODO: dsubu
+	return CONVERT_ERROR;
+#endif
+}
+
+static int DSUB(MIPS_instr mips){
+	return DSUBU(mips);
+}
+
+static int DSLL(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_DW
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_DW
+	// TODO: dsll
+	return CONVERT_ERROR;
+#endif
+}
+
+static int DSRL(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_DW
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_DW
+	// TODO: dsrl
+	return CONVERT_ERROR;
+#endif
+}
+
+static int DSRA(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_DW
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_DW
+	// TODO: dsra
+	return CONVERT_ERROR;
+#endif
+}
+
+static int DSLL32(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_DW
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_DW
+	// TODO: dsll32
+	return CONVERT_ERROR;
+#endif
+}
+
+static int DSRL32(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_DW
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_DW
+	// TODO: dsrl32
+	return CONVERT_ERROR;
+#endif
+}
+
+static int DSRA32(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_DW
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_DW
+	// TODO: dsra32
+	return CONVERT_ERROR;
+#endif
+}
+
+static int ADDU(MIPS_instr mips){
+	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	GEN_ADD(ppc,
+	        mapRegisterNew( MIPS_GET_RD(mips) ),
+	        rs,
+	        rt);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+}
+
+static int ADD(MIPS_instr mips){
+	return ADDU(mips);
+}
+
+static int SUBU(MIPS_instr mips){
+	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	GEN_SUB(ppc,
+	        mapRegisterNew( MIPS_GET_RD(mips) ),
+	        rs,
+	        rt);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+}
+
+static int SUB(MIPS_instr mips){
+	return SUBU(mips);
+}
+
+static int AND(MIPS_instr mips){
+	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	GEN_AND(ppc,
+	        mapRegisterNew( MIPS_GET_RD(mips) ),
+	        rs,
+	        rt);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+}
+
+static int OR(MIPS_instr mips){
+	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	GEN_OR(ppc,
+	        mapRegisterNew( MIPS_GET_RD(mips) ),
+	        rs,
+	        rt);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+}
+
+static int XOR(MIPS_instr mips){
+	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	GEN_XOR(ppc,
+	        mapRegisterNew( MIPS_GET_RD(mips) ),
+	        rs,
+	        rt);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+}
+
+static int NOR(MIPS_instr mips){
+	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	GEN_NOR(ppc,
+	        mapRegisterNew( MIPS_GET_RD(mips) ),
+	        rs,
+	        rt);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+}
+
+static int SLT(MIPS_instr mips){
+	PowerPC_instr ppc;
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	int rd = mapRegisterNew( MIPS_GET_RD(mips) );
+	// TODO: rs < r0 can be done in one instruction
+	// carry = rs < rt ? 0 : 1 (unsigned)
+	GEN_SUBFC(ppc, 0, rt, rs);
+	set_next_dst(ppc);
+	// rd = ~(rs ^ rt)
+	GEN_EQV(ppc, rd, rt, rs);
+	set_next_dst(ppc);
+	// rd = sign(rs) == sign(rt) ? 1 : 0
+	GEN_SRWI(ppc, rd, rd, 31);
+	set_next_dst(ppc);
+	// rd += carry
+	GEN_ADDZE(ppc, rd, rd);
+	set_next_dst(ppc);
+	// rt &= 1 ( = (sign(rs) == sign(rt)) xor (rs < rt (unsigned)) ) 
+	GEN_RLWINM(ppc, rd, rd, 0, 31, 31);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+}
+
+static int SLTU(MIPS_instr mips){
+	PowerPC_instr ppc; 
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	int rd = mapRegisterNew( MIPS_GET_RD(mips) );
+	// carry = rs < rt ? 0 : 1
+	GEN_SUBFC(ppc, rd, rt, rs);
+	set_next_dst(ppc);
+	// rd = carry - 1 ( = rs < rt ? -1 : 0 )
+	GEN_SUBFE(ppc, rd, rd, rd);
+	set_next_dst(ppc);
+	// rd = !carry ( = rs < rt ? 1 : 0 )
+	GEN_NEG(ppc, rd, rd);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+}
+
+static int TEQ(MIPS_instr mips){
+	PowerPC_instr ppc;
 #ifdef INTERPRET_TRAPS
-		genCallInterp(mips);
-		return INTERPRETED;
+	genCallInterp(mips);
+	return INTERPRETED;
 #else
-		return CONVERT_ERROR;
+	return CONVERT_ERROR;
 #endif
-	case MIPS_RT_BLTZALL:
-	case MIPS_RT_BGEZALL:
-	case MIPS_RT_BLTZAL:
-	case MIPS_RT_BGEZAL:
-		bo = (MIPS_GET_RT(mips) == MIPS_RT_BLTZAL  ||
-		      MIPS_GET_RT(mips) == MIPS_RT_BLTZALL) ?
-		           0xc : 0x4;
-		// cmpi to 0
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_CMPI);
-		PPC_SET_RA    (ppc, MIPS_GET_RA(mips));
-		PPC_SET_IMMED (ppc, 0);
-		PPC_SET_CRF   (ppc, 7); // Use CR7
+}
+
+static int (*gen_special[64])(MIPS_instr) =
+{
+   SLL , NI   , SRL , SRA , SLLV   , NI    , SRLV  , SRAV  ,
+   JR  , JALR , NI  , NI  , SYSCALL, BREAK , NI    , SYNC  ,
+   MFHI, MTHI , MFLO, MTLO, DSLLV  , NI    , DSRLV , DSRAV ,
+   MULT, MULTU, DIV , DIVU, DMULT  , DMULTU, DDIV  , DDIVU ,
+   ADD , ADDU , SUB , SUBU, AND    , OR    , XOR   , NOR   ,
+   NI  , NI   , SLT , SLTU, DADD   , DADDU , DSUB  , DSUBU ,
+   NI  , NI   , NI  , NI  , TEQ    , NI    , NI    , NI    ,
+   DSLL, NI   , DSRL, DSRA, DSLL32 , NI    , DSRL32, DSRA32
+};
+
+static int SPECIAL(MIPS_instr mips){
+	return gen_special[MIPS_GET_FUNC(mips)](mips);
+}
+
+// -- RegImmed Instructions --
+
+// Since the RegImmed instructions are very similar:
+//   BLTZ, BGEZ, BLTZL, BGEZL, BLZAL, BGEZAL, BLTZALL, BGEZALL
+//   It's less work to handle them all in one function
+static int REGIMM(MIPS_instr mips){
+	PowerPC_instr  ppc;
+	int which = MIPS_GET_RT(mips);
+	int cond   = which & 1; // t = GE, f = LT
+	int likely = which & 2;
+	int link   = which & 16;
+	
+	// cmpi ra, 0
+	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 4);
+	set_next_dst(ppc);
+	
+	return branch(signExtend(MIPS_GET_IMMED(mips),16),
+	              cond ? GE : LT, link, likely);
+}
+
+// -- COP0 Instructions --
+
+/*
+static int (*gen_cop0[32])(MIPS_instr) =
+{
+   MFC0, NI, NI, NI, MTC0, NI, NI, NI,
+   NI  , NI, NI, NI, NI  , NI, NI, NI,
+   TLB , NI, NI, NI, NI  , NI, NI, NI,
+   NI  , NI, NI, NI, NI  , NI, NI, NI
+};
+*/
+
+static int COP0(MIPS_instr mips){
+#ifdef INTERPRET_COP0
+	genCallInterp(mips);
+	return INTERPRETED;
+#else
+	// TODO: COP0 instructions
+	return CONVERT_ERROR;
+#endif
+}
+
+// -- COP1 Instructions --
+
+static int MFC1(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_FP
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP
+	// TODO: mfc1
+#endif
+}
+
+static int DMFC1(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_FP
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP
+	// TODO: dmfc1
+#endif
+}
+
+static int CFC1(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_FP
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP
+	// TODO: cfc1
+#endif
+}
+
+static int MTC1(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_FP
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP
+	// TODO: mtc1
+#endif
+}
+
+static int DMTC1(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_FP
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP
+	// TODO: dmtc1
+#endif
+}
+
+static int CTC1(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_FP
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP
+	// TODO: ctc1
+#endif
+}
+
+static int BC(MIPS_instr mips){
+#ifdef INTERPRET_FP
+	genCallInterp(mips);
+	return INTERPRETED;
+#else
+	PowerPC_instr ppc;
+	int cond   = mips & 0x00010000;
+	int likely = mips & 0x00020000;
+	int likely_id = -1;
+	
+	flushRegisters();
+	
+	// Note: we use CR bits 20-27 (CRs 5&6) to store N64 CCs
+#ifdef INTERPRET_FP
+	// Load the value from FCR31 and use that to set condition
+	extern long FCR31;
+	// mtctr r3
+	GEN_MTCTR(ppc, 3);
+	set_next_dst(ppc);
+	// la r3, &FCR31
+	GEN_LIS(ppc, 3, ((unsigned int)&FCR31)>>16);
+	set_next_dst(ppc);
+	GEN_ORI(ppc, 3, 3, (unsigned int)&FCR31);
+	set_next_dst(ppc);
+	// lwz r3, 0(r3)
+	GEN_LWZ(ppc, 3, 0, 3);
+	set_next_dst(ppc);
+	// The intention here is to shift the MSb
+	//   to the bit that will be checked by the bc
+	// srwi r3, r3, 20+MIPS_GET_CC(mips)
+	GEN_SRWI(ppc, 3, 3, 20+MIPS_GET_CC(mips));
+	set_next_dst(ppc);
+	// FIXME: This destroys other CCs
+	// mtcrf cr5 & cr6, 3
+	ppc = NEW_PPC_INSTR();
+	PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
+	PPC_SET_FUNC  (ppc, PPC_FUNC_MTCRF);
+	PPC_SET_RD    (ppc, 3);
+	ppc |= 0x06 << 12; // Set CRM to CR5
+	set_next_dst(ppc);
+	// mfctr r3
+	GEN_MFCTR(ppc, 3);
+	set_next_dst(ppc);
+#endif
+	
+	if(likely){
+		// b[!cond] <past jumpto & delay>
+		likely_id = add_jump_special(0);
+		GEN_BC(ppc, likely_id, 0, 0,
+		       cond ? 0x4 : 0xc,
+		       20+MIPS_GET_CC(mips)); 
 		set_next_dst(ppc);
-		// Likely branches skip the delay slot if they're not taken
-		if(MIPS_GET_RT(mips) == MIPS_RT_BLTZALL ||
-		   MIPS_GET_RT(mips) == MIPS_RT_BGEZALL ){
-			// b[!cond] <past delay & branch>
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-			PPC_SET_BD(ppc, (peek_next_src() == 0) ? 2 : 3); // past delay & branch
-			PPC_SET_BO(ppc, (bo^0x8)); // !cond
-			PPC_SET_BI(ppc, 28);     // Check CR bit 28 (CR7, LT FIELD)
+	}
+	
+	// Check the delay slot, and note how big it is
+	PowerPC_instr* preDelay = get_curr_dst();
+	check_delaySlot();
+	int delaySlot = get_curr_dst() - preDelay;
+	
+#ifdef INTERPRET_BC
+	if(likely)
+		// Jump over the generated jump, and both delay slots
+		set_jump_special(likely_id, JUMPTO_OFF_SIZE+2*delaySlot+1);
+	else {
+		// b[!cond] <past jumpto & delay> 
+		GEN_BC(ppc, JUMPTO_OFF_SIZE+delaySlot+2, 0, 0,
+		       cond ? 0x4 : 0xc,
+		       20+MIPS_GET_CC(mips)); 
+		set_next_dst(ppc);
+	}
+	genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
+#else // INTERPRET_BC
+	// If we're jumping out, we need pizza
+	if(is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
+		if(likely)
+			// Jump over the generated jump, and both delay slots
+			set_jump_special(likely_id, JUMPTO_OFF_SIZE+2*delaySlot+1);
+		else {
+			// b[!cond] <past jumpto & delay> 
+			GEN_BC(ppc, JUMPTO_OFF_SIZE+delaySlot+2, 0, 0,
+			       cond ? 0x4 : 0xc,
+			       20+MIPS_GET_CC(mips)); 
 			set_next_dst(ppc);
 		}
-		// delay slot
-		temp2 = (int)get_curr_dst();
-		check_delaySlot();
-		temp2 = (int)get_curr_dst() - temp2;
-#if defined(INTERPRET_BLTZAL) || defined(INTERPRET_BGEZAL)
-		// b[!cond] <past delay & jumpto>
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-		PPC_SET_BD(ppc, (JUMPTO_OFF_SIZE+3+temp2)); // past delay & jumpto
-		PPC_SET_BO(ppc, (bo^0x8)); // !cond
-		PPC_SET_BI(ppc, 28);     // Check CR bit 28 (CR7, LT FIELD)
-		set_next_dst(ppc);
-		// Set LR to next instruction
-		// lis	lr, pc@ha(0)
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-		PPC_SET_RD    (ppc, MIPS_REG_LR);
-		PPC_SET_IMMED (ppc, get_src_pc()>>16);
-		set_next_dst(ppc);
-		// la	lr, pc@l(lr)
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-		PPC_SET_RD    (ppc, MIPS_REG_LR);
-		PPC_SET_RA    (ppc, MIPS_REG_LR);
-		PPC_SET_IMMED (ppc, get_src_pc());
-		set_next_dst(ppc);
 		genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
-#else
-		// temp is used for is_out
-		temp = 0;
-		ppc = NEW_PPC_INSTR();
-		if(is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
-			temp = 1;
-			// Allocate space for jumping out, 4 instrs
-			set_next_dst(0);
-			set_next_dst(0);
-			set_next_dst(0);
-			set_next_dst(0);
-		}
-		// bc
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-		PPC_SET_BD(ppc, add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, temp));
-		PPC_SET_BO(ppc, bo);  // Test if CR is 1 or 0
-		PPC_SET_BI(ppc, 28);  // Check CR bit 28 (CR7, LT FIELD)
-		PPC_SET_LK(ppc, 1);
+	} else if(likely){
+		// Jump over the generated jump, and both delay slots
+		set_jump_special(likely_id, 1+2*delaySlot+1);
+	
+		// b[cond] <dest> 
+		GEN_BC(ppc, 
+		       add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, j_out),
+		       0, 0,
+		       cond ? 0xc : 0x4,
+		       20+MIPS_GET_CC(mips));
 		set_next_dst(ppc);
-		// Add space to zero r0 if its not taken
-		if(temp){
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-			set_next_dst(ppc);
-		}
-#endif
-		// If there's something in the delay slot, it will also be after the branch
-		//   so we must skip over it so its not done twice if don't branch
-		if(temp2){
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_B);
-			PPC_SET_LI    (ppc, ((temp2>>2)+1));
-			set_next_dst(ppc);
-		}
-		
-		isGCAddr[MIPS_REG_LR] = 1;
-		
-		return CONVERT_SUCCESS;
-	default:
-		return CONVERT_ERROR;
 	}
+#endif
+	
+	if(!likely){
+		// Step over the already executed delay slot if
+		//   the branch isn't taken, not necessary for
+		//   a likely branch because it'll be skipped
+		// b delaySlot+1
+		GEN_B(ppc, delaySlot+1, 0, 0);
+		set_next_dst(ppc);
+	}
+	
+	// Let's still recompile the delay slot in place in case its branched to
+	if(delaySlot){ unget_last_src(); isDelaySlot = 1; }
+	else nop_ignored();
+	
+#ifdef INTERPRET_BC
+	return INTERPRETED;
+#else // INTERPRET_BC
+	return CONVERT_SUCCESS;
+#endif
+#endif // INTERPRET_BC
 }
 
-#define PRECISION_SINGLE 1
-#define PRECISION_DOUBLE 2
-#define PRECISION_WORD   0
-#define PRECISION_LONG   3
-static int convert_CoP(MIPS_instr mips, int z){
-	PowerPC_instr ppc = NEW_PPC_INSTR();
-	int temp2;
-	
-	switch(MIPS_GET_RS(mips)){
-	
-	case MIPS_FRMT_MFC:
-		if(z == 0){
-#ifdef INTEPRET_COP0
-			genCallInterp(mips);
-			return INTERPRETED;
-#else
-			return CONVERT_ERROR;
+static int S(MIPS_instr mips){
+#ifdef INTERPRET_FP
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP
+	// TODO: single-precision FP
+	return CONVERT_ERROR;
 #endif
-		} else if(z == 1){
-			// lis	rd, temp@ha(0)
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-			PPC_SET_RD    (ppc, MIPS_GET_RT(mips));
-			PPC_SET_IMMED (ppc, (unsigned int)&temp>>16);
-			set_next_dst(ppc);
-			// la	rd, temp@l(rd)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-			PPC_SET_RD    (ppc, MIPS_GET_RT(mips));
-			PPC_SET_RA    (ppc, MIPS_GET_RT(mips));
-			PPC_SET_IMMED (ppc, (unsigned int)&temp);
-			// stfs	fs, 0(rd)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_STFS);
-			PPC_SET_RD    (ppc, MIPS_GET_FS(mips));
-			PPC_SET_RA    (ppc, MIPS_GET_RT(mips));
-			set_next_dst(ppc);
-			// lwz	rd, 0(rd)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_LWZ);
-			PPC_SET_RD    (ppc, MIPS_GET_RT(mips));
-			PPC_SET_RA    (ppc, MIPS_GET_RT(mips));
-			set_next_dst(ppc);
-			return CONVERT_SUCCESS;
-		} else
-			return CONVERT_ERROR;
-	case MIPS_FRMT_DMFC:
-		if(z == 1){
-			// lis	rd, reg@ha(0)
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-			PPC_SET_RD    (ppc, MIPS_GET_RT(mips));
-			PPC_SET_IMMED (ppc, (unsigned int)reg>>16);
-			set_next_dst(ppc);
-			// la	rd, reg@l(rd)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-			PPC_SET_RD    (ppc, MIPS_GET_RT(mips));
-			PPC_SET_RA    (ppc, MIPS_GET_RT(mips));
-			PPC_SET_IMMED (ppc, (unsigned int)reg);
-			set_next_dst(ppc);
-			// stfd	fs, rd*8(rd)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc,  PPC_OPCODE_STFD);
-			PPC_SET_RD    (ppc,  MIPS_GET_FS(mips));
-			PPC_SET_RA    (ppc,  MIPS_GET_RT(mips));
-			PPC_SET_IMMED (ppc, (MIPS_GET_RT(mips)*8));
-			set_next_dst(ppc);
-			// lwz	rd, rd*8+4(rd)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc,  PPC_OPCODE_LWZ);
-			PPC_SET_RD    (ppc,  MIPS_GET_RT(mips));
-			PPC_SET_RA    (ppc,  MIPS_GET_RT(mips));
-			PPC_SET_IMMED (ppc, (MIPS_GET_RT(mips)*8+4));
-			set_next_dst(ppc);
-			return CONVERT_SUCCESS;
-		} else return CONVERT_ERROR;
-	case MIPS_FRMT_CFC:
-		return CONVERT_ERROR;
-	case MIPS_FRMT_MTC:
-		if(z == 0){
-#ifdef INTERPRET_COP0
-			genCallInterp(mips);
-			return INTERPRETED;
-#else
-			return CONVERT_ERROR;
-#endif
-		} else if(z == 1){
-			// move	r0, rd
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDI);
-			PPC_SET_RA    (ppc, MIPS_GET_RT(mips));
-			set_next_dst(ppc);
-			// lis	rd, temp@ha(0)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-			PPC_SET_RD    (ppc, MIPS_GET_RT(mips));
-			PPC_SET_IMMED (ppc, (unsigned int)&temp>>16);
-			set_next_dst(ppc);
-			// la	rd, temp@l(rd)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-			PPC_SET_RD    (ppc, MIPS_GET_RT(mips));
-			PPC_SET_RA    (ppc, MIPS_GET_RT(mips));
-			PPC_SET_IMMED (ppc, (unsigned int)&temp);
-			// stw	r0, 0(rd)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_STW);
-			PPC_SET_RD    (ppc, 0);
-			PPC_SET_RA    (ppc, MIPS_GET_RT(mips));
-			set_next_dst(ppc);
-			// lfs	fs, 0(rd)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_LFS);
-			PPC_SET_RD    (ppc, MIPS_GET_FS(mips));
-			PPC_SET_RA    (ppc, MIPS_GET_RT(mips));
-			set_next_dst(ppc);
-			// move	rd, r0 (mtctr, mfctr)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-			PPC_SET_FUNC  (ppc, PPC_FUNC_MTSPR);
-			PPC_SET_RD    (ppc, 0);
-			PPC_SET_SPR   (ppc, 0x120);
-			set_next_dst(ppc);
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-			PPC_SET_FUNC  (ppc, PPC_FUNC_MFSPR);
-			PPC_SET_RD    (ppc, MIPS_GET_RT(mips));
-			PPC_SET_SPR   (ppc, 0x120);
-			set_next_dst(ppc);
-			// andi	r0, r0, 0
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ANDI);
-			set_next_dst(ppc);
-			return CONVERT_SUCCESS;
-		} else
-			return CONVERT_ERROR;
-	case MIPS_FRMT_DMTC:
-		if(z == 1){
-			// temp designates which register to hold the reg addr
-			temp = (MIPS_GET_RT(mips) == 1) ? 2 : 1;
-			// mtctr r1
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-			PPC_SET_FUNC  (ppc, PPC_FUNC_MTSPR);
-			PPC_SET_RD    (ppc, temp);
-			PPC_SET_SPR   (ppc, 0x120);
-			set_next_dst(ppc);
-			// lis	r1, reg@ha(0)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-			PPC_SET_RD    (ppc, temp);
-			PPC_SET_IMMED (ppc, (unsigned int)reg>>16);
-			set_next_dst(ppc);
-			// la	r1, reg@l(r1)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-			PPC_SET_RD    (ppc, temp);
-			PPC_SET_RA    (ppc, temp);
-			PPC_SET_IMMED (ppc, (unsigned int)reg);
-			set_next_dst(ppc);
-			// stw	ra, ra*8+4(r1)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_STW);
-			PPC_SET_RD    (ppc, MIPS_GET_RT(mips));
-			PPC_SET_RA    (ppc, temp);
-			PPC_SET_IMMED (ppc, (MIPS_GET_RT(mips)*8 + 4));
-			set_next_dst(ppc);
-			// lfd	fd, ra*8(r1)
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_LFD);
-			PPC_SET_RD    (ppc, MIPS_GET_FS(mips));
-			PPC_SET_RA    (ppc, temp);
-			PPC_SET_IMMED (ppc, (MIPS_GET_RT(mips)*8));
-			set_next_dst(ppc);
-			// mfctr r1
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-			PPC_SET_FUNC  (ppc, PPC_FUNC_MFSPR);
-			PPC_SET_RD    (ppc, temp);
-			PPC_SET_SPR   (ppc, 0x120);
-			set_next_dst(ppc);
-			return CONVERT_SUCCESS;
-		} else return CONVERT_ERROR;		
-	case MIPS_FRMT_CTC:
-		return CONVERT_ERROR;
-	case MIPS_FRMT_BC:
-		if(z == 1)
-			switch((mips >> 16) & 0x3){
-			case 3: //bczfl
-				// Likely branches skip the delay slot if they're not taken
-				// b[!cond] <past delay & branch>
-				ppc = NEW_PPC_INSTR();
-				PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-				PPC_SET_BD(ppc, (peek_next_src() == 0) ? 2 : 3); // past delay & branch
-				PPC_SET_BO(ppc, 0xc); // !cond
-				PPC_SET_BI(ppc, (20 + MIPS_GET_CC(mips)));     // Check cc
-				set_next_dst(ppc);
-				ppc = NEW_PPC_INSTR();
-			case 0: //bczf
-				temp2 = (int)get_curr_dst();
-				check_delaySlot();
-				temp2 = (int)get_curr_dst() - temp2;
-#ifdef INTERPRET_BCZF
-				// b[!cond] <past delay & jumpto>
-				ppc = NEW_PPC_INSTR();
-				PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-				PPC_SET_BD(ppc, (JUMPTO_OFF_SIZE+1+temp2)); // past delay & jumpto
-				PPC_SET_BO(ppc, 0xc); // !cond
-				PPC_SET_BI(ppc, (20 + MIPS_GET_CC(mips)));     // Check cc
-				set_next_dst(ppc);
-				genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
-#else
-				// temp is used for is_out
-				temp = 0;
-				if(is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
-					temp = 1;
-					// Allocate space for jumping out, 4 instrs
-					set_next_dst(0);
-					set_next_dst(0);
-					set_next_dst(0);
-					set_next_dst(0);
-				}
-				PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-				PPC_SET_BD(ppc, add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, temp));
-				PPC_SET_BO(ppc, 0x4);  // Test if cc is 1 or 0
-				PPC_SET_BI(ppc, (20 + MIPS_GET_CC(mips)));  // Check cc
-				set_next_dst(ppc);
-				// Add space to zero r0 if its not taken
-				if(temp){
-					PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-					set_next_dst(ppc);
-				}
-#endif
-				// If there's something in the delay slot, it will also be after the branch
-				//   so we must skip over it so its not done twice if don't branch
-				if(temp2){
-					ppc = NEW_PPC_INSTR();
-					PPC_SET_OPCODE(ppc, PPC_OPCODE_B);
-					PPC_SET_LI    (ppc, ((temp2>>2)+1));
-					set_next_dst(ppc);
-				}
-				
-				return CONVERT_SUCCESS;
-			case 2: //bcztl
-				// Likely branches skip the delay slot if they're not taken
-				// b[!cond] <past delay & branch>
-				ppc = NEW_PPC_INSTR();
-				PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-				PPC_SET_BD(ppc, (peek_next_src() == 0) ? 2 : 3); // past delay & branch
-				PPC_SET_BO(ppc, 0x4); // !cond
-				PPC_SET_BI(ppc, (20 + MIPS_GET_CC(mips)));     // Check cc
-				set_next_dst(ppc);
-				ppc = NEW_PPC_INSTR();
-			case 1: //bczt
-				temp2 = (int)get_curr_dst();
-				check_delaySlot();
-				temp2 = (int)get_curr_dst() - temp2;
-#ifdef INTERPRET_BCZT
-				// b[!cond] <past delay & jumpto>
-				ppc = NEW_PPC_INSTR();
-				PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-				PPC_SET_BD(ppc, (JUMPTO_OFF+1+temp2)); // past delay & jumpto
-				PPC_SET_BO(ppc, 0x4); // !cond
-				PPC_SET_BI(ppc, (20 + MIPS_GET_CC(mips)));     // Check cc
-				set_next_dst(ppc);
-				genJumpTo(signExtend(MIPS_GET_IMMED(mips),16), JUMPTO_OFF);
-#else
-				// temp is used for is_out
-				temp = 0;
-				if(is_j_out(signExtend(MIPS_GET_IMMED(mips),16), 0)){
-					temp = 1;
-					// Allocate space for jumping out, 4 instrs
-					set_next_dst(0);
-					set_next_dst(0);
-					set_next_dst(0);
-					set_next_dst(0);
-				}
-				PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-				PPC_SET_BD(ppc, add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, temp));
-				PPC_SET_BO(ppc, 0xc);  // Test if cc is 1 or 0
-				PPC_SET_BI(ppc, (20 + MIPS_GET_CC(mips)));  // Check cc
-				set_next_dst(ppc);
-				// Add space to zero r0 if its not taken
-				if(temp){
-					PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-					set_next_dst(ppc);
-				}
-#endif
-				// If there's something in the delay slot, it will also be after the branch
-				//   so we must skip over it so its not done twice if don't branch
-				if(temp2){
-					ppc = NEW_PPC_INSTR();
-					PPC_SET_OPCODE(ppc, PPC_OPCODE_B);
-					PPC_SET_LI    (ppc, ((temp2>>2)+1));
-					set_next_dst(ppc);
-				}
-				
-				return CONVERT_SUCCESS;
-			}
-		else
-			return CONVERT_ERROR;
-	case MIPS_FRMT_COP1:
-		if(z == 1)
-			return convert_FP(mips, PRECISION_SINGLE);
-		else if(z == 0) // TLB instructions
-			switch(MIPS_GET_FUNC(mips)){
-			case MIPS_FUNC_TLBR:
-			case MIPS_FUNC_TLBWI:
-			case MIPS_FUNC_TLBWR:
-			case MIPS_FUNC_TLBP:
-			case MIPS_FUNC_ERET:
-			case MIPS_FUNC_DERET:
-#ifdef INTERPRET_COP0
-				genCallInterp(mips);
-				return INTERPRETED;
-#else
-				return CONVERT_ERROR;
-#endif
-			default:
-				return CONVERT_ERROR;
-			}
-		else
-			return CONVERT_ERROR;
-	case MIPS_FRMT_COP2:
-		if(z == 1)
-			return convert_FP(mips, PRECISION_DOUBLE);
-		else      
-			return CONVERT_ERROR;
-	case MIPS_FRMT_COP3:
-		if(z == 1)
-			return convert_FP(mips, PRECISION_WORD);
-		else
-			return CONVERT_ERROR;
-	case MIPS_FRMT_COP4:
-		if(z == 1)
-			return convert_FP(mips, PRECISION_LONG);
-		else
-			return CONVERT_ERROR;
-		
-	default:
-		return CONVERT_ERROR;
-	}
 }
 
-#define CONVERT_FPRS(ppc, mips) do { \
-        PPC_SET_RD    (ppc, MIPS_GET_FD(mips)); \
-	PPC_SET_RA    (ppc, MIPS_GET_FS(mips)); \
-	PPC_SET_RB    (ppc, MIPS_GET_FT(mips)); } while(0)
-
-static int convert_FP(MIPS_instr mips, int precision){
-	PowerPC_instr ppc = NEW_PPC_INSTR();
-	
-	// if(!fpu_in_use){ fp_restore(); }
-#if 0
-	// mtctr r1
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-	PPC_SET_FUNC  (ppc, PPC_FUNC_MTSPR);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_SPR   (ppc, 0x120);
-	set_next_dst(ppc);
-	// lis r1, fpu_in_use@ha(0)
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_IMMED (ppc, ((int)&fpu_in_use)>>16);
-	set_next_dst(ppc);
-	// li r1, fpu_in_use@l(r1)
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_RA    (ppc, 1);
-	PPC_SET_IMMED (ppc, ((int)&fpu_in_use));
-	set_next_dst(ppc);
-	// lwz r0, 0(r1)
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_LWZ);
-	PPC_SET_RA    (ppc, 1);
-	set_next_dst(ppc);
-	// cmpi rt, 0
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_CMPI);
-	PPC_SET_RA    (ppc, 0);
-	PPC_SET_IMMED (ppc, 0);
-	PPC_SET_CRF   (ppc, 7); // Use CR7
-	set_next_dst(ppc);
-	// li r0, 0
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_ANDI);
-	set_next_dst(ppc);
-	// mfctr r1
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-	PPC_SET_FUNC  (ppc, PPC_FUNC_MFSPR);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_SPR   (ppc, 0x120);
-	set_next_dst(ppc);
-	// bne <past fp_restore>
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-	PPC_SET_BD(ppc, 4);
-	PPC_SET_BO(ppc, 0xc);  // Test if CR is 1
-	PPC_SET_BI(ppc, 30);  // Check CR bit 30 (CR7, EQ FIELD)
-	set_next_dst(ppc);
-	// mflr
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-	PPC_SET_FUNC  (ppc, PPC_FUNC_MFSPR);
-	PPC_SET_RD    (ppc, MIPS_REG_LR);
-	PPC_SET_SPR   (ppc, 0x100);
-	set_next_dst(ppc);
-	// bl <fp_restore>
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_B);
-	PPC_SET_BD(ppc, ((int)&fp_restore)>>2);
-	PPC_SET_LK(ppc, 1);
-	PPC_SET_AA(ppc, 1);
-	set_next_dst(ppc);
-	// mtlr
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-	PPC_SET_FUNC  (ppc, PPC_FUNC_MTSPR);
-	PPC_SET_RD    (ppc, MIPS_REG_LR);
-	PPC_SET_SPR   (ppc, 0x100);
-	set_next_dst(ppc);
+static int D(MIPS_instr mips){
+#ifdef INTERPRET_FP
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP
+	// TODO: double-precision FP
+	return CONVERT_ERROR;
 #endif
-	
-	// FIXME: We might have an issue if they try to do say add.w or add.l
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_FPD);
-	
-	switch(MIPS_GET_FUNC(mips)){
-	
-	case MIPS_FUNC_ADD_:
-		PPC_SET_FUNC(ppc, PPC_FUNC_FADD);
-		CONVERT_FPRS(ppc, mips);
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_SUB_:
-		PPC_SET_FUNC(ppc, PPC_FUNC_FSUB);
-		CONVERT_FPRS(ppc, mips);
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_MUL_:
-		PPC_SET_FUNC(ppc, PPC_FUNC_FMUL);
-		PPC_SET_RD  (ppc, MIPS_GET_FD(mips));
-		PPC_SET_RA  (ppc, MIPS_GET_FS(mips));
-		PPC_SET_RC  (ppc, MIPS_GET_FT(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_DIV_:
-		PPC_SET_FUNC(ppc, PPC_FUNC_FDIV);
-		CONVERT_FPRS(ppc, mips);
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_SQRT_:
-		PPC_SET_FUNC(ppc, PPC_FUNC_FSQRT);
-		PPC_SET_RD  (ppc, MIPS_GET_FD(mips));
-		PPC_SET_RB  (ppc, MIPS_GET_FS(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_ABS_:
-		PPC_SET_FUNC(ppc, PPC_FUNC_FABS);
-		PPC_SET_RD  (ppc, MIPS_GET_FD(mips));
-		PPC_SET_RB  (ppc, MIPS_GET_FS(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_MOV_:
-		PPC_SET_FUNC(ppc, PPC_FUNC_FMR);
-		PPC_SET_RD  (ppc, MIPS_GET_FD(mips));
-		PPC_SET_RB  (ppc, MIPS_GET_FS(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_NEG_:
-		PPC_SET_FUNC(ppc, PPC_FUNC_FNEG);
-		PPC_SET_RD  (ppc, MIPS_GET_FD(mips));
-		PPC_SET_RB  (ppc, MIPS_GET_FS(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	// Rounding instructions set rounding mode then round
-	case MIPS_FUNC_ROUND_W_:
-		PPC_SET_FUNC  (ppc, PPC_FUNC_MTFSB0);
-		PPC_SET_RD    (ppc, 30);
-		set_next_dst  (ppc);
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_FPD);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_MTFSB0);
-		PPC_SET_RD    (ppc, 31);
-		set_next_dst(ppc);
-		
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_FPD);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_FCTIW);
-		PPC_SET_RD    (ppc, MIPS_GET_FD(mips));
-		PPC_SET_RB    (ppc, MIPS_GET_FS(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_ROUND_L_:
-		PPC_SET_FUNC  (ppc, PPC_FUNC_MTFSB0);
-		PPC_SET_RD    (ppc, 30);
-		set_next_dst  (ppc);
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_FPD);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_MTFSB0);
-		PPC_SET_RD    (ppc, 31);
-		set_next_dst(ppc);
-		
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_FPD);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_FCTID);
-		PPC_SET_RD    (ppc, MIPS_GET_FD(mips));
-		PPC_SET_RB    (ppc, MIPS_GET_FS(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_FLOOR_W_:
-		PPC_SET_FUNC  (ppc, PPC_FUNC_MTFSB1);
-		PPC_SET_RD    (ppc, 30);
-		set_next_dst(ppc);
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_FPD);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_MTFSB1);
-		PPC_SET_RD    (ppc, 31);
-		set_next_dst(ppc);
-		
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_FUNC(ppc, PPC_FUNC_FCTIW);
-		PPC_SET_RD  (ppc, MIPS_GET_FD(mips));
-		PPC_SET_RB  (ppc, MIPS_GET_FS(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_FLOOR_L_:
-		PPC_SET_FUNC  (ppc, PPC_FUNC_MTFSB1);
-		PPC_SET_RD    (ppc, 30);
-		set_next_dst(ppc);
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_FPD);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_MTFSB1);
-		PPC_SET_RD    (ppc, 31);
-		set_next_dst(ppc);
-		
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_FPD);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_FCTID);
-		PPC_SET_RD    (ppc, MIPS_GET_FD(mips));
-		PPC_SET_RB    (ppc, MIPS_GET_FS(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_TRUNC_W_:
-		PPC_SET_FUNC(ppc, PPC_FUNC_FCTIWZ);
-		PPC_SET_RD  (ppc, MIPS_GET_FD(mips));
-		PPC_SET_RB  (ppc, MIPS_GET_FS(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_TRUNC_L_:
-		PPC_SET_FUNC(ppc, PPC_FUNC_FCTIDZ);
-		PPC_SET_RD  (ppc, MIPS_GET_FD(mips));
-		PPC_SET_RB  (ppc, MIPS_GET_FS(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_CEIL_W_:
-		PPC_SET_FUNC  (ppc, PPC_FUNC_MTFSB1);
-		PPC_SET_RD    (ppc, 30);
-		set_next_dst(ppc);
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_FPD);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_MTFSB0);
-		PPC_SET_RD    (ppc, 31);
-		set_next_dst(ppc);
-		
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_FPD);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_FCTIW);
-		PPC_SET_RD    (ppc, MIPS_GET_FD(mips));
-		PPC_SET_RB    (ppc, MIPS_GET_FS(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_CEIL_L_:
-		PPC_SET_FUNC  (ppc, PPC_FUNC_MTFSB1);
-		PPC_SET_RD    (ppc, 30);
-		set_next_dst(ppc);
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_FPD);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_MTFSB0);
-		PPC_SET_RD    (ppc, 31);
-		set_next_dst(ppc);
-		
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_FPD);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_FCTID);
-		PPC_SET_RD    (ppc, MIPS_GET_FD(mips));
-		PPC_SET_RB    (ppc, MIPS_GET_FS(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_MOV__:
-		// movt.f/movf.f
-		// beq <past addi>
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-		PPC_SET_BD(ppc, 2);
-		PPC_SET_BO(ppc, (mips&0x10000) ? 0xc : 0x4); // Test if cc is t/f
-		PPC_SET_BI(ppc, (20 + MIPS_GET_CC(mips)));   // Check cc (CR5/6)
-		set_next_dst(ppc);
-		// fmr fd, fs
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_FPD);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_FMR);
-		PPC_SET_RD    (ppc, MIPS_GET_FD(mips));
-		PPC_SET_RB    (ppc, MIPS_GET_FS(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_MOVZ_:
-	case MIPS_FUNC_MOVN_:
-		// cmpi rt, 0
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_CMPI);
-		PPC_SET_RA    (ppc, MIPS_GET_RT(mips));
-		PPC_SET_IMMED (ppc, 0);
-		PPC_SET_CRF   (ppc, 7); // Use CR7
-		set_next_dst(ppc);
-		// bne <past addi>
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_BC);
-		PPC_SET_BD(ppc, 2);
-		PPC_SET_BO(ppc, (MIPS_GET_FUNC(mips) == MIPS_FUNC_MOVZ)
-		                 ? 0xc : 0x4);
-		PPC_SET_BI(ppc, 30);  // Check CR bit 30 (CR7, EQ FIELD)
-		set_next_dst(ppc);
-		// fmr fd, fs
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_FPD);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_FMR);
-		PPC_SET_RD    (ppc, MIPS_GET_FD(mips));
-		PPC_SET_RB    (ppc, MIPS_GET_FS(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_CVT_S_:
-	case MIPS_FUNC_CVT_D_:
-		// It shouldn't matter what precision float we're in
-		if(precision == PRECISION_SINGLE || precision == PRECISION_DOUBLE)
-			return CONVERT_SUCCESS;
-		PPC_SET_FUNC(ppc, PPC_FUNC_FCFID);
-		PPC_SET_RD  (ppc, MIPS_GET_FD(mips));
-		PPC_SET_RB  (ppc, MIPS_GET_FS(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_CVT_W_:
-		PPC_SET_FUNC(ppc, PPC_FUNC_FCTIWZ);
-		PPC_SET_RD  (ppc, MIPS_GET_FD(mips));
-		PPC_SET_RB  (ppc, MIPS_GET_FS(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_CVT_L_:
-		PPC_SET_FUNC(ppc, PPC_FUNC_FCTIDZ);
-		PPC_SET_RD  (ppc, MIPS_GET_FD(mips));
-		PPC_SET_RB  (ppc, MIPS_GET_FS(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	// -- Floating Point Compare instructions --
-	// Note: The emulator uses cr bits 20-27 for cc 0-7
-	case MIPS_FUNC_C_SF_: // Signalling False: F F F F
-	case MIPS_FUNC_C_F_:  // False:            F F F F
-		// Always evaluate F
-		// Clear the cc bit
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_XL);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_CRXOR);
-		PPC_SET_RD    (ppc, (MIPS_GET_CC(mips) + 20));
-		PPC_SET_RA    (ppc, (MIPS_GET_CC(mips) + 20));
-		PPC_SET_RB    (ppc, (MIPS_GET_CC(mips) + 20));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_C_NGLE_: // Not GT + LT + EQ: F F F T
-	case MIPS_FUNC_C_UN_: //   Unordered: F F F T
-		PPC_SET_FUNC(ppc, PPC_FUNC_FCMPU);
-		PPC_SET_RA  (ppc, MIPS_GET_FS(mips));
-		PPC_SET_RB  (ppc, MIPS_GET_FT(mips));
-		PPC_SET_CRF (ppc, 1);
-		set_next_dst(ppc);
-		// cr arithmetic
-		// Clear the cc bit
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_XL);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_CRXOR);
-		PPC_SET_RD    (ppc, (MIPS_GET_CC(mips) + 20));
-		PPC_SET_RA    (ppc, (MIPS_GET_CC(mips) + 20));
-		PPC_SET_RB    (ppc, (MIPS_GET_CC(mips) + 20));
-		set_next_dst(ppc);
-		// Set the cc bit with the un bit
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_XL);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_CROR);
-		PPC_SET_RD    (ppc, (MIPS_GET_CC(mips) + 20));
-		PPC_SET_RA    (ppc, (MIPS_GET_CC(mips) + 20));
-		PPC_SET_RB    (ppc, 7); // unordered bit of CR-1
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_C_NGL_: // Not GT + LT:   F F T T
-	case MIPS_FUNC_C_SEQ_: // Signalling EQ: F F T F
-	case MIPS_FUNC_C_EQ_:  // Equals:        F F T F
-		PPC_SET_FUNC(ppc, PPC_FUNC_FCMPU);
-		PPC_SET_RA  (ppc, MIPS_GET_FS(mips));
-		PPC_SET_RB  (ppc, MIPS_GET_FT(mips));
-		PPC_SET_CRF (ppc, 1);
-		set_next_dst(ppc);
-		// cr arithmetic
-		// Clear the cc bit
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_XL);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_CRXOR);
-		PPC_SET_RD    (ppc, (MIPS_GET_CC(mips) + 20));
-		PPC_SET_RA    (ppc, (MIPS_GET_CC(mips) + 20));
-		PPC_SET_RB    (ppc, (MIPS_GET_CC(mips) + 20));
-		set_next_dst(ppc);
-		// Set the cc bit with the eq bit
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_XL);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_CROR);
-		PPC_SET_RD    (ppc, (MIPS_GET_CC(mips) + 20));
-		PPC_SET_RA    (ppc, (MIPS_GET_FUNC(mips) == MIPS_FUNC_C_NGL_) ?
-		                       7 : (MIPS_GET_CC(mips) + 20) ); // Check unordered for NGL
-		PPC_SET_RB    (ppc, 6); // EQ bit of CR-1
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_C_ULT_: // UN + LT:     T F F T
-	case MIPS_FUNC_C_NGE_: // Not GT + EQ: T F F T
-	case MIPS_FUNC_C_OLT_: // Ordered LT:  T F F F
-	case MIPS_FUNC_C_LT_:  // LT:          T F F F
-		PPC_SET_FUNC(ppc, PPC_FUNC_FCMPU);
-		PPC_SET_RA  (ppc, MIPS_GET_FS(mips));
-		PPC_SET_RB  (ppc, MIPS_GET_FT(mips));
-		PPC_SET_CRF (ppc, 1);
-		set_next_dst(ppc);
-		// cr arithmetic
-		// Clear the cc bit
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_XL);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_CRXOR);
-		PPC_SET_RD    (ppc, (MIPS_GET_CC(mips) + 20));
-		PPC_SET_RA    (ppc, (MIPS_GET_CC(mips) + 20));
-		PPC_SET_RB    (ppc, (MIPS_GET_CC(mips) + 20));
-		set_next_dst(ppc);
-		// Set the cc bit with the lt bit
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_XL);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_CROR);
-		PPC_SET_RD    (ppc, (MIPS_GET_CC(mips) + 20));
-		PPC_SET_RA    (ppc, (MIPS_GET_FUNC(mips) == MIPS_FUNC_C_NGE_
-		                     || MIPS_GET_FUNC(mips) == MIPS_FUNC_C_ULT_) ?
-		                       7 : (MIPS_GET_CC(mips) + 20) ); // Check unordered for NGE
-		PPC_SET_RB    (ppc, 4); // LT bit of CR-1
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS; 
-	case MIPS_FUNC_C_ULE_: // UN + LT + EQ: T F T T
-	case MIPS_FUNC_C_NGT_: // Not GT:       T F T T
-	case MIPS_FUNC_C_OLE_: // Unordered LE: T F T F
-	case MIPS_FUNC_C_LE_:  // LT + EQ:      T F T F
-		PPC_SET_FUNC(ppc, PPC_FUNC_FCMPU);
-		PPC_SET_RA  (ppc, MIPS_GET_FS(mips));
-		PPC_SET_RB  (ppc, MIPS_GET_FT(mips));
-		PPC_SET_CRF (ppc, 1);
-		set_next_dst(ppc);
-		// cr arithmetic
-		// Clear the cc bit
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_XL);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_CRXOR);
-		PPC_SET_RD    (ppc, (MIPS_GET_CC(mips) + 20));
-		PPC_SET_RA    (ppc, (MIPS_GET_CC(mips) + 20));
-		PPC_SET_RB    (ppc, (MIPS_GET_CC(mips) + 20));
-		set_next_dst(ppc);
-		// Set the cc bit with the lt + eq bits
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_XL);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_CROR);
-		PPC_SET_RD    (ppc, (MIPS_GET_CC(mips) + 20));
-		PPC_SET_RA    (ppc, 6); // EQ bit of CR-1
-		PPC_SET_RB    (ppc, 4); // LT bit of CR-1
-		set_next_dst(ppc);
-		if(MIPS_GET_FUNC(mips) == MIPS_FUNC_C_NGT_
-		   || MIPS_GET_FUNC(mips) == MIPS_FUNC_C_ULE_){
-			// If this is NGT, we have to check whether its unordered
-			ppc = NEW_PPC_INSTR();
-			PPC_SET_OPCODE(ppc, PPC_OPCODE_XL);
-			PPC_SET_FUNC  (ppc, PPC_FUNC_CROR);
-			PPC_SET_RD    (ppc, (MIPS_GET_CC(mips) + 20));
-			PPC_SET_RA    (ppc, (MIPS_GET_CC(mips) + 20));
-			PPC_SET_RB    (ppc, 7); // UN bit of CR-1
-			set_next_dst(ppc);
-		}
-		return CONVERT_SUCCESS; 
-	default:
-		return CONVERT_ERROR;
-	}
 }
 
-static int convert_M(MIPS_instr mips){
-	PowerPC_instr ppc = NEW_PPC_INSTR();
-	switch(MIPS_GET_FUNC(mips)){
-	
-	case MIPS_FUNC_MADD:
-		hi_instr_count = lo_instr_count = 0;
-#ifdef INTERPRET_MADD
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		return CONVERT_ERROR;
+static int W(MIPS_instr mips){
+#ifdef INTERPRET_FP
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP
+	// TODO: integer FP
+	return CONVERT_ERROR;
 #endif
-	case MIPS_FUNC_MADDU:
-		hi_instr_count = lo_instr_count = 0;
-#ifdef INTERPRET_MADDU
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		return CONVERT_ERROR;
-#endif
-	case MIPS_FUNC_MUL:
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_MULLW);
-		PPC_SET_RD    (ppc, MIPS_GET_RD(mips));
-		PPC_SET_RA    (ppc, MIPS_GET_RA(mips));
-		PPC_SET_RB    (ppc, MIPS_GET_RB(mips));
-		set_next_dst  (ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_MSUB:
-		hi_instr_count = lo_instr_count = 0;
-#ifdef INTERPRET_MSUB
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		return CONVERT_ERROR;
-#endif
-	case MIPS_FUNC_MSUBU:
-		hi_instr_count = lo_instr_count = 0;
-#ifdef INTERPRET_MSUBU
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		return CONVERT_ERROR;
-#endif
-	case MIPS_FUNC_CLZ:
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_CNTLZW);
-		PPC_SET_RD    (ppc, MIPS_GET_RS(mips));
-		PPC_SET_RA    (ppc, MIPS_GET_RD(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-	case MIPS_FUNC_CLO:
-#ifdef INTERPRET_CLO
-		genCallInterp(mips);
-		return INTERPRETED;
-#else
-		// neg
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_NEG);
-		PPC_SET_RD    (ppc, MIPS_GET_RD(mips));
-		PPC_SET_RA    (ppc, MIPS_GET_RS(mips));
-		set_next_dst(ppc);
-		// cntlzw
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-		PPC_SET_FUNC  (ppc, PPC_FUNC_CNTLZW);
-		PPC_SET_RD    (ppc, MIPS_GET_RD(mips));
-		PPC_SET_RA    (ppc, MIPS_GET_RD(mips));
-		set_next_dst(ppc);
-		return CONVERT_SUCCESS;
-#endif
-	
-	default:
-		return CONVERT_ERROR;
-	}
 }
 
-//This call no longer clobbers r1
+static int L(MIPS_instr mips){
+#ifdef INTERPRET_FP
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP
+	// TODO: long-integer FP
+	return CONVERT_ERROR;
+#endif
+}
+
+static int (*gen_cop1[32])(MIPS_instr) =
+{
+   MFC1, DMFC1, CFC1, NI, MTC1, DMTC1, CTC1, NI,
+   BC  , NI   , NI  , NI, NI  , NI   , NI  , NI,
+   S   , D    , NI  , NI, W   , L    , NI  , NI,
+   NI  , NI   , NI  , NI, NI  , NI   , NI  , NI
+};
+
+static int COP1(MIPS_instr mips){
+	return gen_cop1[MIPS_GET_RS(mips)](mips);
+}
+
+static int (*gen_ops[64])(MIPS_instr) =
+{
+   SPECIAL, REGIMM, J   , JAL  , BEQ , BNE , BLEZ , BGTZ ,
+   ADDI   , ADDIU , SLTI, SLTIU, ANDI, ORI , XORI , LUI  ,
+   COP0   , COP1  , NI  , NI   , BEQL, BNEL, BLEZL, BGTZL,
+   DADDI  , DADDIU, LDL , LDR  , NI  , NI  , NI   , NI   ,
+   LB     , LH    , LWL , LW   , LBU , LHU , LWR  , LWU  ,
+   SB     , SH    , SWL , SW   , SDL , SDR , SWR  , CACHE,
+   LL     , LWC1  , NI  , NI   , NI  , LDC1, NI   , LD   ,
+   SC     , SWC1  , NI  , NI   , NI  , SDC1, NI   , SD
+};
+
+
+
 static void genCallInterp(MIPS_instr mips){
 	PowerPC_instr ppc = NEW_PPC_INSTR();
-	// Move the dst address to ctr
-	unsigned int addr = (unsigned int)&decodeNInterpret;
-	
-	// mtctr r1
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-	PPC_SET_FUNC  (ppc, PPC_FUNC_MTSPR);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_SPR   (ppc, 0x120);
+	flushRegisters();
+	// Update the instruction count and pass it
+	GEN_ADDI(ppc, 5, DYNAREG_ICOUNT, get_instruction_count());
 	set_next_dst(ppc);
-	// lis r1, addr@ha(0)
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_IMMED (ppc, addr>>16);
+	GEN_ADDI(ppc, DYNAREG_ICOUNT, 0, 0);
 	set_next_dst(ppc);
-	// li r1, addr@l(r1)
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_RA    (ppc, 1);
-	PPC_SET_IMMED (ppc, addr);
+	// Pass in whether this instruction is in the delay slot
+	GEN_LI(ppc, 6, 0, isDelaySlot ? 1 : 0);
 	set_next_dst(ppc);
-	// mfctr r0
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-	PPC_SET_FUNC  (ppc, PPC_FUNC_MFSPR);
-	PPC_SET_RD    (ppc, 0);
-	PPC_SET_SPR   (ppc, 0x120);
+	// Save the lr
+	GEN_MFLR(ppc, 0);
 	set_next_dst(ppc);
-	// mtctr r1
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-	PPC_SET_FUNC  (ppc, PPC_FUNC_MTSPR);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_SPR   (ppc, 0x120);
+	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
 	set_next_dst(ppc);
-	// Store the instruction
-	// lis r1, mips@ha(0)
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_IMMED (ppc, mips>>16);
+#if 0
+	// Load the address of decodeNInterpret
+	GEN_LIS(ppc, 3, ((unsigned int)decodeNInterpret)>>16);
 	set_next_dst(ppc);
-	// li r1, mips@l(r1)
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_RA    (ppc, 1);
-	PPC_SET_IMMED (ppc, mips);
+	GEN_ORI(ppc, 3, 3, (unsigned int)decodeNInterpret);
 	set_next_dst(ppc);
-	
-	// xor r1, r0, r1
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-	PPC_SET_FUNC  (ppc, PPC_FUNC_XOR);
-	PPC_SET_RA    (ppc, 1);
-	PPC_SET_RD    (ppc, 0);
-	PPC_SET_RB    (ppc, 1);
+#endif
+	// Move the address of decodeNInterpret to ctr for a bctr
+	GEN_MTCTR(ppc, DYNAREG_INTERP);
 	set_next_dst(ppc);
-	
-	// xor r0, r1, r0
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-	PPC_SET_FUNC  (ppc, PPC_FUNC_XOR);
-	PPC_SET_RA    (ppc, 0);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_RB    (ppc, 0);
+	// Load our argument into r3 (mips)
+	GEN_LIS(ppc, 3, mips>>16);
 	set_next_dst(ppc);
-	
-	// xor r1, r0, r1
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-	PPC_SET_FUNC  (ppc, PPC_FUNC_XOR);
-	PPC_SET_RA    (ppc, 1);
-	PPC_SET_RD    (ppc, 0);
-	PPC_SET_RB    (ppc, 1);
+	GEN_ORI(ppc, 3, 3, mips);
 	set_next_dst(ppc);
-	
-	// Then save the lr
-	// mflr
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-	PPC_SET_FUNC  (ppc, PPC_FUNC_MFSPR);
-	PPC_SET_RD    (ppc, MIPS_REG_LR);
-	PPC_SET_SPR   (ppc, 0x100);
+	// Load the current PC as the second arg
+	GEN_LIS(ppc, 4, get_src_pc()>>16);
 	set_next_dst(ppc);
-	// Call the interpreter
-	// bctrl
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_XL);
-	PPC_SET_FUNC  (ppc, PPC_FUNC_BCCTR);
-	PPC_SET_BO    (ppc, 0x14);
-	PPC_SET_LK    (ppc, 1);
+	GEN_ORI(ppc, 4, 4, get_src_pc());
+	set_next_dst(ppc);
+	// Branch to decodeNInterpret
+	GEN_BCTRL(ppc);
 	set_next_dst(ppc);
 	// Restore the lr
-	// mtlr
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-	PPC_SET_FUNC  (ppc, PPC_FUNC_MTSPR);
-	PPC_SET_RD    (ppc, MIPS_REG_LR);
-	PPC_SET_SPR   (ppc, 0x100);
+	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
 	set_next_dst(ppc);
+	GEN_MTLR(ppc, 0);
+	set_next_dst(ppc);
+	// if decodeNInterpret returned an address
+	//   jumpTo it
+	GEN_CMPI(ppc, 3, 0, 6);
+	set_next_dst(ppc);
+#if 0
+	// TODO: It would be nice to re-enable this when possible
+	GEN_BNE(ppc, 6, add_jump(-1, 0, 1), 0, 0);
+	set_next_dst(ppc);
+#else
+	GEN_BEQ(ppc, 6, 2, 0, 0);
+	set_next_dst(ppc);
+	GEN_B(ppc, add_jump(-1, 1, 1), 0, 0);
+	set_next_dst(ppc);
+#endif
 }
 
 static void genJumpTo(unsigned int loc, unsigned int type){
 	PowerPC_instr ppc = NEW_PPC_INSTR();
-	unsigned int locReg = (type == JUMPTO_REG) ? loc : 0;
-	//mtctr	r1
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-	PPC_SET_FUNC  (ppc, PPC_FUNC_MTSPR);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_SPR   (ppc, 0x120);
-	set_next_dst(ppc);
-	// If we're jumping to an address, load it in r0
-	if(type != JUMPTO_REG){
+	
+	if(type == JUMPTO_REG){
+		// Load the register as the return value
+		GEN_LWZ(ppc, 3, loc*8+4, DYNAREG_REG);
+		set_next_dst(ppc);
+	} else {
+		// Calculate the destination address
 		loc <<= 2;
 		if(type == JUMPTO_OFF) loc += get_src_pc();
-		// lis	r1, loc@ha(0)
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-		PPC_SET_RD    (ppc, 1);
-		PPC_SET_IMMED (ppc, loc>>16);
+		else loc |= get_src_pc() & 0xf0000000;
+		// Load the address as the return value
+		GEN_LIS(ppc, 3, loc >> 16);
 		set_next_dst(ppc);
-		// la	r0, loc@l(r1)
-		ppc = NEW_PPC_INSTR();
-		PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-		PPC_SET_RD    (ppc, 1);
-		PPC_SET_RA    (ppc, locReg);
-		PPC_SET_IMMED (ppc, loc);
+		GEN_ORI(ppc, 3, 3, loc);
 		set_next_dst(ppc);
 	}
-	//lis	r1, emu_reg@ha(0)
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_IMMED (ppc, (unsigned int)emu_reg>>16);
-	set_next_dst(ppc);
-	//la	r1, emu_reg@l(r1)
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_RA    (ppc, 1);
-	PPC_SET_IMMED (ppc, (unsigned int)emu_reg);
-	set_next_dst(ppc);
-	//stw	RS, 3*4(r1)       // pass dest address as arg0
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_STW);
-	PPC_SET_RD    (ppc, locReg);
-	PPC_SET_RA    (ppc, 1);
-	PPC_SET_IMMED (ppc, 3*4);
-	set_next_dst(ppc);
-	//lis	r1, jump_to@ha(0)
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_IMMED (ppc, (unsigned int)jump_to>>16);
-	set_next_dst(ppc);
-	//la	r0, jump_to@l(r1)
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_RA    (ppc, 0);
-	PPC_SET_IMMED (ppc, (unsigned int)jump_to);
-	set_next_dst(ppc);
-	//lis	r1, &return_address@ha(0)
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_IMMED (ppc, (unsigned int)&return_address>>16);
-	set_next_dst(ppc);
-	//la	r1, &return_address@l(r1)
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_RA    (ppc, 1);
-	PPC_SET_IMMED (ppc, (unsigned int)&return_address);
-	set_next_dst(ppc);
-	//stw	r0, 0(r1) // return to jump_to(dest)
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_STW);
-	PPC_SET_RA    (ppc, 1);
-	set_next_dst(ppc);
-	//lis	r1, return_from_code@ha(0)
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_ADDIS);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_IMMED (ppc, (unsigned int)return_from_code>>16);
-	set_next_dst(ppc);
-	//la	r0, return_from_code@l(r1)
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_ORI);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_RA    (ppc, 0);
-	PPC_SET_IMMED (ppc, (unsigned int)return_from_code);
-	set_next_dst(ppc);
-	//mfctr	r1
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-	PPC_SET_FUNC  (ppc, PPC_FUNC_MFSPR);
-	PPC_SET_RD    (ppc, 1);
-	PPC_SET_SPR   (ppc, 0x120);
-	set_next_dst(ppc);
-	//mtctr	r0
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_X);
-	PPC_SET_FUNC  (ppc, PPC_FUNC_MTSPR);
-	PPC_SET_SPR   (ppc, 0x120);
-	set_next_dst(ppc);
-	//bctr		// return_from_code();
-	ppc = NEW_PPC_INSTR();
-	PPC_SET_OPCODE(ppc, PPC_OPCODE_XL);
-	PPC_SET_FUNC  (ppc, PPC_FUNC_BCCTR);
-	PPC_SET_BO    (ppc, 0x14);
+	
+	// Branch to the jump pad
+	GEN_B(ppc, add_jump(loc, 1, 1), 0, 0);
 	set_next_dst(ppc);
 }
 
@@ -2648,4 +2031,3 @@ static int mips_is_jump(MIPS_instr instr){
                   func == MIPS_RT_BLTZALL   ||
                   func == MIPS_RT_BGEZALL)));
 }
-

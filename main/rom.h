@@ -30,17 +30,11 @@
 #ifndef ROM_H
 #define ROM_H
 
-#include "../fileBrowser/fileBrowser.h"
-
-int rom_read(fileBrowser_file*);
-int fill_header(fileBrowser_file*);
-void calculateMD5(fileBrowser_file*, unsigned char digest[16]);
+int rom_read(const char *argv);
+int fill_header(const char *argv);
+void calculateMD5(const char *argv, unsigned char digest[16]);
 extern unsigned char *rom;
-#ifndef __PPC__
 extern int taille_rom;
-#else
-extern int rom_length;
-#endif
 
 typedef struct _rom_header
 {
@@ -70,7 +64,5 @@ typedef struct _rom_settings
    char MD5[33];
 } rom_settings;
 extern rom_settings ROM_SETTINGS;
-
-int init_byte_swap(unsigned int magicWord);
 
 #endif
