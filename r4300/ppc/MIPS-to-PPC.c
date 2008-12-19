@@ -24,6 +24,9 @@ static void genJumpTo(unsigned int loc, unsigned int type);
 static int inline mips_is_jump(MIPS_instr);
 void jump_to(unsigned int);
 
+// Infinite loop-breaker code
+static int interpretedLoop;
+
 // Register Mapping
 // r13 holds reg
 #define MIPS_REG_HI 32
@@ -146,6 +149,7 @@ static int mapRegister(int reg){
 void start_new_block(void){
 	invalidateRegisters();
 	nextLRUVal = 0;
+	interpretedLoop = 0;
 }
 void start_new_mapping(void){
 	flushRegisters();
@@ -164,6 +168,7 @@ unsigned int get_instruction_count(void){
 static int isDelaySlot;
 // This should be called before the jump is recompiled
 static inline int check_delaySlot(void){
+	interpretedLoop = 0; // Reset this variable for the next basic block
 	if(peek_next_src() == 0){ // MIPS uses 0 as a NOP
 		get_next_src();   // Get rid of the NOP
 		return 0;
@@ -326,6 +331,14 @@ static int NI(MIPS_instr mips){
 
 static int J(MIPS_instr mips){
 	PowerPC_instr  ppc;
+	
+	if(!interpretedLoop &&
+	   ((MIPS_GET_LI(mips) & 0x02ffffff) < (get_src_pc() & 0x02ffffff))){
+		// If we're jumping backwards without any calls to the
+		//   interpreter, call it here to check interrupts
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
 	
 	flushRegisters();
 	
@@ -1927,6 +1940,7 @@ static int (*gen_ops[64])(MIPS_instr) =
 
 static void genCallInterp(MIPS_instr mips){
 	PowerPC_instr ppc = NEW_PPC_INSTR();
+	interpretedLoop = 1;
 	flushRegisters();
 	// Update the instruction count and pass it
 	GEN_ADDI(ppc, 5, DYNAREG_ICOUNT, get_instruction_count());

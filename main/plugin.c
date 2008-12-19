@@ -260,6 +260,7 @@ void plugin_scan_directory(const char *directory)
 		  insert_plugin(liste_plugins, name, PluginInfo.Name,
 				handle, PluginInfo.Type, 0);
 	       }
+		printf("Loaded plugin '%s'\n", name);
 	  }
 	else
 	  printf("Couldn't load plugin '%s': %s\n", name, dlerror());

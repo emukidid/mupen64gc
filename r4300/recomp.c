@@ -1628,7 +1628,9 @@ static void RJ()
 	  }
 	//else if (dynacore) genj();
      }
-   else if (!interpcore && (target < dst_block->start || target >= dst_block->end || dst->addr == (dst_block->end-4)))
+   else if (!interpcore && !dynacore &&
+            (target < dst_block->start || target >= dst_block->end ||
+             dst->addr == (dst_block->end-4)))
      {
 	dst->ops = J_OUT;
 	//if (dynacore) genj_out();
