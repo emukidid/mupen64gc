@@ -27,5 +27,7 @@ unsigned int decodeNInterpret(MIPS_instr, unsigned int, unsigned int, int);
 #define invalid_code_set(page,invalid) invalid_code[page] = invalid
 #define invalid_code_get(page) (invalid_code[page])
 
+#define Count reg_cop0[9]
+
 #endif
 

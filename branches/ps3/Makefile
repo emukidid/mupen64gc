@@ -4,13 +4,15 @@ CC		=gcc
 CXX		=g++
 
 #CFLAGS		=-DX86 -O3 -mpentium -Wall -DEMU64_DEBUG
-CFLAGS		=-g -ffast-math -fno-strict-aliasing -Wall -pipe -DPPC_DYNAREC
+CFLAGS		=-g -fPIC -ffast-math -fno-strict-aliasing -Wall -pipe -DPPC_DYNAREC
 #CFLAGS		=-DX86 -O3 -mcpu=pentium -Wall -g -pg
 #CFLAGS		=-DX86 -Wall -pipe -g3 -DEMU64_DEBUG
 #CFLAGS		=-DX86 -Wall -pipe -g -DEMU64_DEBUG -DCOMPARE_CORE
 #CFLAGS		=-DX86 -Wall -pipe -g
 
 CXXFLAGS	=$(CFLAGS)
+
+LIB_DIR		=-L/usr/lib
 
 GL_PATH		=-I/usr/X11R6/include
 
@@ -346,13 +348,13 @@ glN64/F3DWRUS.o:		glN64/F3DWRUS.cpp
 				$(CXX) $(CFLAGS) -D__LINUX__  `sdl-config --cflags` -c -o $@ $<
 
 mupen64_nogui:	$(OBJ) $(OBJ_PPC) main/main.o main/gui_gtk/config.o
-		$(CC) $^ $(LIB) -Wl -L/usr/X11R6/lib `sdl-config --libs` -lpthread -ldl -o $@
+		$(CC) $^ $(LIB_DIR) $(LIB) -Wl -L/usr/X11R6/lib `sdl-config --libs` -lpthread -ldl -o $@
 		#strip --#strip-all $@
 
 ifneq ("$(shell grep VCR config.h)","\#define VCR_SUPPORT 1")
 
 mupen64:	$(OBJ) $(OBJ_GTK_GUI)
-		$(CC) $^ $(CFLAGS) $(LIB) -Wl,-export-dynamic $(GTK_LIBS) -L/usr/X11R6/lib `sdl-config --libs` -lGL -lpthread -ldl -o $@
+		$(CC) $^ $(CFLAGS) $(LIB) $(LIB_DIR) -Wl,-export-dynamic $(GTK_LIBS) -L/usr/X11R6/lib `sdl-config --libs` -lGL -lpthread -ldl -o $@
 		##strip --#strip-all $@
 
 else
@@ -367,35 +369,35 @@ mupen64_oldgui:	$(OBJ) $(OBJ_X86) main/main_gtk.o
 		#strip --#strip-all $@
 
 plugins/mupen64_input.so: $(OBJ_INPUT)
-			  $(CC) $^ -Wl -shared $(GTK_LIBS) -o $@
+			  $(CC) $(LIB_DIR) $^ -Wl -shared $(GTK_LIBS) -o $@
 			  #strip --#strip-all $@
 
 plugins/blight_input.so: $(OBJ_BLIGHT)
-			 $(CC) $^ -Wl -shared `sdl-config --libs` `freetype-config --libs` -o $@
+			 $(CC) $(LIB_DIR) $^ -Wl -shared `sdl-config --libs` `freetype-config --libs` -o $@
 			 #strip --#strip-all $@
 
 plugins/mupen64_hle_rsp_azimer.so: $(OBJ_RSPHLE)
-				   $(CXX) $^ -Wl -shared $(GTK_LIBS) -o $@
+				   $(CXX) $(LIB_DIR) $^ -Wl -shared $(GTK_LIBS) -o $@
 				   #strip --#strip-all $@
 
 plugins/dummyaudio.so:	$(OBJ_DUMMY)
-			$(CC) $^ -Wl -shared -o $@
+			$(CC) $(LIB_DIR) $^ -Wl -shared -o $@
 			#strip --#strip-all $@
 
 plugins/mupen64_audio.so:	$(OBJ_AUDIO)
-				$(CC) $(GTK_LIBS) -lpthread $^ -Wl -shared -o $@
+				$(CC) $(LIB_DIR) $(GTK_LIBS) -lpthread $^ -Wl -shared -o $@
 				#strip --#strip-all $@
 
 plugins/jttl_audio.so:	$(OBJ_JTTL)
-			$(CC) $^ -Wl -shared `sdl-config --libs` $(GTK_LIBS) -o $@
+			$(CC) $(LIB_DIR) $^ -Wl -shared `sdl-config --libs` $(GTK_LIBS) -o $@
 			#strip --#strip-all $@
 
 plugins/mupen64_soft_gfx.so:	$(OBJ_SOFT_GFX)
-				$(CXX) `sdl-config --libs` $^ -Wl -shared -o $@
+				$(CXX) $(LIB_DIR) `sdl-config --libs` $^ -Wl -shared -o $@
 				#strip --#strip-all $@
 
 plugins/glN64.so:	$(OBJ_GLN64)
-			$(CXX) $^ -Wl -shared $(GTK_LIBS) $(GTHREAD_LIBS) `sdl-config --libs` -lGL -o $@
+			$(CXX) $(LIB_DIR) $^ -Wl -shared $(GTK_LIBS) $(GTHREAD_LIBS) `sdl-config --libs` -lGL -o $@
 			#strip --#strip-all $@
 
 install:
