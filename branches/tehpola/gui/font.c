@@ -1,5 +1,5 @@
-/* 
-	font.c - font functions	
+/*
+	font functions	
 	modified by sepp256 to work as textures instead of writing to the xfb
 */
 
@@ -35,6 +35,25 @@ typedef struct
 //unsigned char* GXfontTexture;
 static unsigned char fontFont[ 0x40000 ] __attribute__((aligned(32)));
 
+//lowlevel Qoob Modchip disable
+void ipl_set_config(unsigned char c)
+{
+	volatile unsigned long* exi = (volatile unsigned long*)0xCC006800;
+	unsigned long val,addr;
+	addr=0xc0000000;
+	val = c << 24;
+	exi[0] = ((((exi[0]) & 0x405) | 256) | 48);	//select IPL
+	//write addr of IPL
+	exi[0 * 5 + 4] = addr;
+	exi[0 * 5 + 3] = ((4 - 1) << 4) | (1 << 2) | 1;
+	while (exi[0 * 5 + 3] & 1);
+	//write the ipl we want to send
+	exi[0 * 5 + 4] = val;
+	exi[0 * 5 + 3] = ((4 - 1) << 4) | (1 << 2) | 1;
+	while (exi[0 * 5 + 3] & 1);
+	
+	exi[0] &= 0x405;	//deselect IPL
+}
 /****************************************************************************
  * YAY0 Decoding
  ****************************************************************************/
@@ -129,10 +148,6 @@ void TF_I2toI4(unsigned char *dst, unsigned char *src, int xres, int yres)
 CHAR_INFO fontChars;
 extern void __SYS_ReadROM(void *buf,u32 len,u32 offset);
 
-#ifdef EMBEDDED_FONTS
-	#include "ARIAL.H"
-#endif
-
 void init_font(void)
 {
 	static unsigned char fontWork[ 0x20000 ] __attribute__((aligned(32)));
@@ -140,11 +155,10 @@ void init_font(void)
 
 	// dont read system rom fonts because this breaks on qoob modchip
 	memset(fontFont,0,0x3000);
-#ifdef EMBEDDED_FONTS
-	memcpy(&fontFont, &arial[0], ARIAL_LEN);
-#else
+	#ifndef WII
+	ipl_set_config(6);
+	#endif
 	__SYS_ReadROM(( unsigned char *)&fontFont,0x3000,0x1FCF00);
-#endif
 	yay0_decode((unsigned char *)&fontFont, (unsigned char *)&fontWork);
 	FONT_HEADER *fnt;
 
@@ -214,7 +228,7 @@ void write_font_init_GX(GXColor fontColor)
 
 	GX_InvalidateTexAll();
 	GX_InitTexObj(&fontTexObj, &fontFont, 512, 512, GX_TF_I4, GX_CLAMP, GX_CLAMP, GX_FALSE);
-	GX_LoadTexObj(&fontTexObj, GX_TEXMAP0);
+	GX_LoadTexObj(&fontTexObj, GX_TEXMAP1);
 
 	GX_SetTevColor(GX_TEVREG1,fontColor);
 	GX_SetTevKColor(GX_TEVPREV,fontColor);
@@ -223,7 +237,7 @@ void write_font_init_GX(GXColor fontColor)
 //	GX_SetTevKAlphaSel(GX_TEVSTAGE0,GX_TEV_KCSEL_K0_A);
 
 	GX_SetNumTevStages (1);
-	GX_SetTevOrder (GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0); // change to (u8) tile later
+	GX_SetTevOrder (GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP1, GX_COLOR0A0); // change to (u8) tile later
 	GX_SetTevColorIn (GX_TEVSTAGE0, GX_CC_C1, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
 //	GX_SetTevColorIn (GX_TEVSTAGE0, GX_CC_KONST, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
 	GX_SetTevColorOp (GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_ENABLE, GX_TEVPREV);
@@ -262,8 +276,8 @@ void write_font(int x, int y, char *string, float scale)
 		int i;
 		GX_Begin(GX_QUADS, GX_VTXFMT1, 4);
 		for (i=0; i<4; i++) {
-			int s = (i & 1) ^ ((i & 2) >> 1) ? fontChars.font_size[c] : 0;
-			int t = (i & 2) ? fontChars.fheight : 0;
+			int s = (i & 1) ^ ((i & 2) >> 1) ? fontChars.font_size[c] : 1;
+			int t = (i & 2) ? fontChars.fheight : 1;
 			float s0 = ((float) (fontChars.s[c] + s))/512;
 			float t0 = ((float) (fontChars.t[c] + t))/512;
 			s = (int) s * scale;
