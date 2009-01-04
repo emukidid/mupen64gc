@@ -24,8 +24,6 @@ Most of these shouldn't be major goals, but things we would like to see in the e
   
   * *Optimization:* In dynarec, try to keep track of constant values to simplify later operations on those values
   
-  * *Optimization:* In dynarec, all accesses to r0 should be replaced with a constant 0, thus allowing r0 to be used to hold some state (eg: isGCAddr for branches)
-  
   * *Optimization:* Reduce the size of ROM blocks to hopefully reduce thrashing on GC
 
   * *Optimization:* Use inline assembly code for loading byteswapped (and halfword swapped) ROM files
