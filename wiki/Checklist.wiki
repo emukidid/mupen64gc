@@ -14,7 +14,7 @@ Most of these shouldn't be major goals, but things we would like to see in the e
 
   * *Optimization:* Initialize the correct video mode for each ROM region (to achieve proper FPS)
   
-  * *Optimization:* Change some RSP code to utilize the DSP
+  * *Optimization:* Change some RSP code to utilize the DSP (maaaaaaybe later)
   
   * *Optimization:* In dynarec, eliminate redundant work on adjacent interpreted instructions
   
@@ -28,7 +28,11 @@ Most of these shouldn't be major goals, but things we would like to see in the e
   
   * *Optimization:* Reduce the size of ROM blocks to hopefully reduce thrashing on GC
 
-  * *Feature:* Save states
+  * *Optimization:* Use inline assembly code for loading byteswapped (and halfword swapped) ROM files
+
+  * *Feature:* ROM Information menu option
+
+  * *Feature:* Save states (done, might need more testing)
   
   * *Feature:* Widescreen and 480p support (NTSC 480p support now)
   
@@ -38,7 +42,7 @@ Most of these shouldn't be major goals, but things we would like to see in the e
   
   * *Feature:* Set preferred source for ROMs/saves (rather than setting every time)
   
-  * *Feature:* Save manager
+  * *Feature:* Save manager (not needed?)
   
   * *Feature:* Improved ROM browsing (icons, info, etc)
   
