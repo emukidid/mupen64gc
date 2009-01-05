@@ -27,6 +27,14 @@ void jump_to(unsigned int);
 // Infinite loop-breaker code
 static int interpretedLoop;
 
+// Number of instructions executed in current fragment
+static unsigned int fragment_instruction_count;
+unsigned int get_instruction_count(void){
+	unsigned int t = fragment_instruction_count;
+	fragment_instruction_count = 0;
+	return t;
+}
+
 // Register Mapping
 // r13 holds reg
 #define MIPS_REG_HI 32
@@ -153,14 +161,19 @@ void start_new_block(void){
 }
 void start_new_mapping(void){
 	flushRegisters();
-}
-
-// Number of instructions executed in current fragment
-static unsigned int fragment_instruction_count;
-unsigned int get_instruction_count(void){
-	unsigned int t = fragment_instruction_count;
-	fragment_instruction_count = 0;
-	return t;
+	// FIXME: Enabling the following code causes a bizarre failure
+	//          for no obvious reason
+#if 0
+	// Since we're entering a new mapping,
+	//   we need to ensure that the instruction counting is done properly
+	unsigned int icount = get_instruction_count();
+	if(icount){
+		PowerPC_instr ppc;
+		// Update the instruction count
+		GEN_ADDI(ppc, DYNAREG_ICOUNT, DYNAREG_ICOUNT, icount);
+		set_next_dst(ppc);
+	}
+#endif
 }
 
 // Variable to indicate whether the current recompiled instruction
@@ -497,6 +510,10 @@ static int ADDI(MIPS_instr mips){
 
 static int SLTI(MIPS_instr mips){
 	PowerPC_instr ppc;
+#ifdef INTERPRET_SLTI
+	genCallInterp(mips);
+	return INTERPRETED;
+#else
 	int rs = mapRegister( MIPS_GET_RS(mips) );
 	int rt = mapRegisterNew( MIPS_GET_RT(mips) );
 	// r0 = immed (sign extended)
@@ -519,10 +536,15 @@ static int SLTI(MIPS_instr mips){
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
+#endif
 }
 
 static int SLTIU(MIPS_instr mips){
 	PowerPC_instr ppc;
+#ifdef INTERPRET_SLTIU
+	genCallInterp(mips);
+	return INTERPRETED;
+#else
 	int rs = mapRegister( MIPS_GET_RS(mips) );
 	int rt = mapRegisterNew( MIPS_GET_RT(mips) );
 	// rt = immed
@@ -539,6 +561,7 @@ static int SLTIU(MIPS_instr mips){
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
+#endif
 }
 
 static int ANDI(MIPS_instr mips){
@@ -1581,6 +1604,10 @@ static int NOR(MIPS_instr mips){
 
 static int SLT(MIPS_instr mips){
 	PowerPC_instr ppc;
+#ifdef INTERPRET_SLT
+	genCallInterp(mips);
+	return INTERPRETED;
+#else
 	int rt = mapRegister( MIPS_GET_RT(mips) );
 	int rs = mapRegister( MIPS_GET_RS(mips) );
 	int rd = mapRegisterNew( MIPS_GET_RD(mips) );
@@ -1602,10 +1629,15 @@ static int SLT(MIPS_instr mips){
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
+#endif
 }
 
 static int SLTU(MIPS_instr mips){
-	PowerPC_instr ppc; 
+	PowerPC_instr ppc;
+#ifdef INTERPRET_SLTU
+	genCallInterp(mips);
+	return INTERPRETED;
+#else
 	int rt = mapRegister( MIPS_GET_RT(mips) );
 	int rs = mapRegister( MIPS_GET_RS(mips) );
 	int rd = mapRegisterNew( MIPS_GET_RD(mips) );
@@ -1620,6 +1652,7 @@ static int SLTU(MIPS_instr mips){
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
+#endif
 }
 
 static int TEQ(MIPS_instr mips){
