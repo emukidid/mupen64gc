@@ -89,13 +89,18 @@ void dynarec(unsigned int address){
 	}
 }
 
-unsigned int decodeNInterpret(MIPS_instr mips, unsigned int PC,
+unsigned int decodeNInterpret(MIPS_instr mips, unsigned int pc,
                               unsigned int count, int isDelaySlot){
 	instructionCount = count; // Update the value for the instruction count
 	delay_slot = isDelaySlot; // Make sure we set delay_slot properly
-	interp_addr = PC;
+	PC->addr = interp_addr = pc;
 	prefetch_opcode(mips);
 	interp_ops[MIPS_GET_OPCODE(mips)]();
-	return interp_addr != PC + 4 ? interp_addr : 0;
+	
+	// Check for interrupts
+	update_count();
+	if(next_interupt <= Count) gen_interupt();
+	
+	return interp_addr != pc + 4 ? interp_addr : 0;
 }
 

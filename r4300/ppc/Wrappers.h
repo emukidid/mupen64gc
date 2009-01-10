@@ -24,5 +24,7 @@ extern long long int reg_cop1_fgr_64[32];
 
 unsigned int decodeNInterpret(MIPS_instr, unsigned int, unsigned int, int);
 
+#define Count reg_cop0[9]
+
 #endif
 
