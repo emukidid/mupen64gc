@@ -103,7 +103,7 @@ void recompile_block(PowerPC_block* ppc_block){
 		// FIXME: The resize factor may not be optimal
 		//          maybe we can make a guess based on
 		//          how far along we are now
-		if(*code_length + 32 >= ppc_block->max_length)
+		if(*code_length + 128 >= ppc_block->max_length)
 			resizeCode(ppc_block, ppc_block->max_length * 3/2);
 		
 		if(isJmpDst[src-src_first]) start_new_mapping();
