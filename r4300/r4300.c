@@ -1493,7 +1493,7 @@ void update_count()
    else
      {
 #ifdef PPC_DYNAREC
-	Count += instructionCount;
+	Count += instructionCount * 2;
 	last_addr = interp_addr;
 #else	
 	if (PC->addr < last_addr)

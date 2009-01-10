@@ -5,6 +5,7 @@
    TODO: Create FP register mapping and recompile those
          If possible (and not too complicated), it would be nice to leave out
            the in-place delay slot which is skipped if it is not branched to
+         Optimize idle branches (generate a call to gen_interrupt)
  */
 
 #include <string.h>
@@ -33,6 +34,24 @@ unsigned int get_instruction_count(void){
 	unsigned int t = fragment_instruction_count;
 	fragment_instruction_count = 0;
 	return t;
+}
+
+// Variable to indicate whether the current recompiled instruction
+//   is a delay slot (which needs to have its registers flushed)
+static int isDelaySlot;
+// This should be called before the jump is recompiled
+static inline int check_delaySlot(void){
+	interpretedLoop = 0; // Reset this variable for the next basic block
+	++fragment_instruction_count;
+	if(peek_next_src() == 0){ // MIPS uses 0 as a NOP
+		get_next_src();   // Get rid of the NOP
+		return 0;
+	} else {
+		if(mips_is_jump(peek_next_src())) return CONVERT_WARNING;
+		isDelaySlot = 1;
+		convert(); // This just moves the delay slot instruction ahead of the branch
+		return 1;
+	}
 }
 
 // Register Mapping
@@ -161,9 +180,14 @@ void start_new_block(void){
 }
 void start_new_mapping(void){
 	flushRegisters();
+	
+	// If a new mapping begins in a delay slot, we should count
+	//   the delay slot as part of the fragment.
+	if(isDelaySlot) ++fragment_instruction_count;
+	
 	// FIXME: Enabling the following code causes a bizarre failure
 	//          for no obvious reason
-#if 0
+#if 1
 	// Since we're entering a new mapping,
 	//   we need to ensure that the instruction counting is done properly
 	unsigned int icount = get_instruction_count();
@@ -174,23 +198,6 @@ void start_new_mapping(void){
 		set_next_dst(ppc);
 	}
 #endif
-}
-
-// Variable to indicate whether the current recompiled instruction
-//   is a delay slot (which needs to have its registers flushed)
-static int isDelaySlot;
-// This should be called before the jump is recompiled
-static inline int check_delaySlot(void){
-	interpretedLoop = 0; // Reset this variable for the next basic block
-	if(peek_next_src() == 0){ // MIPS uses 0 as a NOP
-		get_next_src();   // Get rid of the NOP
-		return 0;
-	} else {
-		if(mips_is_jump(peek_next_src())) return CONVERT_WARNING;
-		isDelaySlot = 1;
-		convert(); // This just moves the delay slot instruction ahead of the branch
-		return 1;
-	}
 }
 
 static inline int signExtend(int value, int size){
@@ -329,10 +336,10 @@ static int (*gen_ops[64])(MIPS_instr);
 
 int convert(void){
 	MIPS_instr mips = get_next_src();
+	if(!isDelaySlot) ++fragment_instruction_count;
 	int needFlush = isDelaySlot; isDelaySlot = 0;
 	int result = gen_ops[MIPS_GET_OPCODE(mips)](mips);
 	if(needFlush) flushRegisters();
-	++fragment_instruction_count;
 	return result;
 }
 

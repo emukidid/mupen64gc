@@ -94,6 +94,11 @@ unsigned int decodeNInterpret(MIPS_instr mips, unsigned int pc,
 	PC->addr = interp_addr = pc;
 	prefetch_opcode(mips);
 	interp_ops[MIPS_GET_OPCODE(mips)]();
+	
+	// Check for interrupts
+	update_count();
+	if(next_interupt <= Count) gen_interupt();
+	
 	return interp_addr != pc + 4 ? interp_addr : 0;
 }
 
