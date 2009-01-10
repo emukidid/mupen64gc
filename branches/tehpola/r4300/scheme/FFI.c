@@ -24,15 +24,15 @@ Scheme_Object* decodeNInterpret(int argc, Scheme_Object* argv[]){
 	SCM2UINT(argv[1], interp_addr);
 	SCM2UINT(scheme_eval_string("(get&reset-count)", env), count);
 #endif
-	if (interp_addr == 0xa4000ac8) stop = 1;
+	//if (interp_addr == 0xa4000ac8) stop = 1;
 	//printf("Executed %d instructions\n", count);
 	//Count += count;
-	
+
 	//printf("Interpreting %08x @ %08x\n", op, interp_addr);
 	//prefetch_opcode(op);
 	prefetch();
 	interp_ops[((op >> 26) & 0x3F)]();
-	
+
 	return UINT2SCM(interp_addr);
 }
 
@@ -45,10 +45,10 @@ Scheme_Object* isStopSignaled(int argc, Scheme_Object* argv[]){
 
 //unsigned long regLoad(int which){ return (long)reg[which]; }
 #ifdef MZ_SCHEME
-Scheme_Object* regLoad(int argc, Scheme_Object* argv[]){
+Scheme_Object* uregLoad(int argc, Scheme_Object* argv[]){
 	int which;
 	SCM2INT(argv[0], which);
-	printf("%x (%llx) <- r%d\n", (int)reg[which], reg[which], which);
+	//printf("%x (%llx) <- r%d\n", (int)reg[which], reg[which], which);
 	//if(which == 4) getc(stdin);
 	//return INT2SCM((int)reg[which]);
 	return UINT2SCM((unsigned int)reg[which]);
@@ -56,9 +56,10 @@ Scheme_Object* regLoad(int argc, Scheme_Object* argv[]){
 #endif
 //long sregLoad(int which){ return (unsigned long)reg[which]; }
 #ifdef MZ_SCHEME
-Scheme_Object* sregLoad(int argc, Scheme_Object* argv[]){
+Scheme_Object* regLoad(int argc, Scheme_Object* argv[]){
 	int which;
 	SCM2INT(argv[0], which);
+	//printf("%x (%llx) <- r%d\n", (int)reg[which], reg[which], which);
 	return INT2SCM((int)reg[which]);
 }
 #endif
@@ -90,7 +91,7 @@ Scheme_Object* regStore(int argc, Scheme_Object* argv[]){
 	if( !SCM2UINT(argv[0], val) )
 		scheme_signal_error("Error unpacking %V into r%d", argv[0], which);
 	reg[which] = (long long)val;
-	printf("r%d <- %x\n", which, (long long)val);
+	//printf("r%d <- %x\n", which, (long long)val);
 	//if(which == 4) getc(stdin);
 	return scheme_false;
 }
@@ -138,7 +139,7 @@ Scheme_Object* fetch(int argc, Scheme_Object* argv[]){
 	SCM2UINT(argv[0], addr);
 	printf("fetching instruction @ %08x\n", addr);
 	unsigned int op = -1;
-	
+
 	if((addr >= 0x80000000) && (addr < 0xc0000000)){
 		if((addr >= 0x80000000) && (addr < 0x80800000)){
 			op = rdram[(addr&0xFFFFFF)/4];
@@ -155,7 +156,7 @@ Scheme_Object* fetch(int argc, Scheme_Object* argv[]){
 		stop = 1;
 		*((int*)0) = 0x1337;
 	}
-	
+
 	return UINT2SCM(op);
 }
 
@@ -232,22 +233,22 @@ void dynaInvalidate(unsigned int start, unsigned int stop){
 static int setup_mzscheme(Scheme_Env* e, int argc, char* argv[]){
 	int i;
     mz_jmp_buf * volatile save, fresh;
-    
+
     /* Declare embedded modules in "required.c": */
     printf("declaring modules\n");
     declare_modules(e);
-    
+
     printf("requiring mzscheme\n");
     scheme_namespace_require(scheme_intern_symbol("mzscheme"));
     printf("requiring mips/Recompile.ss\n");
     scheme_namespace_require(scheme_intern_symbol("mips/Recompile"));
-    
+
     // Create a Scheme function for each C function that needs to be called
     printf("registering functions\n");
     SCM_DEFUN(e, decodeNInterpret, "decode&interpret", 2, 2);
     SCM_DEFUN(e, logicalShift, "logical-shift", 2, 2);
     SCM_DEFUN(e, regLoad, "reg", 1, 1);
-    SCM_DEFUN(e, sregLoad, "sreg", 1, 1);
+    SCM_DEFUN(e, uregLoad, "ureg", 1, 1);
     SCM_DEFUN(e, reg64Load, "reg64", 1, 1);
     SCM_DEFUN(e, ureg64Load, "ureg64", 1, 1);
     SCM_DEFUN(e, regStore, "r=", 2, 2);
@@ -257,11 +258,11 @@ static int setup_mzscheme(Scheme_Env* e, int argc, char* argv[]){
     Scheme_Object* module = scheme_intern_symbol("mips/Bridge");
     SCM_DEFUN_MOD(e, module, isStopSignaled, "stop-signaled?", 0, 0);
     SCM_DEFUN_MOD(e, module, fetch, "fetch", 1, 1);
-	
-#if 0 
+
+#if 0
 	save = scheme_current_thread->error_buf;
     scheme_current_thread->error_buf = &fresh;
-    
+
     printf("setjmp\n");
 	if(scheme_setjmp(scheme_error_buf)){
 		// This block will only be executed after a longjmp (an error in scheme code)
@@ -269,7 +270,7 @@ static int setup_mzscheme(Scheme_Env* e, int argc, char* argv[]){
 		env = NULL;
 		printf("scheme exception caught\n");
 		return -1; /* There was an error */
-	
+
 	} else {
 		// This block of code is executed immediately after setjmp
 		// Load our scheme source
@@ -283,7 +284,7 @@ static int setup_mzscheme(Scheme_Env* e, int argc, char* argv[]){
 		scheme_current_thread->error_buf = save;
 	}
 #endif
-	
+
 	env = e;
 	return 0;
 }
@@ -302,11 +303,11 @@ unsigned int dynarec(unsigned int addr){
 	sprintf(call, "(dynarec #x%08x)", addr);
 	dynacore = 0;
 	interpcore = 1;
-	
+
 	mz_jmp_buf * volatile save, fresh;
 	save = scheme_current_thread->error_buf;
     scheme_current_thread->error_buf = &fresh;
-    
+
     if(scheme_setjmp(scheme_error_buf)){
 		// This block will only be executed after a longjmp (an error in scheme code)
 		scheme_current_thread->error_buf = save;
@@ -319,7 +320,7 @@ unsigned int dynarec(unsigned int addr){
 		SCM2UINT( scheme_eval_string(call, env), ret );
 		scheme_current_thread->error_buf = save;
     }
-	
+
 	dynacore = 1;
 	interpcore = 0;
 	return ret;

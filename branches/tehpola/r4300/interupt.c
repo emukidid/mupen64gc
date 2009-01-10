@@ -48,6 +48,8 @@
 #include "../main/savestates.h"
 #include "../main/vcr.h"
 
+#include "../gui/DEBUG.h"
+
 
 unsigned long next_vi;
 int vi_field=0;
@@ -330,6 +332,7 @@ void check_interupt()
 
 void gen_interupt()
 {
+	DEBUG_print("gen_interrupt()\n", DBG_USBGECKO);
    //if (!skip_jump)
      //printf("interrupt:%x (%x)\n", q->type, Count);
    if (stop == 1) dyna_stop();
@@ -342,6 +345,8 @@ void gen_interupt()
    
    if (skip_jump /*&& !dynacore*/)
      {
+     	sprintf(txtbuffer, "skip_jump = %08x\n", skip_jump);
+     	DEBUG_print(txtbuffer, DBG_USBGECKO);
 	if (q->count > Count || (Count - q->count) < 0x80000000)
 	  next_interupt = q->count;
 	else

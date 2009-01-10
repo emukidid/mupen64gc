@@ -166,7 +166,7 @@
            (branch ,(+ (get-pc) (arithmetic-shift (s16-ext immed) 2)))
            ; Else continue executing past the delay slot
            (branch ,(+ (get-pc) 8))))))
-|#
+
 
   (opcode #x09 ADDIU
           (with-i-form
@@ -175,15 +175,15 @@
   (define ADDI ADDIU)
   (hash-table-put! opcode-handlers #x08 ADDI)
 
-#|
+
   (opcode #x0a SLTI
           (with-i-form
-           `(r= ,rt (if (< (sreg ,rs) ,(s16-ext immed)) 1 0))))
+           `(r= ,rt (if (< (reg ,rs) ,(s16-ext immed)) 1 0))))
 
   (opcode #x0b SLTIU
           (with-i-form
-           `(r= ,rt (if (< (reg ,rs) ,immed)) 1 0)))
-
+           `(r= ,rt (if (< (ureg ,rs) ,immed)) 1 0)))
+|#
   (opcode #x0c ANDI
           (with-i-form
            `(r= ,rt (bitwise-and (reg ,rs) ,immed))))
@@ -195,7 +195,7 @@
   (opcode #x0e XORI
           (with-i-form
            `(r= ,rt (bitwise-xor (reg ,rs) ,immed))))
-
+#|
   (opcode #x0f LUI
           (with-i-form
            `(r= ,rt (arithmetic-shift ,immed 16))))

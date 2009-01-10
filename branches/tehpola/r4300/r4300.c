@@ -1497,15 +1497,16 @@ void update_count()
    else
      {
 #ifdef PPC_DYNAREC
-	Count += instructionCount;
+	Count += instructionCount * 2;
+	last_addr = interp_addr;
 #else	
 	if (PC->addr < last_addr)
 	  {
 	     printf("PC->addr < last_addr\n");
 	  }
 	Count = Count + (PC->addr - last_addr)/2;
-#endif
 	last_addr = PC->addr;
+#endif
      }
 #ifdef COMPARE_CORE
    if (delay_slot)
@@ -1629,6 +1630,7 @@ void go()
 #ifdef PPC_DYNAREC
 	//jump_to(0xa4000040);
 	dynarec(0xa4000040);
+	_break();
 #else
 	code = (void *)(actual->code+(actual->block[0x40/4].local_addr));
 	dyna_start(code);
@@ -1909,6 +1911,6 @@ void cpu_deinit(void){
 		}
 	}
    // tehpola: modified condition from !dynacore && interpcore
-   if (dynacore == 2) free(PC);
+   if (dynacore) free(PC);
 }
 
