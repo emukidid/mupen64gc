@@ -181,6 +181,8 @@ void start_new_block(void){
 void start_new_mapping(void){
 	flushRegisters();
 	
+	// Clear the interpretedLoop flag for this new fragment
+	interpretedLoop = 0;
 	// If a new mapping begins in a delay slot, we should count
 	//   the delay slot as part of the fragment.
 	if(isDelaySlot) ++fragment_instruction_count;
@@ -352,7 +354,7 @@ static int NI(MIPS_instr mips){
 static int J(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	if(!interpretedLoop &&
- 		   ((MIPS_GET_LI(mips) & 0x02ffffff) < (get_src_pc() & 0x02ffffff))){
+	   ((MIPS_GET_LI(mips) & 0x02ffffff) <= (get_src_pc() & 0x02ffffff))){
  	  // If we're jumping backwards without any calls to the
  		//   interpreter, call it here to check interrupts
  		genCallInterp(mips);
