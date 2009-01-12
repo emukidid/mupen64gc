@@ -463,6 +463,12 @@ static int JAL(MIPS_instr mips){
 static int BEQ(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	
+	if(MIPS_GET_IMMED(mips) == 0xffff &&
+	   MIPS_GET_RA(mips) == MIPS_GET_RB(mips)){
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
+	
 	// cmp ra, rb
 	GEN_CMP(ppc,
 	        mapRegister(MIPS_GET_RA(mips)),
@@ -2082,12 +2088,6 @@ static int mips_is_jump(MIPS_instr instr){
                 opcode == MIPS_OPCODE_BNEL  ||
                 opcode == MIPS_OPCODE_BLEZL ||
                 opcode == MIPS_OPCODE_BGTZL ||
-               (opcode == MIPS_OPCODE_B     &&
-                 (func == MIPS_RT_BLTZ      ||
-                  func == MIPS_RT_BGEZ      ||
-                  func == MIPS_RT_BLTZL     ||
-                  func == MIPS_RT_BGEZL     ||
-                  func == MIPS_RT_BLTZAL    ||
-                  func == MIPS_RT_BLTZALL   ||
-                  func == MIPS_RT_BGEZALL)));
+                opcode == MIPS_OPCODE_B      );
 }
+
