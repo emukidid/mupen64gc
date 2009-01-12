@@ -119,6 +119,8 @@ void recompile_block(PowerPC_block* ppc_block){
 		}
 	}
 	
+	// Flush any remaining mapped registers
+	start_new_mapping();
 	// This simplifies jumps and branches out of the block
 	genJumpPad(ppc_block);
 	
@@ -466,7 +468,7 @@ static void genJumpPad(PowerPC_block* ppc_block){
 	//   we've really reached the end of the block, not jumped to the pad
 	GEN_LIS(ppc, 3, ppc_block->end_address>>16);
 	set_next_dst(ppc);
-	GEN_LI(ppc, 3, 3, ppc_block->end_address);
+	GEN_ORI(ppc, 3, 3, ppc_block->end_address);
 	set_next_dst(ppc);
 	
 	jump_pad = dst;
