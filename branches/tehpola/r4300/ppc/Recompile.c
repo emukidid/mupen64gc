@@ -364,8 +364,9 @@ static void pass0(PowerPC_block* ppc_block){
         	++src; ++pc;
         	bd |= (bd & 0x8000) ? 0xFFFF0000 : 0; // sign extend
         	if(!is_j_out(bd, 0)){
-        		assert( ((pc & 0x3FF) + bd >= 0) && ((pc & 0x3FF) + bd < 1024) );
-        		isJmpDst[ (pc & 0x3FF) + bd ] = 1;
+        		int index = (pc + bd) - (addr_first >> 2);
+        		assert( index >= 0 && index < 1024 );
+        		isJmpDst[ index ] = 1;
         	}
 		}
 	}
