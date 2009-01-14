@@ -2849,16 +2849,4 @@ void prefetch_opcode(unsigned long instr)
    op = instr;
    //printf("Interpreting %08x\n",op);
    recomp_ops[((src >> 26) & 0x3F)]();
-   
-#if 0
-   // Relocated because this is not the appropriate place
-   if(dynacore){
-   	//sprintf(txtbuffer, "Interpreting 0x%08x\n", op);
-   	//DEBUG_print(txtbuffer, DBG_USBGECKO);
-   	
-   	// Check for interrupts
-	update_count();
-	if (next_interupt <= Count) gen_interupt();
-   }
-#endif
 }

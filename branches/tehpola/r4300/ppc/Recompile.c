@@ -262,7 +262,7 @@ int is_j_out(int branch, int is_aa){
 		return ((branch << 2 | (addr_first & 0xF0000000)) < addr_first ||
 		        (branch << 2 | (addr_first & 0xF0000000)) > addr_last);
 	else {
-		int dst_instr = (src - src_first) + branch;
+		int dst_instr = (src-1 - src_first) + branch;
 		return (dst_instr < 0 || dst_instr >= (addr_last-addr_first)>>2);
 	}
 }
@@ -489,16 +489,11 @@ static void genJumpPad(PowerPC_block* ppc_block){
 	// Restore r16
 	GEN_LWZ(ppc, DYNAREG_INTERP, DYNAOFF_INTERP, 1);
 	set_next_dst(ppc);
-	// Actually set the instruction count
-	GEN_LIS(ppc, 4, (unsigned int)&instructionCount>>16);
-	set_next_dst(ppc);
-	GEN_ORI(ppc, 4, 4, (unsigned int)&instructionCount);
-	set_next_dst(ppc);
-	// Store the value to instructionCount
-	GEN_STW(ppc, DYNAREG_ICOUNT, 0, 4);
-	set_next_dst(ppc);
 	// Restore r17
-	GEN_LWZ(ppc, DYNAREG_ICOUNT, DYNAOFF_ICOUNT, 1);
+	GEN_LWZ(ppc, DYNAREG_UCOUNT, DYNAOFF_UCOUNT, 1);
+	set_next_dst(ppc);
+	// Restore r18
+	GEN_LWZ(ppc, DYNAREG_LADDR, DYNAOFF_LADDR, 1);
 	set_next_dst(ppc);
 	// Restore the sp
 	GEN_LWZ(ppc, 1, 0, 1);
