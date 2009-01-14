@@ -1482,31 +1482,28 @@ int check_cop1_unusable()
    return 0;
 }
 
-#ifdef PPC_DYNAREC
-unsigned int instructionCount;
-#endif
+#include "../gui/DEBUG.h"
 
 void update_count()
 {
-   if (interpcore)
+   if (dynacore || interpcore)
      {
      	//sprintf(txtbuffer, "trace: addr = 0x%08x\n", interp_addr);
+     	if(interp_addr < last_addr){
+     		sprintf(txtbuffer, "interp_addr (%08x) < last_addr (%08x)\n");
+     		DEBUG_print(txtbuffer, DBG_USBGECKO);
+     	}
 	Count = Count + (interp_addr - last_addr)/2;
 	last_addr = interp_addr;
      }
    else
      {
-#ifdef PPC_DYNAREC
-	Count += instructionCount * 2;
-	last_addr = interp_addr;
-#else	
 	if (PC->addr < last_addr)
 	  {
 	     printf("PC->addr < last_addr\n");
 	  }
 	Count = Count + (PC->addr - last_addr)/2;
 	last_addr = PC->addr;
-#endif
      }
 #ifdef COMPARE_CORE
    if (delay_slot)
@@ -1873,9 +1870,6 @@ void cpu_init(void){
    //          worst case is probably this will leak mem
    if(dynacore == 2)
    	PC = malloc(sizeof(precomp_instr));
-#ifdef PPC_DYNAREC
-   instructionCount = 0;
-#endif
    // Hack for the interpreter
    cpu_inited = 1;
 }

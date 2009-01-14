@@ -17,14 +17,14 @@ inline unsigned long update_invalid_addr(unsigned long addr);
 
 
 /* Recompiled code stack frame:
- *  $sp+28  |
- *  $sp+24  | old r17 (new r17 holds instruction count)
+ *  $sp+28  | old r18 (new r18 holds &last_addr)
+ *  $sp+24  | old r17 (new r17 holds dyna_update_count)
  *  $sp+20  | old r16 (new r16 holds decodeNInterpret)
  *  $sp+16  | old r15 (new r15 holds 0)
- * 	$sp+12	| old r14 (new r14 holds reg)
- * 	$sp+8	| old cr
- * 	$sp+4	| old lr
- * 	$sp		| old sp
+ *  $sp+12  | old r14 (new r14 holds reg)
+ *  $sp+8   | old cr
+ *  $sp+4   | old lr
+ *  $sp	    | old sp
  */
 
 #define DYNAREC_PRELUDE() \
@@ -33,28 +33,28 @@ inline unsigned long update_invalid_addr(unsigned long addr);
 		"stw	14, 12(1) \n" \
 		"mfcr	14        \n" \
 		"stw	14, 8(1)  \n" \
-		"mr		14, %0    \n" \
+		"mr	14, %0    \n" \
 		"stw	15, 16(1) \n" \
 		"addi	15, 0, 0  \n" \
 		"stw	16, 20(1) \n" \
-		"mr		16, %1    \n" \
+		"mr	16, %1    \n" \
 		"stw	17, 24(1) \n" \
-		"addi	17, 0, 0  \n" \
-		:: "r" (reg), "r" (decodeNInterpret) )
+		"mr	17, %2    \n" \
+		"stw	18, 28(1) \n" \
+		"mr	18, %3    \n" \
+		:: "r" (reg), "r" (decodeNInterpret), \
+		   "r" (dyna_update_count), "r" (&last_addr) )
 
 
 void dynarec(unsigned int address){
 	while(!stop){
 		PowerPC_block* dst_block = blocks[address>>12];
 		unsigned long paddr = update_invalid_addr(address);
-		if(!paddr) return;
-		
-		// Check for interrupts
-		update_count();
-		if(next_interupt <= Count) gen_interupt();
 		
 		sprintf(txtbuffer, "trampolining to 0x%08x\n", address);
 		DEBUG_print(txtbuffer, DBG_USBGECKO);
+		
+		if(!paddr){ stop=1; return; }
 		
 		if(!dst_block){
 			sprintf(txtbuffer, "block at %08x doesn't exist\n", address&~0xFFF);
@@ -86,21 +86,30 @@ void dynarec(unsigned int address){
 		// FIXME: Try actually saving the lr now: use &&label after code() and then mr %address, 3
 		DYNAREC_PRELUDE();
 		address = code();
+		
+		last_addr = interp_addr = address;
+		// Check for interrupts
+		if(next_interupt <= Count){
+			gen_interupt();
+			address = interp_addr;
+		}
 	}
 }
 
 unsigned int decodeNInterpret(MIPS_instr mips, unsigned int pc,
-                              unsigned int count, int isDelaySlot){
-	instructionCount = count; // Update the value for the instruction count
+                              int isDelaySlot){
 	delay_slot = isDelaySlot; // Make sure we set delay_slot properly
 	PC->addr = interp_addr = pc;
 	prefetch_opcode(mips);
 	interp_ops[MIPS_GET_OPCODE(mips)]();
 	
-	// Check for interrupts
-	update_count();
-	if(next_interupt <= Count) gen_interupt();
-	
 	return interp_addr != pc + 4 ? interp_addr : 0;
+}
+
+int dyna_update_count(unsigned int pc){
+	Count += (pc - last_addr)/2;
+	last_addr = pc;
+	
+	return next_interupt - Count;
 }
 

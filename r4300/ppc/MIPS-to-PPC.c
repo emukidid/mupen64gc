@@ -22,19 +22,12 @@ static void genCallInterp(MIPS_instr);
 #define JUMPTO_OFF_SIZE  3
 #define JUMPTO_ADDR_SIZE 3
 static void genJumpTo(unsigned int loc, unsigned int type);
+static void genUpdateCount(void);
 static int inline mips_is_jump(MIPS_instr);
 void jump_to(unsigned int);
 
 // Infinite loop-breaker code
 static int interpretedLoop;
-
-// Number of instructions executed in current fragment
-static unsigned int fragment_instruction_count;
-unsigned int get_instruction_count(void){
-	unsigned int t = fragment_instruction_count;
-	fragment_instruction_count = 0;
-	return t;
-}
 
 // Variable to indicate whether the current recompiled instruction
 //   is a delay slot (which needs to have its registers flushed)
@@ -42,7 +35,6 @@ static int isDelaySlot;
 // This should be called before the jump is recompiled
 static inline int check_delaySlot(void){
 	interpretedLoop = 0; // Reset this variable for the next basic block
-	++fragment_instruction_count;
 	if(peek_next_src() == 0){ // MIPS uses 0 as a NOP
 		get_next_src();   // Get rid of the NOP
 		return 0;
@@ -180,26 +172,8 @@ void start_new_block(void){
 }
 void start_new_mapping(void){
 	flushRegisters();
-	
 	// Clear the interpretedLoop flag for this new fragment
 	interpretedLoop = 0;
-	// If a new mapping begins in a delay slot, we should count
-	//   the delay slot as part of the fragment.
-	if(isDelaySlot) ++fragment_instruction_count;
-	
-	// FIXME: Enabling the following code causes a bizarre failure
-	//          for no obvious reason
-#if 1
-	// Since we're entering a new mapping,
-	//   we need to ensure that the instruction counting is done properly
-	unsigned int icount = get_instruction_count();
-	if(icount){
-		PowerPC_instr ppc;
-		// Update the instruction count
-		GEN_ADDI(ppc, DYNAREG_ICOUNT, DYNAREG_ICOUNT, icount);
-		set_next_dst(ppc);
-	}
-#endif
 }
 
 static inline int signExtend(int value, int size){
@@ -209,7 +183,7 @@ static inline int signExtend(int value, int size){
 	return value;
 }
 
-typedef enum { NONE, EQ, NE, LT, GT, LE, GE } condition;
+typedef enum { NONE=0, EQ, NE, LT, GT, LE, GE } condition;
 // Branch a certain offset (possibly conditionally, linking, or likely)
 //   offset: N64 instructions from current N64 instruction to branch
 //   cond: type of branch to execute depending on cr 7
@@ -246,10 +220,6 @@ static int branch(int offset, condition cond, int link, int likely){
 	
 	flushRegisters();
 	
-	// Update the instruction count
-	GEN_ADDI(ppc, DYNAREG_ICOUNT, DYNAREG_ICOUNT, get_instruction_count());
-	set_next_dst(ppc);
-	
 	if(likely){
 		// b[!cond] <past jumpto & delay>
 		likely_id = add_jump_special(0);
@@ -261,6 +231,8 @@ static int branch(int offset, condition cond, int link, int likely){
 	PowerPC_instr* preDelay = get_curr_dst();
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
+	
+	genUpdateCount(); // Sets cr2 to (next_interupt ? Count)
 	
 #ifndef INTERPRET_BRANCH
 	// If we're jumping out, we need to trampoline using genJumpTo
@@ -295,7 +267,7 @@ static int branch(int offset, condition cond, int link, int likely){
 	} else {
 		if(likely)
 			// Note: if there's a delay slot, I will branch to the branch over it
-			set_jump_special(likely_id, 1+delaySlot+1+(link?3:0));
+			set_jump_special(likely_id, (cond?10:6)+delaySlot+1+(link?3:0));
 		if(link){
 			// Set LR to next instruction
 			int lr = mapRegisterNew(MIPS_REG_LR);
@@ -308,9 +280,36 @@ static int branch(int offset, condition cond, int link, int likely){
 			
 			flushRegisters();
 		}	
-	
+		
+		// last_addr = naddr
+		if(cond != NONE){
+			GEN_BC(ppc, 4, 0, 0, bo, bi);
+			set_next_dst(ppc);
+			GEN_LIS(ppc, 3, (get_src_pc()+4)>>16);
+			set_next_dst(ppc);
+			GEN_ORI(ppc, 3, 3, get_src_pc()+4);
+			set_next_dst(ppc);
+			GEN_B(ppc, 3, 0, 0);
+			set_next_dst(ppc);
+		}
+		GEN_LIS(ppc, 3, (get_src_pc() + (offset<<2))>>16);
+		set_next_dst(ppc);
+		GEN_ORI(ppc, 3, 3, get_src_pc() + (offset<<2));
+		set_next_dst(ppc);
+		GEN_STW(ppc, 3, 0, DYNAREG_LADDR);
+		set_next_dst(ppc);
+		
+		// If we need to take an interrupt, don't branch in the block
+		GEN_BLE(ppc, 2, 2, 0, 0);
+		set_next_dst(ppc);
+		
 		// The actual branch
 		GEN_BC(ppc, add_jump(offset, 0, 0), 0, 0, bo, bi);
+		set_next_dst(ppc);
+		
+		// If we're taking the interrupt, we have to use the trampoline
+		// Branch to the jump pad
+		GEN_B(ppc, add_jump(-2, 1, 1), 0, 0);
 		set_next_dst(ppc);
 	}
 #endif // INTERPRET_BRANCH
@@ -338,7 +337,6 @@ static int (*gen_ops[64])(MIPS_instr);
 
 int convert(void){
 	MIPS_instr mips = get_next_src();
-	if(!isDelaySlot) ++fragment_instruction_count;
 	int needFlush = isDelaySlot; isDelaySlot = 0;
 	int result = gen_ops[MIPS_GET_OPCODE(mips)](mips);
 	if(needFlush) flushRegisters();
@@ -353,15 +351,9 @@ static int NI(MIPS_instr mips){
 
 static int J(MIPS_instr mips){
 	PowerPC_instr  ppc;
-	if(!interpretedLoop &&
-	   ((MIPS_GET_LI(mips) & 0x02ffffff) <= (get_src_pc() & 0x02ffffff))){
- 	  // If we're jumping backwards without any calls to the
- 		//   interpreter, call it here to check interrupts
- 		genCallInterp(mips);
- 		return INTERPRETED;
- 	}
-	if(!interpretedLoop &&
-	   ((MIPS_GET_LI(mips) & 0x02ffffff) < (get_src_pc() & 0x02ffffff))){
+	unsigned int naddr = (MIPS_GET_LI(mips)<<2)|(get_src_pc()&0xf0000000);
+	
+	if(!interpretedLoop && naddr <= get_src_pc()){
 		// If we're jumping backwards without any calls to the
 		//   interpreter, call it here to check interrupts
 		genCallInterp(mips);
@@ -375,9 +367,7 @@ static int J(MIPS_instr mips){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 	
-	// Update the instruction count
-	GEN_ADDI(ppc, DYNAREG_ICOUNT, DYNAREG_ICOUNT, get_instruction_count());
-	set_next_dst(ppc);
+	genUpdateCount(); // Sets cr2 to (next_interupt ? Count)
 	
 #ifdef INTERPRET_J
 	genJumpTo(MIPS_GET_LI(mips), JUMPTO_ADDR);
@@ -386,9 +376,26 @@ static int J(MIPS_instr mips){
 	if(is_j_out(MIPS_GET_LI(mips), 1)){
 		genJumpTo(MIPS_GET_LI(mips), JUMPTO_ADDR);
 	} else {
+		// last_addr = naddr
+		GEN_LIS(ppc, 3, naddr>>16);
+		set_next_dst(ppc);
+		GEN_ORI(ppc, 3, 3, naddr);
+		set_next_dst(ppc);
+		GEN_STW(ppc, 3, 0, DYNAREG_LADDR);
+		set_next_dst(ppc);
+		
+		// If we need to take an interrupt, don't branch in the block
+		GEN_BLE(ppc, 2, 2, 0, 0);
+		set_next_dst(ppc);
+		
 		// Even though this is an absolute branch
 		//   in pass 2, we generate a relative branch
 		GEN_B(ppc, add_jump(MIPS_GET_LI(mips), 1, 0), 0, 0);
+		set_next_dst(ppc);
+		
+		// If we're taking the interrupt, we have to use the trampoline
+		// Branch to the jump pad
+		GEN_B(ppc, add_jump(naddr, 1, 1), 0, 0);
 		set_next_dst(ppc);
 	}
 #endif
@@ -406,6 +413,7 @@ static int J(MIPS_instr mips){
 
 static int JAL(MIPS_instr mips){
 	PowerPC_instr  ppc;
+	unsigned int naddr = (MIPS_GET_LI(mips)<<2)|(get_src_pc()&0xf0000000);
 	
 	flushRegisters();
 	
@@ -425,9 +433,7 @@ static int JAL(MIPS_instr mips){
 	
 	flushRegisters();
 	
-	// Update the instruction count
-	GEN_ADDI(ppc, DYNAREG_ICOUNT, DYNAREG_ICOUNT, get_instruction_count());
-	set_next_dst(ppc);
+	genUpdateCount(); // Sets cr2 to (next_interupt ? Count)
 	
 #ifdef INTERPRET_JAL
 	genJumpTo(MIPS_GET_LI(mips), JUMPTO_ADDR);
@@ -436,10 +442,27 @@ static int JAL(MIPS_instr mips){
 	if(is_j_out(MIPS_GET_LI(mips), 1)){
 		genJumpTo(MIPS_GET_LI(mips), JUMPTO_ADDR);
 	} else {
+		// last_addr = naddr
+		GEN_LIS(ppc, 3, naddr>>16);
+		set_next_dst(ppc);
+		GEN_ORI(ppc, 3, 3, naddr);
+		set_next_dst(ppc);
+		GEN_STW(ppc, 3, 0, DYNAREG_LADDR);
+		set_next_dst(ppc);
+		
+		// If we need to take an interrupt, don't branch in the block
+		GEN_BLE(ppc, 2, 2, 0, 0);
+		set_next_dst(ppc);
+		
 		// Even though this is an absolute branch
 		//   in pass 2, we generate a relative branch
 		// TODO: If I can figure out using the LR, use it!
 		GEN_B(ppc, add_jump(MIPS_GET_LI(mips), 1, 0), 0, 0);
+		set_next_dst(ppc);
+		
+		// If we're taking the interrupt, we have to use the trampoline
+		// Branch to the jump pad
+		GEN_B(ppc, add_jump(naddr, 1, 1), 0, 0);
 		set_next_dst(ppc);
 	}
 #endif
@@ -448,11 +471,12 @@ static int JAL(MIPS_instr mips){
 	if(delaySlot){
 		unget_last_src();
 		isDelaySlot = 1;
+		// TODO
 		// Step over the already executed delay slot if we ever
 		//   actually use the real LR for JAL
 		// b delaySlot+1
-		GEN_B(ppc, delaySlot+1, 0, 0);
-		set_next_dst(ppc);
+		//GEN_B(ppc, delaySlot+1, 0, 0);
+		//set_next_dst(ppc);
 	} else nop_ignored();
 	
 #ifdef INTERPRET_JAL
@@ -1059,9 +1083,7 @@ static int JR(MIPS_instr mips){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 	
-	// Update the instruction count
-	GEN_ADDI(ppc, DYNAREG_ICOUNT, DYNAREG_ICOUNT, get_instruction_count());
-	set_next_dst(ppc);
+	genUpdateCount();
 	
 #ifdef INTERPRET_JR
 	genJumpTo(MIPS_GET_RS(mips), JUMPTO_REG);
@@ -1103,9 +1125,7 @@ static int JALR(MIPS_instr mips){
 	
 	flushRegisters();
 	
-	// Update the instruction count
-	GEN_ADDI(ppc, DYNAREG_ICOUNT, DYNAREG_ICOUNT, get_instruction_count());
-	set_next_dst(ppc);
+	genUpdateCount();
 	
 #ifdef INTERPRET_JALR
 	genJumpTo(MIPS_GET_RS(mips), JUMPTO_REG);
@@ -1117,11 +1137,12 @@ static int JALR(MIPS_instr mips){
 	if(delaySlot){
 		unget_last_src();
 		isDelaySlot = 1;
+		// TODO
 		// Step over the already executed delay slot if we ever
 		//   actually use the real LR for JAL
 		// b delaySlot+1
-		GEN_B(ppc, delaySlot+1, 0, 0);
-		set_next_dst(ppc);
+		//GEN_B(ppc, delaySlot+1, 0, 0);
+		//set_next_dst(ppc);
 	} else nop_ignored();
 	
 #ifdef INTERPRET_JALR
@@ -1849,7 +1870,7 @@ static int BC(MIPS_instr mips){
 	// mfctr r3
 	GEN_MFCTR(ppc, 3);
 	set_next_dst(ppc);
-#endif
+#endif // INTERPRET_FP
 	
 	if(likely){
 		// b[!cond] <past jumpto & delay>
@@ -1903,7 +1924,7 @@ static int BC(MIPS_instr mips){
 		       20+MIPS_GET_CC(mips));
 		set_next_dst(ppc);
 	}
-#endif
+#endif // INTERPRET_BC
 	
 	if(!likely){
 		// Step over the already executed delay slot if
@@ -1922,8 +1943,8 @@ static int BC(MIPS_instr mips){
 	return INTERPRETED;
 #else // INTERPRET_BC
 	return CONVERT_SUCCESS;
-#endif
 #endif // INTERPRET_BC
+#endif // INTERPRET_FP
 }
 
 static int S(MIPS_instr mips){
@@ -1996,13 +2017,8 @@ static void genCallInterp(MIPS_instr mips){
 	PowerPC_instr ppc = NEW_PPC_INSTR();
 	interpretedLoop = 1;
 	flushRegisters();
-	// Update the instruction count and pass it
-	GEN_ADDI(ppc, 5, DYNAREG_ICOUNT, get_instruction_count());
-	set_next_dst(ppc);
-	GEN_ADDI(ppc, DYNAREG_ICOUNT, 0, 0);
-	set_next_dst(ppc);
 	// Pass in whether this instruction is in the delay slot
-	GEN_LI(ppc, 6, 0, isDelaySlot ? 1 : 0);
+	GEN_LI(ppc, 5, 0, isDelaySlot ? 1 : 0);
 	set_next_dst(ppc);
 	// Save the lr
 	GEN_MFLR(ppc, 0);
@@ -2074,6 +2090,35 @@ static void genJumpTo(unsigned int loc, unsigned int type){
 	
 	// Branch to the jump pad
 	GEN_B(ppc, add_jump(loc, 1, 1), 0, 0);
+	set_next_dst(ppc);
+}
+
+// Updates Count, and sets cr2 to (next_interupt ? Count)
+static void genUpdateCount(void){
+	PowerPC_instr ppc = NEW_PPC_INSTR();
+	// Move &dyna_update_count to ctr for call
+	GEN_MTCTR(ppc, DYNAREG_UCOUNT);
+	set_next_dst(ppc);
+	// Save the lr
+	GEN_MFLR(ppc, 0);
+	set_next_dst(ppc);
+	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	// Load the current PC as the argument
+	GEN_LIS(ppc, 3, get_src_pc()>>16);
+	set_next_dst(ppc);
+	GEN_ORI(ppc, 3, 3, get_src_pc());
+	set_next_dst(ppc);
+	// Call dyna_update_count
+	GEN_BCTRL(ppc);
+	set_next_dst(ppc);
+	// Load the lr
+	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	GEN_MTLR(ppc, 0);
+	set_next_dst(ppc);
+	// If next_interupt <= Count (cr2)
+	GEN_CMPI(ppc, 3, 0, 2);
 	set_next_dst(ppc);
 }
 
