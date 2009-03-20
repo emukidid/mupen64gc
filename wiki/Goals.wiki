@@ -9,7 +9,7 @@ Listed in order of importance:
   * *512mbit ROMS* _done_
   * *Input (Gamecube & Classic Controller)* _done_
   * *Configurable input methods* _todo_
-  * *DVD/SD/Front-SD Loading* _done_
+  * *DVD/SD/SDHC/Front-SD Loading* _done_
   * *Native Saves (to SD or MC)* _done_
   * *Save States (to SD)* _done_
   * *Rumble/Controller Pak Support* _done_
