@@ -1,5 +1,5 @@
 #summary Screenshots of the emulator running
-#labels Screenshots,Featured
+#labels Screenshots
 
 == 26th May 2008 ==
 
