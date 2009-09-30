@@ -1,6 +1,9 @@
 #summary Screenshots of the emulator running
 #labels Screenshots
 
+== Beta 1 screenshots ==
+[http://emulatemii.com/wii64/compatList/ Can be found here]
+
 == 26th May 2008 ==
 
 [http://mupen64gc.googlecode.com/svn/web/images/Automobili%20Lamborghini.jpg]
