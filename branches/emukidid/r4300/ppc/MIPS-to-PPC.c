@@ -2107,7 +2107,7 @@ static void genUpdateCount(void){
 	// Load the current PC as the argument
 	GEN_LIS(ppc, 3, get_src_pc()>>16);
 	set_next_dst(ppc);
-	GEN_ORI(ppc, 3, 3, get_src_pc());
+	GEN_ORI(ppc, 3, 3, get_src_pc()+4);
 	set_next_dst(ppc);
 	// Call dyna_update_count
 	GEN_BCTRL(ppc);

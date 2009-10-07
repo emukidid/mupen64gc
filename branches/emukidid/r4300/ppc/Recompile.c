@@ -260,9 +260,9 @@ void deinit_block(PowerPC_block* ppc_block){
 int is_j_out(int branch, int is_aa){
 	if(is_aa)
 		return ((branch << 2 | (addr_first & 0xF0000000)) < addr_first ||
-		        (branch << 2 | (addr_first & 0xF0000000)) > addr_last);
+		        (branch << 2 | (addr_first & 0xF0000000)) >= addr_last);
 	else {
-		int dst_instr = (src-1 - src_first) + branch;
+		int dst_instr = (src - src_first) + branch;
 		return (dst_instr < 0 || dst_instr >= (addr_last-addr_first)>>2);
 	}
 }

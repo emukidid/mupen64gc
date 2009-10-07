@@ -50,15 +50,15 @@ void dynarec(unsigned int address){
 	while(!stop){
 		PowerPC_block* dst_block = blocks[address>>12];
 		unsigned long paddr = update_invalid_addr(address);
-		
+		/*
 		sprintf(txtbuffer, "trampolining to 0x%08x\n", address);
 		DEBUG_print(txtbuffer, DBG_USBGECKO);
-		
+		*/
 		if(!paddr){ stop=1; return; }
 		
 		if(!dst_block){
-			sprintf(txtbuffer, "block at %08x doesn't exist\n", address&~0xFFF);
-			DEBUG_print(txtbuffer, DBG_USBGECKO);
+			/*sprintf(txtbuffer, "block at %08x doesn't exist\n", address&~0xFFF);
+			DEBUG_print(txtbuffer, DBG_USBGECKO);*/
 			blocks[address>>12] = malloc(sizeof(PowerPC_block));
 			dst_block = blocks[address>>12];
 			dst_block->code          = NULL;
@@ -70,8 +70,8 @@ void dynarec(unsigned int address){
 		}
 		
 		if(invalid_code_get(address>>12)){
-			sprintf(txtbuffer, "block at %08x is invalid\n", address&~0xFFF);
-			DEBUG_print(txtbuffer, DBG_USBGECKO);
+			/*sprintf(txtbuffer, "block at %08x is invalid\n", address&~0xFFF);
+			DEBUG_print(txtbuffer, DBG_USBGECKO);*/
 			dst_block->length = 0;
 			recompile_block(dst_block);
 		}
@@ -79,10 +79,10 @@ void dynarec(unsigned int address){
 		// Recompute the block offset
 		unsigned int (*code)(void);
 		code = (unsigned int (*)(void))dst_block->code_addr[(address&0xFFF)>>2];
-		
+		/*
 		sprintf(txtbuffer, "Entering dynarec code @ 0x%08x\n", code);
 		DEBUG_print(txtbuffer, DBG_USBGECKO);
-		
+		*/
 		// FIXME: Try actually saving the lr now: use &&label after code() and then mr %address, 3
 		DYNAREC_PRELUDE();
 		address = code();

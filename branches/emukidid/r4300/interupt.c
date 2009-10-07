@@ -332,7 +332,8 @@ void check_interupt()
 
 void gen_interupt()
 {
-	DEBUG_print("gen_interrupt()\n", DBG_USBGECKO);
+  sprintf(txtbuffer,"gen_interrupt() %08X",Count);
+	DEBUG_print(txtbuffer,11);
    //if (!skip_jump)
      //printf("interrupt:%x (%x)\n", q->type, Count);
    if (stop == 1) dyna_stop();
@@ -346,7 +347,7 @@ void gen_interupt()
    if (skip_jump /*&& !dynacore*/)
      {
      	sprintf(txtbuffer, "skip_jump = %08x\n", skip_jump);
-     	DEBUG_print(txtbuffer, DBG_USBGECKO);
+     	DEBUG_print(txtbuffer, 12);
 	if (q->count > Count || (Count - q->count) < 0x80000000)
 	  next_interupt = q->count;
 	else
@@ -376,6 +377,7 @@ void gen_interupt()
    switch(q->type)
      {
       case SPECIAL_INT:
+      DEBUG_print("special", 13);
 	if (Count > 0x10000000) return;
 	remove_interupt_event();
 	add_interupt_event_count(SPECIAL_INT, 0);
@@ -383,6 +385,7 @@ void gen_interupt()
 	break;
 	
       case VI_INT:
+      DEBUG_print("VI int", 14);
 #ifdef VCR_SUPPORT
 	VCR_updateScreen();
 #else
@@ -411,6 +414,7 @@ void gen_interupt()
 	break;
 	
       case COMPARE_INT:
+      DEBUG_print("compare", 15);
 	remove_interupt_event();
 	Count+=2;
 	add_interupt_event_count(COMPARE_INT, Compare);
@@ -422,10 +426,12 @@ void gen_interupt()
 	break;
 	
       case CHECK_INT:
+      DEBUG_print("check", 16);
 	remove_interupt_event();
 	break;
 	
       case SI_INT:
+      DEBUG_print("SI int", 17);
 #ifndef __WIN32__
 	//SDL_PumpEvents();
 #endif
@@ -442,6 +448,7 @@ void gen_interupt()
 	break;
 	
       case PI_INT:
+      DEBUG_print("PI Int", 18);
 	remove_interupt_event();
 	MI_register.mi_intr_reg |= 0x10;
 	pi_register.read_pi_status_reg &= ~3;
@@ -454,6 +461,7 @@ void gen_interupt()
 	break;
 	
       case AI_INT:
+      DEBUG_print("AI int", 19);
 	if (ai_register.ai_status & 0x80000000) // full
 	  {
 	     unsigned long ai_event = get_event(AI_INT);
@@ -490,6 +498,7 @@ void gen_interupt()
 	break;
 	
       case SP_INT:
+      DEBUG_print("SP int", 20);
 	remove_interupt_event();
 	sp_register.sp_status_reg |= 0x303;
 	//sp_register.signal1 = 1;
@@ -508,6 +517,7 @@ void gen_interupt()
 	break;
 	
       case DP_INT:
+      DEBUG_print("DP int", 21);
 	remove_interupt_event();
 	dpc_register.dpc_status &= ~2;
 	dpc_register.dpc_status |= 0x81;
