@@ -41,7 +41,7 @@ static inline void nodeRemove(CacheMetaNode* n){
 static void release(int minNeeded){
 	// Frees alloc'ed blocks so that at least minNeeded bytes are available
 	CacheMetaNode* n;
-	for(n = tail; n != NULL && minNeeded > 0; n = n->prev){
+	for(n = tail; n != NULL && minNeeded > 0;){
 		sprintf(txtbuffer, "Releasing block %05x from RecompCache\n", n->blockNum);
 		DEBUG_print(txtbuffer, DBG_USBGECKO);
 		nodeRemove(n);
@@ -75,7 +75,9 @@ static void release(int minNeeded){
 				blocks[n->blockNum-0x20000]->block = NULL;
 		}
 #endif
-		free(n);
+		CacheMetaNode* old = n;
+		n = n->prev;
+		free(old);
 	}
 		
 }
@@ -109,6 +111,10 @@ void* RecompCache_Realloc(void* memory, unsigned int size){
 	for(n = head; n != NULL; n = n->next)
 		if(n->memory == memory) break;
 	if(n == NULL) return NULL;
+	
+	// Move the node to the head
+	nodeRemove(n);
+	nodeAdd(n);
 	
 	int neededSpace = size - n->size;
 	
