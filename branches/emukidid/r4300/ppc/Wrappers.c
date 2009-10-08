@@ -107,6 +107,8 @@ unsigned int decodeNInterpret(MIPS_instr mips, unsigned int pc,
 	prefetch_opcode(mips);
 	interp_ops[MIPS_GET_OPCODE(mips)]();
 	
+	if(interp_addr != pc + 4) noCheckInterrupt = 1;
+	
 	return interp_addr != pc + 4 ? interp_addr : 0;
 }
 
