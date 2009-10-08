@@ -96,6 +96,12 @@ void recompile_block(PowerPC_block* ppc_block){
 	
 	pass0(ppc_block);
 	
+#ifdef USE_RECOMP_CACHE
+	if(!ppc_block->code)
+		ppc_block->code = RecompCache_Alloc(ppc_block->max_length * sizeof(PowerPC_instr),
+		                                    ppc_block->start_address>>12);
+#endif
+	
 	src = src_first;
 	dst = ppc_block->code;
 	current_jump = 0;
