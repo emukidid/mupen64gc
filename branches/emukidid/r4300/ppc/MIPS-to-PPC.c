@@ -2058,6 +2058,7 @@ static void genCallInterp(MIPS_instr mips){
 	GEN_B(ppc, add_jump(-1, 1, 1), 0, 0);
 	set_next_dst(ppc);
 #endif
+	if(mips_is_jump(mips)) isDelaySlot = 1;
 }
 
 static void genJumpTo(unsigned int loc, unsigned int type){
@@ -2115,7 +2116,7 @@ static void genUpdateCount(void){
 
 static int mips_is_jump(MIPS_instr instr){
 	int opcode = MIPS_GET_OPCODE(instr);
-	int func   = MIPS_GET_RT    (instr);
+	int format = MIPS_GET_RS    (instr);
 	return (opcode == MIPS_OPCODE_J     ||
                 opcode == MIPS_OPCODE_JAL   ||
                 opcode == MIPS_OPCODE_BEQ   ||
@@ -2126,6 +2127,8 @@ static int mips_is_jump(MIPS_instr instr){
                 opcode == MIPS_OPCODE_BNEL  ||
                 opcode == MIPS_OPCODE_BLEZL ||
                 opcode == MIPS_OPCODE_BGTZL ||
-                opcode == MIPS_OPCODE_B      );
+                opcode == MIPS_OPCODE_B     ||
+                (opcode == MIPS_OPCODE_COP1 &&
+                 format == MIPS_FRMT_BC)    );
 }
 
