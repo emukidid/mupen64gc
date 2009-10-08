@@ -259,7 +259,7 @@ void deinit_block(PowerPC_block* ppc_block){
 
 int is_j_out(int branch, int is_aa){
 	if(is_aa)
-		return ((branch << 2 | (addr_first & 0xF0000000)) < addr_first ||
+		return ((branch << 2 | (addr_first & 0xF0000000)) <  addr_first ||
 		        (branch << 2 | (addr_first & 0xF0000000)) >= addr_last);
 	else {
 		int dst_instr = (src - src_first) + branch;
@@ -463,8 +463,19 @@ static void genJumpPad(PowerPC_block* ppc_block){
 	PowerPC_instr ppc = NEW_PPC_INSTR();
 	
 	// XXX: Careful there won't be a block overflow
-	if(*code_length + 16 >= ppc_block->max_length)
-			resizeCode(ppc_block, ppc_block->max_length + 16);
+	if(*code_length + 24 >= ppc_block->max_length)
+			resizeCode(ppc_block, ppc_block->max_length + 24);
+	
+	// noCheckInterrupt = 1
+	GEN_LIS(ppc, 3, (unsigned int)(&noCheckInterrupt)>>16);
+	set_next_dst(ppc);
+	GEN_ORI(ppc, 3, 3, (unsigned int)(&noCheckInterrupt));
+	set_next_dst(ppc);
+	GEN_LI(ppc, 0, 0, 1);
+	set_next_dst(ppc);
+	GEN_STW(ppc, 0, 0, 3);
+	set_next_dst(ppc);
+	
 	// Set the next address to the first address in the next block if
 	//   we've really reached the end of the block, not jumped to the pad
 	GEN_LIS(ppc, 3, ppc_block->end_address>>16);

@@ -15,6 +15,7 @@ extern unsigned long instructionCount;
 extern void (*interp_ops[64])(void);
 inline unsigned long update_invalid_addr(unsigned long addr);
 
+int noCheckInterrupt = 0;
 
 /* Recompiled code stack frame:
  *  $sp+28  | old r18 (new r18 holds &last_addr)
@@ -87,12 +88,15 @@ void dynarec(unsigned int address){
 		DYNAREC_PRELUDE();
 		address = code();
 		
-		last_addr = interp_addr = address;
-		// Check for interrupts
-		if(next_interupt <= Count){
-			gen_interupt();
-			address = interp_addr;
+		if(!noCheckInterrupt){
+			last_addr = interp_addr = address;
+			// Check for interrupts
+			if(next_interupt <= Count){
+				gen_interupt();
+				address = interp_addr;
+			}
 		}
+		noCheckInterrupt = 0;
 	}
 }
 

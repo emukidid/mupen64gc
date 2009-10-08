@@ -1108,10 +1108,10 @@ static int JALR(MIPS_instr mips){
 	// Set LR to next instruction
 	int rd = mapRegisterNew(MIPS_GET_RD(mips));
 	// lis	lr, pc@ha(0)
-	GEN_LIS(ppc, rd, get_src_pc()>>16);
+	GEN_LIS(ppc, rd, (get_src_pc()+4)>>16);
 	set_next_dst(ppc);
 	// la	lr, pc@l(lr)
-	GEN_ORI(ppc, rd, rd, get_src_pc());
+	GEN_ORI(ppc, rd, rd, get_src_pc()+4);
 	set_next_dst(ppc);
 	
 	flushRegisters();

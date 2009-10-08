@@ -24,6 +24,8 @@
 extern long long int reg[34]; // game's registers
 extern long long int reg_cop1_fgr_64[32];
 
+extern int noCheckInterrupt;
+
 unsigned int decodeNInterpret(MIPS_instr, unsigned int, int);
 int dyna_update_count(unsigned int pc);
 
