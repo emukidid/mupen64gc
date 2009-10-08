@@ -264,7 +264,7 @@ int is_j_out(int branch, int is_aa){
 		return ((branch << 2 | (addr_first & 0xF0000000)) <  addr_first ||
 		        (branch << 2 | (addr_first & 0xF0000000)) >= addr_last);
 	else {
-		int dst_instr = (src - src_first) + branch;
+		int dst_instr = (src-1 - src_first) + branch;
 		return (dst_instr < 0 || dst_instr >= (addr_last-addr_first)>>2);
 	}
 }
@@ -348,11 +348,12 @@ static void pass0(PowerPC_block* ppc_block){
 		int opcode = MIPS_GET_OPCODE(*src);
 		if(opcode == MIPS_OPCODE_J || opcode == MIPS_OPCODE_JAL){
 			unsigned int li = MIPS_GET_LI(*src);
-			++src; ++pc;
+			src+=2; ++pc;
 			if(!is_j_out(li, 1)){
 				assert( ((li&0x3FF) >= 0) && ((li&0x3FF) < 1024) );
 				isJmpDst[ li & 0x3FF ] = 1;
 			}
+			--src;
 		} else if(opcode == MIPS_OPCODE_BEQ   ||
                   opcode == MIPS_OPCODE_BNE   ||
                   opcode == MIPS_OPCODE_BLEZ  ||
@@ -363,13 +364,14 @@ static void pass0(PowerPC_block* ppc_block){
                   opcode == MIPS_OPCODE_BGTZL ||
                   opcode == MIPS_OPCODE_B     ){
         	int bd = MIPS_GET_IMMED(*src);
-        	++src; ++pc;
+        	src+=2; ++pc;
         	bd |= (bd & 0x8000) ? 0xFFFF0000 : 0; // sign extend
         	if(!is_j_out(bd, 0)){
         		int index = (pc + bd) - (addr_first >> 2);
         		assert( index >= 0 && index < 1024 );
         		isJmpDst[ index ] = 1;
         	}
+        	--src;
 		}
 	}
 }

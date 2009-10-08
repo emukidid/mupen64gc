@@ -330,9 +330,9 @@ static int (*gen_ops[64])(MIPS_instr);
 
 int convert(void){
 	MIPS_instr mips = get_next_src();
-	int needFlush = isDelaySlot = delaySlotNext; delaySlotNext = 0;
+	isDelaySlot = delaySlotNext; delaySlotNext = 0;
 	int result = gen_ops[MIPS_GET_OPCODE(mips)](mips);
-	if(needFlush) flushRegisters();
+	if(isDelaySlot) flushRegisters();
 	return result;
 }
 
