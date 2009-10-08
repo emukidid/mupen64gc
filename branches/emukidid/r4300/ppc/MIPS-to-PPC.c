@@ -317,7 +317,9 @@ static int branch(int offset, condition cond, int link, int likely){
 #endif // INTERPRET_BRANCH
 	
 	// Let's still recompile the delay slot in place in case its branched to
-	if(delaySlot){
+	// Unless the delay slot is in the next block, in which case there's nothing to skip
+	//   Testing is_j_out with an offset of 0 checks whether the delay slot is out
+	if(delaySlot && !is_j_out(0, 0)){
 		// Step over the already executed delay slot if the branch isn't taken
 		// b delaySlot+1
 		GEN_B(ppc, delaySlot+1, 0, 0);
