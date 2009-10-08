@@ -350,6 +350,7 @@ static int J(MIPS_instr mips){
 	}
 	
 	flushRegisters();
+	reset_code_addr();
 	
 	// Check the delay slot, and note how big it is
 	PowerPC_instr* preDelay = get_curr_dst();
@@ -405,6 +406,7 @@ static int JAL(MIPS_instr mips){
 	unsigned int naddr = (MIPS_GET_LI(mips)<<2)|(get_src_pc()&0xf0000000);
 	
 	flushRegisters();
+	reset_code_addr();
 	
 	// Check the delay slot, and note how big it is
 	PowerPC_instr* preDelay = get_curr_dst();
@@ -1068,6 +1070,7 @@ static int JR(MIPS_instr mips){
 	PowerPC_instr ppc;
 	
 	flushRegisters();
+	reset_code_addr();
 	
 	// Check the delay slot, and note how big it is
 	PowerPC_instr* preDelay = get_curr_dst();
@@ -1097,6 +1100,7 @@ static int JALR(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	
 	flushRegisters();
+	reset_code_addr();
 	
 	// Check the delay slot, and note how big it is
 	PowerPC_instr* preDelay = get_curr_dst();
@@ -1829,6 +1833,7 @@ static int BC(MIPS_instr mips){
 	int likely_id = -1;
 	
 	flushRegisters();
+	reset_code_addr();
 	
 	// Note: we use CR bits 20-27 (CRs 5&6) to store N64 CCs
 #ifdef INTERPRET_FP
@@ -2008,6 +2013,7 @@ static void genCallInterp(MIPS_instr mips){
 	PowerPC_instr ppc = NEW_PPC_INSTR();
 	interpretedLoop = 1;
 	flushRegisters();
+	reset_code_addr();
 	// Pass in whether this instruction is in the delay slot
 	GEN_LI(ppc, 5, 0, isDelaySlot ? 1 : 0);
 	set_next_dst(ppc);
