@@ -1052,10 +1052,12 @@ static int SRLV(MIPS_instr mips){
 	PowerPC_instr ppc;
 	int rt = mapRegister( MIPS_GET_RT(mips) );
 	int rs = mapRegister( MIPS_GET_RS(mips) );
+	GEN_RLWINM(ppc, 0, rs, 0, 27, 31); // Mask the lower 5-bits of rs
+	set_next_dst(ppc);
 	GEN_SRW(ppc,
 	        mapRegisterNew( MIPS_GET_RD(mips) ),
 	        rt,
-	        rs);
+	        0);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
