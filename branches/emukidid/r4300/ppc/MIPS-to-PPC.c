@@ -65,6 +65,7 @@ static int availableRegsDefault[32] = {
 	};
 static int availableRegs[32];
 
+#define FLUSH_REG_SIZE 3
 static int flushRegisters(void){
 	PowerPC_instr ppc;
 	int i, flushed = 0;
@@ -221,7 +222,7 @@ static int branch(int offset, condition cond, int link, int likely){
 	flushRegisters();
 	
 	if(likely){
-		// b[!cond] <past jumpto & delay>
+		// b[!cond] <past delay to update_count>
 		likely_id = add_jump_special(0);
 		GEN_BC(ppc, likely_id, 0, 0, nbo, bi); 
 		set_next_dst(ppc);
@@ -236,26 +237,16 @@ static int branch(int offset, condition cond, int link, int likely){
 	
 	genUpdateCount(); // Sets cr2 to (next_interupt ? Count)
 	
-	if(likely){
-		likely_id = add_jump_special(0);
-		GEN_BC(ppc, likely_id, 0, 0, nbo, bi);
-		set_next_dst(ppc);
-	}
-	
 #ifndef INTERPRET_BRANCH
 	// If we're jumping out, we need to trampoline using genJumpTo
 	if(is_j_out(offset, 0)){
 #endif // INTEPRET_BRANCH
-
-		if(likely)
-			// Note: if there's a delay slot, I will branch to the branch over it
-			set_jump_special(likely_id, JUMPTO_OFF_SIZE+1+(link?3:0));
-		else {
-			// b[!cond] <past jumpto & delay>
-			//   Note: if there's a delay slot, I will branch to the branch over it
-			GEN_BC(ppc, JUMPTO_OFF_SIZE+1+(link?3:0), 0, 0, nbo, bi);
-			set_next_dst(ppc);
-		}
+		
+		// b[!cond] <past jumpto & delay>
+		//   Note: if there's a delay slot, I will branch to the branch over it
+		GEN_BC(ppc, JUMPTO_OFF_SIZE+1+(link?2+FLUSH_REG_SIZE:0), 0, 0, nbo, bi);
+		set_next_dst(ppc);
+		
 		if(link){
 			// Set LR to next instruction
 			int lr = mapRegisterNew(MIPS_REG_LR);
@@ -273,9 +264,11 @@ static int branch(int offset, condition cond, int link, int likely){
 		
 #ifndef INTERPRET_BRANCH		
 	} else {
-		if(likely)
+		if(likely){
 			// Note: if there's a delay slot, I will branch to the branch over it
-			set_jump_special(likely_id, (cond?10:6)+1+(link?3:0));
+			GEN_BC(ppc, (cond?10:6)+1+(link?2+FLUSH_REG_SIZE:0), 0, 0, nbo, bi);
+			set_next_dst(ppc);
+		}
 		if(link){
 			// Set LR to next instruction
 			int lr = mapRegisterNew(MIPS_REG_LR);
