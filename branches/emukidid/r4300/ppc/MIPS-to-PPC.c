@@ -174,6 +174,10 @@ void start_new_block(void){
 	invalidateRegisters();
 	nextLRUVal = 0;
 	interpretedLoop = 0;
+	// Check if the previous instruction was a branch
+	//   and thus whether this block begins with a delay slot
+	unget_last_src();
+	if(mips_is_jump(get_next_src())) delaySlotNext = 1;
 }
 void start_new_mapping(void){
 	flushRegisters();
@@ -2132,6 +2136,7 @@ static void genUpdateCount(void){
 static int mips_is_jump(MIPS_instr instr){
 	int opcode = MIPS_GET_OPCODE(instr);
 	int format = MIPS_GET_RS    (instr);
+	int func   = MIPS_GET_FUNC  (instr);
 	return (opcode == MIPS_OPCODE_J     ||
                 opcode == MIPS_OPCODE_JAL   ||
                 opcode == MIPS_OPCODE_BEQ   ||
@@ -2143,6 +2148,9 @@ static int mips_is_jump(MIPS_instr instr){
                 opcode == MIPS_OPCODE_BLEZL ||
                 opcode == MIPS_OPCODE_BGTZL ||
                 opcode == MIPS_OPCODE_B     ||
+                (opcode == MIPS_OPCODE_R    &&
+                 (func  == MIPS_FUNC_JR     ||
+                  func  == MIPS_FUNC_JALR)) ||
                 (opcode == MIPS_OPCODE_COP1 &&
                  format == MIPS_FRMT_BC)    );
 }
