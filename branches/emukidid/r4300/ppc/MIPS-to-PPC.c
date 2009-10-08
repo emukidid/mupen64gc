@@ -270,9 +270,9 @@ static int branch(int offset, condition cond, int link, int likely){
 	} else {
 		if(likely){
 			// Note: if there's a delay slot, I will branch to the branch over it
-			GEN_BC(ppc, (cond?10:6)+1, 0, 0, nbo, bi);
+			GEN_BC(ppc, (cond?11:7)+1, 0, 0, nbo, bi);
 			set_next_dst(ppc);
-		}	
+		}
 		
 		// last_addr = naddr
 		if(cond != NONE){
@@ -293,17 +293,26 @@ static int branch(int offset, condition cond, int link, int likely){
 		set_next_dst(ppc);
 		
 		// If we need to take an interrupt, don't branch in the block
-		GEN_BLE(ppc, 2, 2, 0, 0);
+		GEN_BGT(ppc, 2, 2, 0, 0);
 		set_next_dst(ppc);
-		
-		// The actual branch
-		GEN_BC(ppc, add_jump(offset, 0, 0), 0, 0, bo, bi);
-		set_next_dst(ppc);
-		
 		// If we're taking the interrupt, we have to use the trampoline
 		// Branch to the jump pad
 		GEN_B(ppc, add_jump(-2, 1, 1), 0, 0);
 		set_next_dst(ppc);
+		
+		// The actual branch
+#if 0
+		// FIXME: Reenable this when blocks are small enough to BC within
+		//          Make sure that pass2 uses BD/LI as appropriate
+		GEN_BC(ppc, add_jump(offset, 0, 0), 0, 0, bo, bi);
+		set_next_dst(ppc);
+#else
+		GEN_BC(ppc, 2, 0, 0, nbo, bi);
+		set_next_dst(ppc);
+		GEN_B(ppc, add_jump(offset, 0, 0), 0, 0);
+		set_next_dst(ppc);
+#endif
+		
 	}
 #endif // INTERPRET_BRANCH
 	
@@ -1915,7 +1924,7 @@ static int BC(MIPS_instr mips){
 	} else if(likely){
 		// Jump over the generated jump, and both delay slots
 		set_jump_special(likely_id, 1+2*delaySlot+1);
-	
+		
 		// b[cond] <dest> 
 		GEN_BC(ppc, 
 		       add_jump(signExtend(MIPS_GET_IMMED(mips),16), 0, j_out),

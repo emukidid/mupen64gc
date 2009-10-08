@@ -317,8 +317,15 @@ static void pass2(PowerPC_block* ppc_block){
 			       jump_table[i].old_jump, jump_table[i].new_jump);
 			DEBUG_print(txtbuffer, DBG_USBGECKO);*/
 			
+#if 0
+			// FIXME: Reenable this when blocks are small enough to BC within
+			//          Make sure that branch is using BC/B as appropriate
 			*current &= ~(PPC_BD_MASK << PPC_BD_SHIFT);
 			PPC_SET_BD(*current, jump_table[i].new_jump);
+#else
+			*current &= ~(PPC_LI_MASK << PPC_LI_SHIFT);
+			PPC_SET_LI(*current, jump_table[i].new_jump);
+#endif
 			
 		} else { // Jump instruction
 			// The jump_address is actually calculated with the delay slot address
