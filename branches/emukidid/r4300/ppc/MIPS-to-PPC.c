@@ -268,12 +268,6 @@ static int branch(int offset, condition cond, int link, int likely){
 		
 #ifndef INTERPRET_BRANCH		
 	} else {
-		if(likely){
-			// Note: if there's a delay slot, I will branch to the branch over it
-			GEN_BC(ppc, (cond?11:7)+1, 0, 0, nbo, bi);
-			set_next_dst(ppc);
-		}
-		
 		// last_addr = naddr
 		if(cond != NONE){
 			GEN_BC(ppc, 4, 0, 0, bo, bi);
@@ -292,10 +286,10 @@ static int branch(int offset, condition cond, int link, int likely){
 		GEN_STW(ppc, 3, 0, DYNAREG_LADDR);
 		set_next_dst(ppc);
 		
-		// If we need to take an interrupt, don't branch in the block
+		// If not taking an interrupt, skip the branch to jump_pad
 		GEN_BGT(ppc, 2, 2, 0, 0);
 		set_next_dst(ppc);
-		// If we're taking the interrupt, we have to use the trampoline
+		// If taking the interrupt, use the trampoline
 		// Branch to the jump pad
 		GEN_B(ppc, add_jump(-2, 1, 1), 0, 0);
 		set_next_dst(ppc);
