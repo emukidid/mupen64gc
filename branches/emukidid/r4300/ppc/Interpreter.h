@@ -51,7 +51,7 @@ unsigned int decodeNInterpret();
 
 //#define INTERPRET_CLO
 
-#define INTERPRET_HILO
+//#define INTERPRET_HILO
 #if 1
 #define INTERPRET_MULT
 #define INTERPRET_MULTU
