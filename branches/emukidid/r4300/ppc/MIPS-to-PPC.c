@@ -221,6 +221,19 @@ static int branch(int offset, condition cond, int link, int likely){
 	
 	flushRegisters();
 	
+	if(link){
+		// Set LR to next instruction
+		int lr = mapRegisterNew(MIPS_REG_LR);
+		// lis	lr, pc@ha(0)
+		GEN_LIS(ppc, lr, (get_src_pc()+8)>>16);
+		set_next_dst(ppc);
+		// la	lr, pc@l(lr)
+		GEN_ORI(ppc, lr, lr, get_src_pc()+8);
+		set_next_dst(ppc);
+		
+		flushRegisters();
+	}
+	
 	if(likely){
 		// b[!cond] <past delay to update_count>
 		likely_id = add_jump_special(0);
@@ -244,21 +257,8 @@ static int branch(int offset, condition cond, int link, int likely){
 		
 		// b[!cond] <past jumpto & delay>
 		//   Note: if there's a delay slot, I will branch to the branch over it
-		GEN_BC(ppc, JUMPTO_OFF_SIZE+1+(link?2+FLUSH_REG_SIZE:0), 0, 0, nbo, bi);
+		GEN_BC(ppc, JUMPTO_OFF_SIZE+1, 0, 0, nbo, bi);
 		set_next_dst(ppc);
-		
-		if(link){
-			// Set LR to next instruction
-			int lr = mapRegisterNew(MIPS_REG_LR);
-			// lis	lr, pc@ha(0)
-			GEN_LIS(ppc, lr, (get_src_pc()+4)>>16);
-			set_next_dst(ppc);
-			// la	lr, pc@l(lr)
-			GEN_ORI(ppc, lr, lr, get_src_pc()+4);
-			set_next_dst(ppc);
-			
-			flushRegisters();
-		}
 		
 		genJumpTo(offset, JUMPTO_OFF);
 		
@@ -266,20 +266,8 @@ static int branch(int offset, condition cond, int link, int likely){
 	} else {
 		if(likely){
 			// Note: if there's a delay slot, I will branch to the branch over it
-			GEN_BC(ppc, (cond?10:6)+1+(link?2+FLUSH_REG_SIZE:0), 0, 0, nbo, bi);
+			GEN_BC(ppc, (cond?10:6)+1, 0, 0, nbo, bi);
 			set_next_dst(ppc);
-		}
-		if(link){
-			// Set LR to next instruction
-			int lr = mapRegisterNew(MIPS_REG_LR);
-			// lis	lr, pc@ha(0)
-			GEN_LIS(ppc, lr, (get_src_pc()+4)>>16);
-			set_next_dst(ppc);
-			// la	lr, pc@l(lr)
-			GEN_ORI(ppc, lr, lr, get_src_pc()+4);
-			set_next_dst(ppc);
-			
-			flushRegisters();
 		}	
 		
 		// last_addr = naddr
