@@ -3,8 +3,11 @@
  ************************************************
    FIXME: Review all branch destinations
    TODO: Create FP register mapping and recompile those
+         Allow upper 32-bits of a register to mapped for 64-bit instructions
          If possible (and not too complicated), it would be nice to leave out
            the in-place delay slot which is skipped if it is not branched to
+           (That might be tricky as you don't know whether an outside branch
+            or an interpreted branch might branch there)
          Optimize idle branches (generate a call to gen_interrupt)
  */
 
@@ -29,9 +32,10 @@ void jump_to(unsigned int);
 // Infinite loop-breaker code
 static int interpretedLoop;
 
-// Variable to indicate whether the current recompiled instruction
+// Variable to indicate whether the next recompiled instruction
 //   is a delay slot (which needs to have its registers flushed)
-static int isDelaySlot;
+//   and the current instruction
+static int delaySlotNext, isDelaySlot;
 // This should be called before the jump is recompiled
 static inline int check_delaySlot(void){
 	interpretedLoop = 0; // Reset this variable for the next basic block
@@ -40,7 +44,7 @@ static inline int check_delaySlot(void){
 		return 0;
 	} else {
 		if(mips_is_jump(peek_next_src())) return CONVERT_WARNING;
-		isDelaySlot = 1;
+		delaySlotNext = 1;
 		convert(); // This just moves the delay slot instruction ahead of the branch
 		return 1;
 	}
@@ -311,7 +315,7 @@ static int branch(int offset, condition cond, int link, int likely){
 		set_next_dst(ppc); 
 		
 		unget_last_src();
-		isDelaySlot = 1;
+		delaySlotNext = 1;
 	} else nop_ignored();
 	
 #ifdef INTERPRET_BRANCH
@@ -326,7 +330,7 @@ static int (*gen_ops[64])(MIPS_instr);
 
 int convert(void){
 	MIPS_instr mips = get_next_src();
-	int needFlush = isDelaySlot; isDelaySlot = 0;
+	int needFlush = isDelaySlot = delaySlotNext; delaySlotNext = 0;
 	int result = gen_ops[MIPS_GET_OPCODE(mips)](mips);
 	if(needFlush) flushRegisters();
 	return result;
@@ -391,7 +395,7 @@ static int J(MIPS_instr mips){
 #endif
 	
 	// Let's still recompile the delay slot in place in case its branched to
-	if(delaySlot){ unget_last_src(); isDelaySlot = 1; }
+	if(delaySlot){ unget_last_src(); delaySlotNext = 1; }
 	else nop_ignored();
 	
 #ifdef INTERPRET_J
@@ -461,7 +465,7 @@ static int JAL(MIPS_instr mips){
 	// Let's still recompile the delay slot in place in case its branched to
 	if(delaySlot){
 		unget_last_src();
-		isDelaySlot = 1;
+		delaySlotNext = 1;
 		// TODO
 		// Step over the already executed delay slot if we ever
 		//   actually use the real LR for JAL
@@ -1086,7 +1090,7 @@ static int JR(MIPS_instr mips){
 #endif
 	
 	// Let's still recompile the delay slot in place in case its branched to
-	if(delaySlot){ unget_last_src(); isDelaySlot = 1; }
+	if(delaySlot){ unget_last_src(); delaySlotNext = 1; }
 	else nop_ignored();
 	
 #ifdef INTERPRET_JR
@@ -1131,7 +1135,7 @@ static int JALR(MIPS_instr mips){
 	// Let's still recompile the delay slot in place in case its branched to
 	if(delaySlot){
 		unget_last_src();
-		isDelaySlot = 1;
+		delaySlotNext = 1;
 		// TODO
 		// Step over the already executed delay slot if we ever
 		//   actually use the real LR for JAL
@@ -1932,7 +1936,7 @@ static int BC(MIPS_instr mips){
 	}
 	
 	// Let's still recompile the delay slot in place in case its branched to
-	if(delaySlot){ unget_last_src(); isDelaySlot = 1; }
+	if(delaySlot){ unget_last_src(); delaySlotNext = 1; }
 	else nop_ignored();
 	
 #ifdef INTERPRET_BC
@@ -2064,7 +2068,7 @@ static void genCallInterp(MIPS_instr mips){
 	GEN_B(ppc, add_jump(-1, 1, 1), 0, 0);
 	set_next_dst(ppc);
 #endif
-	if(mips_is_jump(mips)) isDelaySlot = 1;
+	if(mips_is_jump(mips)) delaySlotNext = 1;
 }
 
 static void genJumpTo(unsigned int loc, unsigned int type){

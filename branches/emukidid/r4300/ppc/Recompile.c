@@ -56,7 +56,7 @@ int has_next_src(void){ return (src_last-src) > 0; }
 unsigned int get_src_pc(void){ return addr_first + ((src-1-src_first)<<2); }
 void set_next_dst(PowerPC_instr i){ *(dst++) = i; ++(*code_length); }
 // Adjusts the code_addr for the current instruction to account for flushes
-void reset_code_addr(void){ code_addr[src-1-src_first = dst; }
+void reset_code_addr(void){ code_addr[src-1-src_first] = dst; }
 
 int add_jump(int old_jump, int is_j, int is_out){
 	int id = current_jump;
