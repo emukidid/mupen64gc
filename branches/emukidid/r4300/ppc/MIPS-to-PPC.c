@@ -232,7 +232,15 @@ static int branch(int offset, condition cond, int link, int likely){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 	
+	if(likely) set_jump_special(likely_id, delaySlot+1);
+	
 	genUpdateCount(); // Sets cr2 to (next_interupt ? Count)
+	
+	if(likely){
+		likely_id = add_jump_special(0);
+		GEN_BC(ppc, likely_id, 0, 0, nbo, bi);
+		set_next_dst(ppc);
+	}
 	
 #ifndef INTERPRET_BRANCH
 	// If we're jumping out, we need to trampoline using genJumpTo
@@ -241,7 +249,7 @@ static int branch(int offset, condition cond, int link, int likely){
 
 		if(likely)
 			// Note: if there's a delay slot, I will branch to the branch over it
-			set_jump_special(likely_id, JUMPTO_OFF_SIZE+delaySlot+1+(link?3:0));
+			set_jump_special(likely_id, JUMPTO_OFF_SIZE+1+(link?3:0));
 		else {
 			// b[!cond] <past jumpto & delay>
 			//   Note: if there's a delay slot, I will branch to the branch over it
@@ -267,7 +275,7 @@ static int branch(int offset, condition cond, int link, int likely){
 	} else {
 		if(likely)
 			// Note: if there's a delay slot, I will branch to the branch over it
-			set_jump_special(likely_id, (cond?10:6)+delaySlot+1+(link?3:0));
+			set_jump_special(likely_id, (cond?10:6)+1+(link?3:0));
 		if(link){
 			// Set LR to next instruction
 			int lr = mapRegisterNew(MIPS_REG_LR);
@@ -2105,7 +2113,7 @@ static void genUpdateCount(void){
 	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
 	set_next_dst(ppc);
 	// Load the current PC as the argument
-	GEN_LIS(ppc, 3, get_src_pc()>>16);
+	GEN_LIS(ppc, 3, (get_src_pc()+4)>>16);
 	set_next_dst(ppc);
 	GEN_ORI(ppc, 3, 3, get_src_pc()+4);
 	set_next_dst(ppc);
