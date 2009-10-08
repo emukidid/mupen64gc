@@ -106,6 +106,7 @@ unsigned int decodeNInterpret(MIPS_instr mips, unsigned int pc,
 	PC->addr = interp_addr = pc;
 	prefetch_opcode(mips);
 	interp_ops[MIPS_GET_OPCODE(mips)]();
+	delay_slot = 0;
 	
 	if(interp_addr != pc + 4) noCheckInterrupt = 1;
 	

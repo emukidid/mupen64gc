@@ -340,7 +340,7 @@ static int NI(MIPS_instr mips){
 
 static int J(MIPS_instr mips){
 	PowerPC_instr  ppc;
-	unsigned int naddr = (MIPS_GET_LI(mips)<<2)|(get_src_pc()&0xf0000000);
+	unsigned int naddr = (MIPS_GET_LI(mips)<<2)|((get_src_pc()+4)&0xf0000000);
 	
 	if(!interpretedLoop && naddr <= get_src_pc()){
 		// If we're jumping backwards without any calls to the
@@ -403,7 +403,7 @@ static int J(MIPS_instr mips){
 
 static int JAL(MIPS_instr mips){
 	PowerPC_instr  ppc;
-	unsigned int naddr = (MIPS_GET_LI(mips)<<2)|(get_src_pc()&0xf0000000);
+	unsigned int naddr = (MIPS_GET_LI(mips)<<2)|((get_src_pc()+4)&0xf0000000);
 	
 	flushRegisters();
 	reset_code_addr();
@@ -412,6 +412,8 @@ static int JAL(MIPS_instr mips){
 	PowerPC_instr* preDelay = get_curr_dst();
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
+	
+	genUpdateCount(); // Sets cr2 to (next_interupt ? Count)
 	
 	// Set LR to next instruction
 	int lr = mapRegisterNew(MIPS_REG_LR);
@@ -423,8 +425,6 @@ static int JAL(MIPS_instr mips){
 	set_next_dst(ppc);
 	
 	flushRegisters();
-	
-	genUpdateCount(); // Sets cr2 to (next_interupt ? Count)
 	
 #ifdef INTERPRET_JAL
 	genJumpTo(MIPS_GET_LI(mips), JUMPTO_ADDR);
@@ -1107,6 +1107,8 @@ static int JALR(MIPS_instr mips){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 	
+	genUpdateCount();
+	
 	// TODO: If I can figure out using the LR,
 	//         this might only be necessary for interp
 	// Set LR to next instruction
@@ -1119,8 +1121,6 @@ static int JALR(MIPS_instr mips){
 	set_next_dst(ppc);
 	
 	flushRegisters();
-	
-	genUpdateCount();
 	
 #ifdef INTERPRET_JALR
 	genJumpTo(MIPS_GET_RS(mips), JUMPTO_REG);
