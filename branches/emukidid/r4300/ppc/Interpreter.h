@@ -62,7 +62,7 @@ unsigned int decodeNInterpret();
 //#define INTERPRET_MOVN
 //#define INTERPRET_MOVZ
 
-#if 1
+#if 0
 #define INTERPRET_SLT
 #define INTERPRET_SLTU
 #define INTERPRET_SLTI

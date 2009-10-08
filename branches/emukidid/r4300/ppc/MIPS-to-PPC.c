@@ -579,7 +579,7 @@ static int SLTI(MIPS_instr mips){
 	int rs = mapRegister( MIPS_GET_RS(mips) );
 	int rt = mapRegisterNew( MIPS_GET_RT(mips) );
 	// r0 = immed (sign extended)
-	GEN_ADDI(ppc, 0, 0, signExtend(MIPS_GET_IMMED(mips),16));
+	GEN_ADDI(ppc, 0, 0, MIPS_GET_IMMED(mips));
 	set_next_dst(ppc);
 	// rt = ~(rs ^ immed)
 	GEN_EQV(ppc, rt, 0, rs);
@@ -609,11 +609,11 @@ static int SLTIU(MIPS_instr mips){
 #else
 	int rs = mapRegister( MIPS_GET_RS(mips) );
 	int rt = mapRegisterNew( MIPS_GET_RT(mips) );
-	// rt = immed
-	GEN_ORI(ppc, rt, mapRegister(0), MIPS_GET_IMMED(mips));
+	// rt = EXTS(immed)
+	GEN_ADDI(ppc, rt, 0, MIPS_GET_IMMED(mips));
 	set_next_dst(ppc);
 	// carry = rs < rt ? 0 : 1
-	GEN_SUBFC(ppc, rt, rs, rt);
+	GEN_SUBFC(ppc, rt, rt, rs);
 	set_next_dst(ppc);
 	// rt = carry - 1 ( = rs < immed ? -1 : 0 )
 	GEN_SUBFE(ppc, rt, rt, rt);
