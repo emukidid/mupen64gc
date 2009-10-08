@@ -270,6 +270,19 @@ static int branch(int offset, condition cond, int link, int likely){
 		
 		genJumpTo(offset, JUMPTO_OFF);
 		
+		// The branch isn't taken, but we need to check interrupts
+		GEN_BGT(ppc, 2, 4, 0, 0);
+		set_next_dst(ppc);
+		// Load the address of the next instruction
+		GEN_LIS(ppc, 3, (get_src_pc() + (offset<<2))>>16);
+		set_next_dst(ppc);
+		GEN_ORI(ppc, 3, 3, get_src_pc() + (offset<<2));
+		set_next_dst(ppc);
+		// If taking the interrupt, use the trampoline
+		// Branch to the jump pad
+		GEN_B(ppc, add_jump(-2, 1, 1), 0, 0);
+		set_next_dst(ppc);
+		
 #ifndef INTERPRET_BRANCH		
 	} else {
 		// last_addr = naddr
