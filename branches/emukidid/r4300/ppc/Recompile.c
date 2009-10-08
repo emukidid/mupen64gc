@@ -51,12 +51,12 @@ int has_next_src(void){ return (src_last-src) > 0; }
  // Makes sure a branch to a NOP in the delay slot won't crash
  // This should be called ONLY after get_next_src returns a
  //   NOP in a delay slot
- void nop_ignored(void){ code_addr[src-1-src_first] = dst; }
+ void nop_ignored(void){ if(src<src_last) code_addr[src-1-src_first] = dst; }
 // Returns the MIPS PC
 unsigned int get_src_pc(void){ return addr_first + ((src-1-src_first)<<2); }
 void set_next_dst(PowerPC_instr i){ *(dst++) = i; ++(*code_length); }
 // Adjusts the code_addr for the current instruction to account for flushes
-void reset_code_addr(void){ code_addr[src-1-src_first] = dst; }
+void reset_code_addr(void){ if(src<src_last) code_addr[src-1-src_first] = dst; }
 
 int add_jump(int old_jump, int is_j, int is_out){
 	int id = current_jump;
