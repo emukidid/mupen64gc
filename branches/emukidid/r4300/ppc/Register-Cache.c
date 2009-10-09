@@ -2,6 +2,7 @@
    by Mike Slegeir for Mupen64-GC
  */
 
+#include <string.h>
 #include "Register-Cache.h"
 #include "PowerPC.h"
 #include "Wrappers.h"
