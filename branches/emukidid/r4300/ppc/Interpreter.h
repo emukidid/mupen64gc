@@ -42,10 +42,9 @@ unsigned int decodeNInterpret();
 #define INTERPRET_SWC1
 #define INTERPRET_SDC1
 
-#define INTERPRET_DW
+//#define INTERPRET_DW
 
-#define INTERPRET_DADDIU
-#define INTERPRET_DADDI
+//#define INTERPRET_DADDIU
 #define INTERPRET_DSLLV
 #define INTERPRET_DSRLV
 #define INTERPRET_DSRAV
@@ -53,13 +52,11 @@ unsigned int decodeNInterpret();
 #define INTERPRET_DMULTU
 #define INTERPRET_DDIV
 #define INTERPRET_DDIVU
-#define INTERPRET_DADDU
-#define INTERPRET_DADD
-#define INTERPRET_DSUBU
-#define INTERPRET_DSUB
-#define INTERPRET_DSLL
-#define INTERPRET_DSRL
-#define INTERPRET_DSRA
+//#define INTERPRET_DADDU
+//#define INTERPRET_DSUBU
+//#define INTERPRET_DSLL
+//#define INTERPRET_DSRL
+//#define INTERPRET_DSRA
 #define INTERPRET_DSLL32
 #define INTERPRET_DSRL32
 #define INTERPRET_DSRA32
@@ -73,7 +70,7 @@ unsigned int decodeNInterpret();
 
 //#define INTERPRET_HILO
 
-#define INTERPRET_MULT
+//#define INTERPRET_MULT
 #define INTERPRET_MULTU
 #define INTERPRET_DIV
 #define INTERPRET_DIVU
