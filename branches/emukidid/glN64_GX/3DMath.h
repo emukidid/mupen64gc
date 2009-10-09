@@ -239,6 +239,35 @@ MultMatrix_Loop:
 	: /* no output */
 	: "S"(m0), "D"(m1), "c"(4)
 	: "memory" );
+#elif defined(GEKKO)
+	int i, j, k;
+	float dst[4][4] = {{0.0f}};
+	
+	for (k = 0; k < 4; k++)
+	{
+		for (i = 0; i < 4; i++)
+		{
+			// fr2 = m1[i][k], m1[i][k]
+			__asm__ volatile(
+				"psq_lx      2, %1, %0, 1, 0 \n"
+				"ps_merge00  2,  2,  2       \n"
+				:: "r" (m1+i), "r" (k*4)
+				:  "r0", "fr2");
+			for (j = 0; j < 4; j+=2)
+			{
+				//dst[i][j]   += m1[i][k]*m0[k][j];
+				//dst[i][j+1] += m1[i][k]*m0[k][j+1];
+				__asm__ volatile(
+					"psq_lx   3, %2, %0, 0, 0 \n"
+					"psq_lx   4, %2, %1, 0, 0 \n"
+					"ps_madd  4,  2,  3, 4    \n"
+					"psq_stx  4, %2, %1, 0, 0 \n"
+					:: "r" (m0+k), "r" (dst+i), "r" (j*4)
+					: "r0", "fr3", "fr4", "memory");
+			}
+		}
+	}
+	memcpy( m0, dst, sizeof(float) * 16 );
 # else // X86_ASM
 #  ifndef __GX__
 	int i;
