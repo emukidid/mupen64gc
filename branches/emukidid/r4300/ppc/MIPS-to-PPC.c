@@ -251,9 +251,8 @@ static int J(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	unsigned int naddr = (MIPS_GET_LI(mips)<<2)|((get_src_pc()+4)&0xf0000000);
 	
-	if(!interpretedLoop && naddr <= get_src_pc()){
-		// If we're jumping backwards without any calls to the
-		//   interpreter, call it here to check interrupts
+	if(naddr == get_src_pc()){
+		// J_IDLE
 		genCallInterp(mips);
 		return INTERPRETED;
 	}
@@ -391,6 +390,7 @@ static int BEQ(MIPS_instr mips){
 	
 	if(MIPS_GET_IMMED(mips) == 0xffff &&
 	   MIPS_GET_RA(mips) == MIPS_GET_RB(mips)){
+		// BEQ_IDLE
 		genCallInterp(mips);
 		return INTERPRETED;
 	}
@@ -2274,6 +2274,12 @@ static int REGIMM(MIPS_instr mips){
 	int likely = which & 2;
 	int link   = which & 16;
 	
+	if(MIPS_GET_IMMED(mips) == 0xffff){
+		// REGIMM_IDLE
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
+	
 	// cmpi ra, 0
 	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 4);
 	set_next_dst(ppc);
@@ -2318,10 +2324,10 @@ static int MFC1(MIPS_instr mips){
 	flushFPR(fs);
 	
 	// rt = reg_cop1_simple[fs]
-	LWZ(ppc, rt, fs*4, DYNAREG_FPR_32);
+	GEN_LWZ(ppc, rt, fs*4, DYNAREG_FPR_32);
 	set_next_dst(ppc);
 	// rt = *rt
-	LWZ(ppc, rt, 0, rt);
+	GEN_LWZ(ppc, rt, 0, rt);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -2368,8 +2374,10 @@ static int MTC1(MIPS_instr mips){
 	int addr = mapRegisterTemp();
 	invalidateFPR(fs);
 	
+	// addr = reg_cop1_simple[fs]
 	GEN_LWZ(ppc, addr, fs*4, DYNAREG_FPR_32);
 	set_next_dst(ppc);
+	// *addr = rt
 	GEN_STW(ppc, rt, 0, addr);
 	set_next_dst(ppc);
 	

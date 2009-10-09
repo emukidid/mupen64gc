@@ -321,8 +321,8 @@ static void rsp_info_init(void){
 
 void ScanPADSandReset() {
 	PAD_ScanPads();
-	/*if(!((*(u32*)0xCC003000)>>16))
-		stop = 1;*/
+	if(!((*(u32*)0xCC003000)>>16))
+		stop = 1;
 }
 void ResetCallBack() {stop = 1;}
 

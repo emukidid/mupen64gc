@@ -88,7 +88,9 @@ void dynarec(unsigned int address){
 			/*sprintf(txtbuffer, "block at %08x is invalid\n", address&~0xFFF);
 			DEBUG_print(txtbuffer, DBG_USBGECKO);*/
 			dst_block->length = 0;
+			start_section(COMPILER_SECTION);
 			recompile_block(dst_block);
+			end_section(COMPILER_SECTION);
 		}
 		
 		// Recompute the block offset

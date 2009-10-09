@@ -103,7 +103,7 @@ unsigned int stats_buffer[MAX_STATS];
 unsigned int avge_counter[MAX_STATS];
 void DEBUG_stats(int stats_id, char *info, unsigned int stats_type, unsigned int adjustment_value) 
 {
-	#ifdef SHOW_DEBUG
+	#if defined(SHOW_DEBUG) && defined(SHOW_STATS)
 	switch(stats_type)
 	{
 		case STAT_TYPE_ACCUM:	//accumulate

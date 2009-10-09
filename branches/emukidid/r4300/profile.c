@@ -70,6 +70,9 @@ void refresh_stat()
 	sprintf(txtbuffer, "fp=%f%%", 100.0f * (float)time_in_section[FP_SECTION] / (float)time_in_section[0]);
 	DEBUG_print(txtbuffer, DBG_PROFILE_FP);
 	
+	sprintf(txtbuffer, "comp=%f%%", 100.0f * (float)time_in_section[COMPILER_SECTION] / (float)time_in_section[0]);
+	DEBUG_print(txtbuffer, DBG_PROFILE_COMP);
+	
 	int i;
 	for(i=1; i<=NUM_SECTIONS; ++i) time_in_section[i] = 0;
 	last_start[0] = this_tick;
