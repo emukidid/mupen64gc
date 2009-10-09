@@ -82,8 +82,8 @@ unsigned int decodeNInterpret();
 
 //#define INTERPRET_SLT
 //#define INTERPRET_SLTU
-#define INTERPRET_SLTI      //fix me
-#define INTERPRET_SLTIU     //fix me
+//#define INTERPRET_SLTI
+//#define INTERPRET_SLTIU
 
 
 //#define INTERPRET_J

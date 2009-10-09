@@ -293,6 +293,20 @@ static RegMapping mapRegister64(int reg){
 	return regMap[reg].map;
 }
 
+static int mapRegisterTemp(void){
+	// Try to find an already available register
+	int available = getAvailableHWReg();
+	if(available >= 0) return available;
+	// If there are none, flush the LRU and use it
+	RegMapping lru = flushLRURegister();
+	if(lru.hi >= 0) availableRegs[lru.hi] = 1;
+	return lru.lo;
+}
+
+static void unmapRegisterTemp(int reg){
+	availableRegs[reg] = 1;
+}
+
 // Initialize register mappings
 void start_new_block(void){
 	invalidateRegisters();
@@ -700,16 +714,19 @@ static int SLTI(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else
+	
 	int rs = mapRegister( MIPS_GET_RS(mips) );
 	int rt = mapRegisterNew( MIPS_GET_RT(mips) );
-	// r0 = immed (sign extended)
-	GEN_ADDI(ppc, 0, 0, MIPS_GET_IMMED(mips));
-	set_next_dst(ppc);
-	// rt = ~(rs ^ immed)
-	GEN_EQV(ppc, rt, 0, rs);
+	int tmp = (rs == rt) ? mapRegisterTemp() : rt;
+	
+	// tmp = immed (sign extended)
+	GEN_ADDI(ppc, tmp, 0, MIPS_GET_IMMED(mips));
 	set_next_dst(ppc);
 	// carry = rs < immed ? 0 : 1 (unsigned)
-	GEN_SUBFC(ppc, 0, 0, rs);
+	GEN_SUBFC(ppc, 0, tmp, rs);
+	set_next_dst(ppc);
+	// rt = ~(rs ^ immed)
+	GEN_EQV(ppc, rt, tmp, rs);
 	set_next_dst(ppc);
 	// rt = sign(rs) == sign(immed) ? 1 : 0
 	GEN_SRWI(ppc, rt, rt, 31);
@@ -721,6 +738,8 @@ static int SLTI(MIPS_instr mips){
 	GEN_RLWINM(ppc, rt, rt, 0, 31, 31);
 	set_next_dst(ppc);
 	
+	if(rs == rt) unmapRegisterTemp(tmp);
+	
 	return CONVERT_SUCCESS;
 #endif
 }
@@ -731,13 +750,15 @@ static int SLTIU(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else
+	
 	int rs = mapRegister( MIPS_GET_RS(mips) );
 	int rt = mapRegisterNew( MIPS_GET_RT(mips) );
-	// rt = EXTS(immed)
-	GEN_ADDI(ppc, rt, 0, MIPS_GET_IMMED(mips));
+	
+	// r0 = EXTS(immed)
+	GEN_ADDI(ppc, 0, 0, MIPS_GET_IMMED(mips));
 	set_next_dst(ppc);
-	// carry = rs < rt ? 0 : 1
-	GEN_SUBFC(ppc, rt, rt, rs);
+	// carry = rs < immed ? 0 : 1
+	GEN_SUBFC(ppc, rt, 0, rs);
 	set_next_dst(ppc);
 	// rt = carry - 1 ( = rs < immed ? -1 : 0 )
 	GEN_SUBFE(ppc, rt, rt, rt);
