@@ -15,18 +15,22 @@ unsigned int decodeNInterpret();
 
 // These defines tell the recompiler to interpret
 //  rather than recompile the instruction
+#if 0
 #define INTERPRET_LB
 #define INTERPRET_LBU
 #define INTERPRET_LH
 #define INTERPRET_LHU
 #define INTERPRET_LW
+#endif
 #define INTERPRET_LWU
 #define INTERPRET_LWL
 #define INTERPRET_LWR
 
-//#define INTERPRET_SB
-//#define INTERPRET_SH
-//#define INTERPRET_SW
+#if 0
+#define INTERPRET_SB
+#define INTERPRET_SH
+#define INTERPRET_SW
+#endif
 #define INTERPRET_SWL
 #define INTERPRET_SWR
 
@@ -104,7 +108,7 @@ unsigned int decodeNInterpret();
 
 //#define INTERPRET_FP
 
-#define INTERPRET_MFC1
+//#define INTERPRET_MFC1
 #define INTERPRET_DMFC1
 #define INTERPRET_CFC1
 #define INTERPRET_MTC1
@@ -114,7 +118,7 @@ unsigned int decodeNInterpret();
 
 //#define INTERPRET_FP_S
 //#define INTERPRET_FP_D
-#define INTERPRET_FP_W
+//#define INTERPRET_FP_W
 #define INTERPRET_FP_L
 
 //#define INTERPRET_FP_ADD
@@ -136,7 +140,7 @@ unsigned int decodeNInterpret();
 #define INTERPRET_FP_CEIL_W
 //#define INTERPRET_FP_CVT_S
 //#define INTERPRET_FP_CVT_D
-#define INTERPRET_FP_CVT_W
+//#define INTERPRET_FP_CVT_W
 #define INTERPRET_FP_CVT_L
 
 #define INTERPRET_FP_C_F
