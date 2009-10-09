@@ -45,9 +45,9 @@ unsigned int decodeNInterpret();
 //#define INTERPRET_DW
 
 //#define INTERPRET_DADDIU
-#define INTERPRET_DSLLV
-#define INTERPRET_DSRLV
-#define INTERPRET_DSRAV
+//#define INTERPRET_DSLLV
+//#define INTERPRET_DSRLV
+//#define INTERPRET_DSRAV
 #define INTERPRET_DMULT
 #define INTERPRET_DMULTU
 #define INTERPRET_DDIV
