@@ -1573,8 +1573,38 @@ static int DSLLV(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else  // INTERPRET_DW || INTERPRET_DSLLV
-	// TODO: dsllv
-	return CONVERT_ERROR;
+	
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	RegMapping rt = mapRegister64( MIPS_GET_RT(mips) );
+	RegMapping rd = mapRegister64New( MIPS_GET_RD(mips) );
+	
+	// FIXME: I may need to mask: rs&0x3f
+	// Shift the MSW
+	GEN_SLW(ppc, rd.hi, rt.hi, rs);
+	set_next_dst(ppc);
+	// Calculate 32-sh
+	GEN_SUBFIC(ppc, 0, rs, 32);
+	set_next_dst(ppc);
+	// Extract the bits that will be shifted out the LSW (sh < 32)
+	GEN_SRW(ppc, 0, rt.lo, 0);
+	set_next_dst(ppc);
+	// Insert the bits into the MSW
+	GEN_OR(ppc, rd.hi, rd.hi, 0);
+	set_next_dst(ppc);
+	// Calculate sh-32
+	GEN_ADDI(ppc, 0, rs, -32);
+	set_next_dst(ppc);
+	// Extract the bits that will be shifted out the LSW (sh > 31)
+	GEN_SLW(ppc, 0, rt.lo, 0);
+	set_next_dst(ppc);
+	// Insert the bits into the MSW
+	GEN_OR(ppc, rd.hi, rd.hi, 0);
+	set_next_dst(ppc);
+	// Shift the LSW
+	GEN_SLW(ppc, rd.lo, rt.lo, rs);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -1584,8 +1614,38 @@ static int DSRLV(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else  // INTERPRET_DW || INTERPRET_DSRLV
-	// TODO: dsrlv
-	return CONVERT_ERROR;
+	
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	RegMapping rt = mapRegister64( MIPS_GET_RT(mips) );
+	RegMapping rd = mapRegister64New( MIPS_GET_RD(mips) );
+	
+	// FIXME: I may need to mask: rs&0x3f
+	// Shift the LSW
+	GEN_SRW(ppc, rd.lo, rt.lo, rs);
+	set_next_dst(ppc);
+	// Calculate 32-sh
+	GEN_SUBFIC(ppc, 0, rs, 32);
+	set_next_dst(ppc);
+	// Extract the bits that will be shifted out the MSW (sh < 32)
+	GEN_SLW(ppc, 0, rt.hi, 0);
+	set_next_dst(ppc);
+	// Insert the bits into the LSW
+	GEN_OR(ppc, rd.lo, rd.lo, 0);
+	set_next_dst(ppc);
+	// Calculate sh-32
+	GEN_ADDI(ppc, 0, rs, -32);
+	set_next_dst(ppc);
+	// Extract the bits that will be shifted out the MSW (sh > 31)
+	GEN_SRW(ppc, 0, rt.hi, 0);
+	set_next_dst(ppc);
+	// Insert the bits into the LSW
+	GEN_OR(ppc, rd.lo, rd.lo, 0);
+	set_next_dst(ppc);
+	// Shift the MSW
+	GEN_SRW(ppc, rd.hi, rt.hi, rs);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -1595,8 +1655,38 @@ static int DSRAV(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else  // INTERPRET_DW || INTERPRET_DSRAV
-	// TODO: dsrav
-	return CONVERT_ERROR;
+	
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	RegMapping rt = mapRegister64( MIPS_GET_RT(mips) );
+	RegMapping rd = mapRegister64New( MIPS_GET_RD(mips) );
+	
+	// FIXME: I may need to mask: rs&0x3f
+	// Shift the LSW
+	GEN_SRW(ppc, rd.lo, rt.lo, rs);
+	set_next_dst(ppc);
+	// Calculate 32-sh
+	GEN_SUBFIC(ppc, 0, rs, 32);
+	set_next_dst(ppc);
+	// Extract the bits that will be shifted out the MSW (sh < 32)
+	GEN_SLW(ppc, 0, rt.hi, 0);
+	set_next_dst(ppc);
+	// Insert the bits into the LSW
+	GEN_OR(ppc, rd.lo, rd.lo, 0);
+	set_next_dst(ppc);
+	// Calculate sh-32
+	GEN_ADDI(ppc, 0, rs, -32);
+	set_next_dst(ppc);
+	// Extract the bits that will be shifted out the MSW (sh > 31)
+	GEN_SRAW(ppc, 0, rt.hi, 0);
+	set_next_dst(ppc);
+	// Insert the bits into the LSW
+	GEN_OR(ppc, rd.lo, rd.lo, 0);
+	set_next_dst(ppc);
+	// Shift the MSW
+	GEN_SRAW(ppc, rd.hi, rt.hi, rs);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
