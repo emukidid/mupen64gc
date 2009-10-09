@@ -754,7 +754,7 @@ static int LH(MIPS_instr mips){
 		// Skip over else
 		GEN_B(ppc, 3, 0, 0);
 		set_next_dst(ppc);
-	  
+		
 		// else use SP_DMEM
 		// Mask sp with 0x00001FFF
 		GEN_RLWINM(ppc, addr, base, 0, 19, 31);
@@ -2685,3 +2685,4 @@ static int mips_is_jump(MIPS_instr instr){
                 (opcode == MIPS_OPCODE_COP1 &&
                  format == MIPS_FRMT_BC)    );
 }
+
