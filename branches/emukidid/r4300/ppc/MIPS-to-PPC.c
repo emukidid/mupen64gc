@@ -2642,8 +2642,30 @@ static int SQRT_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_SQRT
-	// TODO: SQRT
-	return CONVERT_ERROR;
+	
+	static double one = 1.0;
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl );
+	int addr = mapRegisterTemp();
+	
+	// li addr, &one
+	GEN_LIS(ppc, addr, ((unsigned int)&one)>>16);
+	set_next_dst(ppc);
+	GEN_ORI(ppc, addr, addr, (unsigned int)&one);
+	set_next_dst(ppc);
+	// lfd f0, 0(addr)
+	GEN_LFD(ppc, 0, 0, addr);
+	set_next_dst(ppc);
+	// frsqrte fd, rs
+	GEN_FRSQRTE(ppc, fd, fs);
+	set_next_dst(ppc);
+	// fdiv fd, f0, fd
+	GEN_FDIV(ppc, fd, 0, fd);
+	set_next_dst(ppc);
+	
+	unmapRegisterTemp(addr);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 

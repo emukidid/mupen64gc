@@ -125,7 +125,7 @@ unsigned int decodeNInterpret();
 //#define INTERPRET_FP_SUB
 //#define INTERPRET_FP_MUL
 //#define INTERPRET_FP_DIV
-#define INTERPRET_FP_SQRT
+//#define INTERPRET_FP_SQRT
 //#define INTERPRET_FP_ABS
 //#define INTERPRET_FP_MOV
 //#define INTERPRET_FP_NEG

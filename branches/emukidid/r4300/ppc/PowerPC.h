@@ -881,6 +881,13 @@ PowerPC_instr Instruction(int opcode, ...);
 	  PPC_SET_RD    (ppc, (fd)); \
 	  PPC_SET_RA    (ppc, (fa)); \
 	  PPC_SET_RB    (ppc, (fb)); }
+	  
+#define GEN_FRSQRTE(ppc,fd,fa) \
+	{ ppc = NEW_PPC_INSTR(); \
+	  PPC_SET_OPCODE(ppc, PPC_OPCODE_FPD); \
+	  PPC_SET_FUNC  (ppc, PPC_FUNC_FRSQRTE); \
+	  PPC_SET_RD    (ppc, (fd)); \
+	  PPC_SET_RB    (ppc, (fa)); }
 
 #define GEN_FMUL(ppc,fd,fa,fb) \
 	{ ppc = NEW_PPC_INSTR(); \
