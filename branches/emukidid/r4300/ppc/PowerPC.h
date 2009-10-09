@@ -881,7 +881,7 @@ PowerPC_instr Instruction(int opcode, ...);
 	  PPC_SET_FUNC  (ppc, PPC_FUNC_FMUL); \
 	  PPC_SET_RD    (ppc, (fd)); \
 	  PPC_SET_RA    (ppc, (fa)); \
-	  PPC_SET_RB    (ppc, (fb)); }
+	  PPC_SET_RC    (ppc, (fb)); }
 
 #define GEN_FDIV(ppc,fd,fa,fb) \
 	{ ppc = NEW_PPC_INSTR(); \
