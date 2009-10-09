@@ -5,12 +5,8 @@
 #ifndef REGISTER_CACHE_H
 #define REGISTER_CACHE_H
 
+// -- GPRs --
 typedef struct { int hi, lo; } RegMapping;
-
-// Unmap all registers, storing any dirty registers
-int flushRegisters(void);
-// Unmap all registers without storing any
-void invalidateRegisters(void);
 // Create a mapping for a 32-bit register (reg) to a HW register (returned)
 // Loading the registers' value if the mapping doesn't already exist
 int mapRegister(int reg);
@@ -28,5 +24,14 @@ RegMapping mapRegister64New(int reg);
 int mapRegisterTemp(void);
 // Frees a previously reserved register
 void unmapRegisterTemp(int tmp);
+
+// -- FPRs --
+// TODO
+
+
+// Unmap all registers, storing any dirty registers
+int flushRegisters(void);
+// Unmap all registers without storing any
+void invalidateRegisters(void);
 
 #endif

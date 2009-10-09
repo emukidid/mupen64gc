@@ -6,7 +6,9 @@
 #include "Register-Cache.h"
 #include "PowerPC.h"
 #include "Wrappers.h"
+#include <string.h>
 
+// -- GPR mappings --
 static struct {
 	// Holds the value of the physical reg or -1 (hi, lo)
 	RegMapping map;
@@ -58,21 +60,6 @@ static int getAvailableHWReg(void){
 	return -1;
 }
 
-int flushRegisters(void){
-	int i, flushed = 0;
-	for(i=1; i<34; ++i){
-		if(regMap[i].map.lo >= 0 && regMap[i].dirty){
-			flushRegister(i);
-			++flushed;
-		}
-		// Mark unmapped
-		regMap[i].map.hi = regMap[i].map.lo = -1;
-	}
-	memcpy(availableRegs, availableRegsDefault, 32*sizeof(int));
-	nextLRUVal = 0;
-	return flushed;
-}
-
 static RegMapping flushLRURegister(void){
 	int i, lru_i = 0, lru_v = 0x7fffffff;
 	for(i=1; i<34; ++i){
@@ -86,15 +73,6 @@ static RegMapping flushLRURegister(void){
 	// Mark unmapped
 	regMap[lru_i].map.hi = regMap[lru_i].map.lo = -1;
 	return map;
-}
-
-void invalidateRegisters(void){
-	int i;
-	for(i=0; i<34; ++i)
-		// Mark unmapped
-		regMap[i].map.hi = regMap[i].map.lo = -1;
-	memcpy(availableRegs, availableRegsDefault, 32*sizeof(int));
-	nextLRUVal = 0;
 }
 
 int mapRegisterNew(int reg){
@@ -178,16 +156,14 @@ int mapRegister(int reg){
 		return regMap[reg].map.lo;
 	}
 	regMap[reg].dirty = 0; // If it hasn't previously been mapped, its clean
-	int i;
 	// Iterate over the HW registers and find one that's available
-	for(i=0; i<32; ++i)
-		if(availableRegs[i]){
-			GEN_LWZ(ppc, i, reg*8+4, DYNAREG_REG);
-			set_next_dst(ppc);
-			
-			availableRegs[i] = 0;
-			return regMap[reg].map.lo = i;
-		}
+	int available = getAvailableHWReg();
+	if(available >= 0){
+		GEN_LWZ(ppc, available, reg*8+4, DYNAREG_REG);
+		set_next_dst(ppc);
+		
+		return regMap[reg].map.lo = available;
+	}
 	// We didn't find an available register, so flush one
 	RegMapping lru = flushLRURegister();
 	if(lru.hi >= 0) availableRegs[lru.hi] = 1;
@@ -260,5 +236,108 @@ int mapRegisterTemp(void){
 
 void unmapRegisterTemp(int reg){
 	availableRegs[reg] = 1;
+}
+
+// -- FPR mappings --
+static struct {
+	int map;   // Holds the value of the physical fpr or -1
+	int dbl;   // Double-precision
+	int dirty; // Nonzero means the register must be flushed to memory
+	int lru;   // LRU value for flushing; higher is newer
+} fprMap[32];
+
+static unsigned int nextLRUValFPR;
+static int availableFPRsDefault[32] = {
+	0, /* Volatile, language specific */
+	1,1,1,1,1,1,1,1, /* Volatile argument registers */
+	1,1,1,1,1, /* Volatile registers */
+	/* Non-volatile registers: using might be too costly */
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	};
+static int availableFPRs[32];
+
+// Actually perform the store for a dirty register mapping
+static void flushFPR(int reg){
+	PowerPC_instr ppc;
+	if(fprMap[reg].dbl){
+		GEN_STFD(ppc, fprMap[reg].map, reg*8, DYNAREG_FPR);
+		set_next_dst(ppc);
+	} else {
+		GEN_STFS(ppc, fprMap[reg].map, reg*8, DYNAREG_FPR);
+		set_next_dst(ppc);
+	}
+}
+// Find an available HW reg or -1 for none
+static int getAvailableFPR(void){
+	int i;
+	// Iterate over the HW registers and find one that's available
+	for(i=0; i<32; ++i){
+		if(availableFPRs[i]){
+			availableFPRs[i] = 0;
+			return i;
+		}
+	}
+	return -1;
+}
+
+static int flushLRUFPR(void){
+	int i, lru_i = 0, lru_v = 0x7fffffff;
+	for(i=0; i<32; ++i){
+		if(fprMap[i].map >= 0 && fprMap[i].lru < lru_v){
+			lru_i = i; lru_v = fprMap[i].lru;
+		}
+	}
+	int map = fprMap[lru_i].map;
+	// Flush the register if its dirty
+	if(fprMap[lru_i].dirty) flushFPR(lru_i);
+	// Mark unmapped
+	fprMap[lru_i].map = -1;
+	return map;
+}
+
+
+// Unmapping registers
+int flushRegisters(void){
+	int i, flushed = 0;
+	// Flush GPRs
+	for(i=1; i<34; ++i){
+		if(regMap[i].map.lo >= 0 && regMap[i].dirty){
+			flushRegister(i);
+			++flushed;
+		}
+		// Mark unmapped
+		regMap[i].map.hi = regMap[i].map.lo = -1;
+	}
+	memcpy(availableRegs, availableRegsDefault, 32*sizeof(int));
+	nextLRUVal = 0;
+	// Flush FPRs
+	for(i=0; i<32; ++i){
+		if(fprMap[i].map >= 0 && fprMap[i].dirty){
+			flushFPR(i);
+			++flushed;
+		}
+		// Mark unmapped
+		fprMap[i].map = -1;
+	}
+	memcpy(availableFPRs, availableFPRsDefault, 32*sizeof(int));
+	nextLRUValFPR = 0;
+	
+	return flushed;
+}
+
+void invalidateRegisters(void){
+	int i;
+	// Invalidate GPRs
+	for(i=0; i<34; ++i)
+		// Mark unmapped
+		regMap[i].map.hi = regMap[i].map.lo = -1;
+	memcpy(availableRegs, availableRegsDefault, 32*sizeof(int));
+	nextLRUVal = 0;
+	// Invalidate FPRs
+	for(i=0; i<32; ++i)
+		// Mark unmapped
+		fprMap[i].map = -1;
+	memcpy(availableFPRs, availableFPRsDefault, 32*sizeof(int));
+	nextLRUValFPR = 0;
 }
 

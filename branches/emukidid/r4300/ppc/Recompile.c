@@ -523,6 +523,12 @@ static void genJumpPad(PowerPC_block* ppc_block){
 	// Restore r18
 	GEN_LWZ(ppc, DYNAREG_LADDR, DYNAOFF_LADDR, 1);
 	set_next_dst(ppc);
+	// Restore r19
+	GEN_LWZ(ppc, DYNAREG_RDRAM, DYNAOFF_RDRAM, 1);
+	set_next_dst(ppc);
+	// Restore r20
+	GEN_LWZ(ppc, DYNAREG_FPR, DYNAOFF_FPR, 1);
+	set_next_dst(ppc);
 	// Restore the sp
 	GEN_LWZ(ppc, 1, 0, 1);
 	set_next_dst(ppc);
