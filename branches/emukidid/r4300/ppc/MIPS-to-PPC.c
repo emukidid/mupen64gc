@@ -661,8 +661,35 @@ static int LB(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_LB
-	// TODO: lb
-	return CONVERT_ERROR;
+	
+	// Recompile accesses to stack pointer
+	if((MIPS_GET_RS(mips) == MIPS_REG_SP) && (((get_src_pc()>>24)&0xFF) == 0x80)){
+		int base = mapRegister( MIPS_GET_RS(mips) );
+		int rd   = mapRegisterNew( MIPS_GET_RT(mips) );
+		int addr = mapRegisterTemp();
+#ifdef USE_EXPANSION
+		// Mask sp with 0x007FFFFF
+		GEN_RLWINM(ppc, addr, base, 0, 9, 31);
+		set_next_dst(ppc);
+#else
+		// Mask sp with 0x003FFFFF
+		GEN_RLWINM(ppc, addr, base, 0, 10, 31);
+		set_next_dst(ppc);
+#endif
+		// Add rdram pointer
+		GEN_ADD(ppc, addr, DYNAREG_RDRAM, addr);
+		set_next_dst(ppc);
+		// Perform the actual load
+		GEN_LBZ(ppc, rd, MIPS_GET_IMMED(mips), addr);
+		set_next_dst(ppc);
+		
+		unmapRegisterTemp(addr);
+		
+		return CONVERT_SUCCESS;
+	} else {
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
 #endif
 }
 
@@ -672,8 +699,35 @@ static int LH(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_LH
-	// TODO: lh
-	return CONVERT_ERROR;
+	
+	// Recompile accesses to stack pointer
+	if((MIPS_GET_RS(mips) == MIPS_REG_SP) && (((get_src_pc()>>24)&0xFF) == 0x80)){
+		int base = mapRegister( MIPS_GET_RS(mips) );
+		int rd   = mapRegisterNew( MIPS_GET_RT(mips) );
+		int addr = mapRegisterTemp();
+#ifdef USE_EXPANSION
+		// Mask sp with 0x007FFFFF
+		GEN_RLWINM(ppc, addr, base, 0, 9, 31);
+		set_next_dst(ppc);
+#else
+		// Mask sp with 0x003FFFFF
+		GEN_RLWINM(ppc, addr, base, 0, 10, 31);
+		set_next_dst(ppc);
+#endif
+		// Add rdram pointer
+		GEN_ADD(ppc, addr, DYNAREG_RDRAM, addr);
+		set_next_dst(ppc);
+		// Perform the actual load
+		GEN_LHZ(ppc, rd, MIPS_GET_IMMED(mips), addr);
+		set_next_dst(ppc);
+		
+		unmapRegisterTemp(addr);
+		
+		return CONVERT_SUCCESS;
+	} else {
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
 #endif
 }
 
@@ -694,8 +748,35 @@ static int LW(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_LW
-	// TODO: lw
-	return CONVERT_ERROR;
+	
+	// Recompile accesses to stack pointer
+	if((MIPS_GET_RS(mips) == MIPS_REG_SP) && (((get_src_pc()>>24)&0xFF) == 0x80)){
+		int base = mapRegister( MIPS_GET_RS(mips) );
+		int rd   = mapRegisterNew( MIPS_GET_RT(mips) );
+		int addr = mapRegisterTemp();
+#ifdef USE_EXPANSION
+		// Mask sp with 0x007FFFFF
+		GEN_RLWINM(ppc, addr, base, 0, 9, 31);
+		set_next_dst(ppc);
+#else
+		// Mask sp with 0x003FFFFF
+		GEN_RLWINM(ppc, addr, base, 0, 10, 31);
+		set_next_dst(ppc);
+#endif
+		// Add rdram pointer
+		GEN_ADD(ppc, addr, DYNAREG_RDRAM, addr);
+		set_next_dst(ppc);
+		// Perform the actual load
+		GEN_LWZ(ppc, rd, MIPS_GET_IMMED(mips), addr);
+		set_next_dst(ppc);
+		
+		unmapRegisterTemp(addr);
+		
+		return CONVERT_SUCCESS;
+	} else {
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
 #endif
 }
 
@@ -749,8 +830,35 @@ static int SB(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_SB
-	// TODO: sb
-	return CONVERT_ERROR;
+	
+	// Recompile accesses to stack pointer
+	if((MIPS_GET_RS(mips) == MIPS_REG_SP) && (((get_src_pc()>>24)&0xFF) == 0x80)){
+		int base = mapRegister( MIPS_GET_RS(mips) );
+		int rd   = mapRegister( MIPS_GET_RT(mips) );
+		int addr = mapRegisterTemp();
+#ifdef USE_EXPANSION
+		// Mask sp with 0x007FFFFF
+		GEN_RLWINM(ppc, addr, base, 0, 9, 31);
+		set_next_dst(ppc);
+#else
+		// Mask sp with 0x003FFFFF
+		GEN_RLWINM(ppc, addr, base, 0, 10, 31);
+		set_next_dst(ppc);
+#endif
+		// Add rdram pointer
+		GEN_ADD(ppc, addr, DYNAREG_RDRAM, addr);
+		set_next_dst(ppc);
+		// Perform the actual store
+		GEN_STB(ppc, rd, MIPS_GET_IMMED(mips), addr);
+		set_next_dst(ppc);
+		
+		unmapRegisterTemp(addr);
+		
+		return CONVERT_SUCCESS;
+	} else {
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
 #endif
 }
 
@@ -760,8 +868,35 @@ static int SH(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_SH
-	// TODO: sh
-	return CONVERT_ERROR;
+	
+	// Recompile accesses to stack pointer
+	if((MIPS_GET_RS(mips) == MIPS_REG_SP) && (((get_src_pc()>>24)&0xFF) == 0x80)){
+		int base = mapRegister( MIPS_GET_RS(mips) );
+		int rd   = mapRegister( MIPS_GET_RT(mips) );
+		int addr = mapRegisterTemp();
+#ifdef USE_EXPANSION
+		// Mask sp with 0x007FFFFF
+		GEN_RLWINM(ppc, addr, base, 0, 9, 31);
+		set_next_dst(ppc);
+#else
+		// Mask sp with 0x003FFFFF
+		GEN_RLWINM(ppc, addr, base, 0, 10, 31);
+		set_next_dst(ppc);
+#endif
+		// Add rdram pointer
+		GEN_ADD(ppc, addr, DYNAREG_RDRAM, addr);
+		set_next_dst(ppc);
+		// Perform the actual store
+		GEN_STH(ppc, rd, MIPS_GET_IMMED(mips), addr);
+		set_next_dst(ppc);
+		
+		unmapRegisterTemp(addr);
+		
+		return CONVERT_SUCCESS;
+	} else {
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
 #endif
 }
 
@@ -782,8 +917,35 @@ static int SW(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_SW
-	// TODO: sw
-	return CONVERT_ERROR;
+	
+	// Recompile accesses to stack pointer
+	if((MIPS_GET_RS(mips) == MIPS_REG_SP) && (((get_src_pc()>>24)&0xFF) == 0x80)){
+		int base = mapRegister( MIPS_GET_RS(mips) );
+		int rd   = mapRegister( MIPS_GET_RT(mips) );
+		int addr = mapRegisterTemp();
+#ifdef USE_EXPANSION
+		// Mask sp with 0x007FFFFF
+		GEN_RLWINM(ppc, addr, base, 0, 9, 31);
+		set_next_dst(ppc);
+#else
+		// Mask sp with 0x003FFFFF
+		GEN_RLWINM(ppc, addr, base, 0, 10, 31);
+		set_next_dst(ppc);
+#endif
+		// Add rdram pointer
+		GEN_ADD(ppc, addr, DYNAREG_RDRAM, addr);
+		set_next_dst(ppc);
+		// Perform the actual store
+		GEN_STW(ppc, rd, MIPS_GET_IMMED(mips), addr);
+		set_next_dst(ppc);
+		
+		unmapRegisterTemp(addr);
+		
+		return CONVERT_SUCCESS;
+	} else {
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
 #endif
 }
 
