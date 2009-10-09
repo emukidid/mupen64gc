@@ -1764,8 +1764,19 @@ static int DSLL32(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_DW || INTERPRET_DSLL32
-	// TODO: dsll32
-	return CONVERT_ERROR;
+	
+	RegMapping rt = mapRegister64( MIPS_GET_RT(mips) );
+	RegMapping rd = mapRegister64New( MIPS_GET_RD(mips) );
+	int sa = MIPS_GET_SA(mips);
+	
+	// Shift LSW into MSW and by SA
+	GEN_SLWI(ppc, rd.hi, rt.lo, sa);
+	set_next_dst(ppc);
+	// Clear out LSW
+	GEN_ADDI(ppc, rd.lo, 0, 0);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -1775,8 +1786,19 @@ static int DSRL32(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_DW || INTERPRET_DSRL32
-	// TODO: dsrl32
-	return CONVERT_ERROR;
+	
+	RegMapping rt = mapRegister64( MIPS_GET_RT(mips) );
+	RegMapping rd = mapRegister64New( MIPS_GET_RD(mips) );
+	int sa = MIPS_GET_SA(mips);
+	
+	// Shift MSW into LSW and by SA
+	GEN_SRWI(ppc, rd.lo, rt.hi, sa);
+	set_next_dst(ppc);
+	// Clear out MSW
+	GEN_ADDI(ppc, rd.hi, 0, 0);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -1786,8 +1808,19 @@ static int DSRA32(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_DW || INTERPRET_DSRA32
-	// TODO: dsra32
-	return CONVERT_ERROR;
+	
+	RegMapping rt = mapRegister64( MIPS_GET_RT(mips) );
+	RegMapping rd = mapRegister64New( MIPS_GET_RD(mips) );
+	int sa = MIPS_GET_SA(mips);
+	
+	// Shift (arithmetically) MSW into LSW and by SA
+	GEN_SRAWI(ppc, rd.lo, rt.hi, sa);
+	set_next_dst(ppc);
+	// Fill MSW with sign of MSW
+	GEN_SRAWI(ppc, rd.hi, rt.hi, 31);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
