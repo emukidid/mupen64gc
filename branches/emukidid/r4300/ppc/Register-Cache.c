@@ -296,6 +296,49 @@ static int flushLRUFPR(void){
 }
 
 
+int mapFPRNew(int fpr, int dbl){
+	fprMap[fpr].lru = nextLRUValFPR++;
+	fprMap[fpr].dirty = 1; // Since we're writing to this reg, its dirty
+	fprMap[fpr].dbl = dbl; // Set whether this is a double-precision
+	
+	// If its already been mapped, just return that value
+	if(fprMap[fpr].map >= 0) return fprMap[fpr].map;
+	
+	// Try to find any already available register
+	int available = getAvailableFPR();
+	if(available >= 0) return fprMap[fpr].map = available;
+	
+	// We didn't find an available register, so flush one
+	return fprMap[fpr].map = flushLRUFPR();
+}
+
+int mapFPR(int fpr, int dbl){
+	PowerPC_instr ppc;
+	
+	fprMap[fpr].lru = nextLRUValFPR++;
+	fprMap[fpr].dbl = dbl; // Set whether this is a double-precision
+	
+	// If its already been mapped, just return that value
+	// FIXME: Do I need to worry about conversions between single and double?
+	if(fprMap[fpr].map >= 0) return fprMap[fpr].map;
+	
+	// Try to find any already available register
+	fprMap[fpr].map = getAvailableFPR();
+	// If didn't find an available register, flush one
+	if(fprMap[fpr].map < 0) return fprMap[fpr].map = flushLRUFPR();
+	
+	if(dbl){
+		GEN_LFD(ppc, fprMap[fpr].map, fpr*8, DYNAREG_FPR);
+		set_next_dst(ppc);
+	} else {
+		GEN_LFS(ppc, fprMap[fpr].map, fpr*8, DYNAREG_FPR);
+		set_next_dst(ppc);
+	}	
+	
+	return fprMap[fpr].map;
+}
+
+
 // Unmapping registers
 int flushRegisters(void){
 	int i, flushed = 0;
