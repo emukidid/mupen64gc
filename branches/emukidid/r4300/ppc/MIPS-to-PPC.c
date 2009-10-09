@@ -2312,7 +2312,19 @@ static int MFC1(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP
-	// TODO: mfc1
+	
+	int fs = MIPS_GET_FS(mips);
+	int rt = mapRegisterNew( MIPS_GET_RT(mips) );
+	flushFPR(fs);
+	
+	// rt = reg_cop1_simple[fs]
+	LWZ(ppc, rt, fs*4, DYNAREG_FPR_32);
+	set_next_dst(ppc);
+	// rt = *rt
+	LWZ(ppc, rt, 0, rt);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 

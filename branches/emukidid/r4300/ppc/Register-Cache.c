@@ -253,7 +253,7 @@ static struct {
 
 static unsigned int nextLRUValFPR;
 static int availableFPRsDefault[32] = {
-	0, /* Volatile, language specific */
+	0, /* Volatile: used as a temp */
 	1,1,1,1,1,1,1,1, /* Volatile argument registers */
 	1,1,1,1,1, /* Volatile registers */
 	/* Non-volatile registers: using might be too costly */
