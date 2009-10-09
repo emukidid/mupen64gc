@@ -3,7 +3,6 @@
  ************************************************
    FIXME: Review all branch destinations
    TODO: Create FP register mapping and recompile those
-         Allow upper 32-bits of a register to mapped for 64-bit instructions
          If possible (and not too complicated), it would be nice to leave out
            the in-place delay slot which is skipped if it is not branched to
            (That might be tricky as you don't know whether an outside branch
@@ -238,7 +237,7 @@ int convert(void){
 	MIPS_instr mips = get_next_src();
 	isDelaySlot = delaySlotNext; delaySlotNext = 0;
 	int result = gen_ops[MIPS_GET_OPCODE(mips)](mips);
-	if(isDelaySlot) flushRegisters();
+	/*if(isDelaySlot)*/ flushRegisters();
 	return result;
 }
 
@@ -667,6 +666,16 @@ static int LB(MIPS_instr mips){
 		int base = mapRegister( MIPS_GET_RS(mips) );
 		int rd   = mapRegisterNew( MIPS_GET_RT(mips) );
 		int addr = mapRegisterTemp();
+		
+		// If base >> 16 != 0xa400
+		GEN_SRAWI(ppc, 0, base, 16);
+		set_next_dst(ppc);
+		GEN_CMPI(ppc, 0, 0xa400, 1);
+		set_next_dst(ppc);
+		GEN_BEQ(ppc, 1, 4, 0, 0);
+		set_next_dst(ppc);
+		
+		// Use rdram
 #ifdef USE_EXPANSION
 		// Mask sp with 0x007FFFFF
 		GEN_RLWINM(ppc, addr, base, 0, 9, 31);
@@ -679,8 +688,23 @@ static int LB(MIPS_instr mips){
 		// Add rdram pointer
 		GEN_ADD(ppc, addr, DYNAREG_RDRAM, addr);
 		set_next_dst(ppc);
+		// Skip over else
+		GEN_B(ppc, 3, 0, 0);
+		set_next_dst(ppc);
+		
+		// else use SP_DMEM
+		// Mask sp with 0x00001FFF
+		GEN_RLWINM(ppc, addr, base, 0, 19, 31);
+		set_next_dst(ppc);
+		// Add SP_DMEM pointer
+		GEN_ADD(ppc, addr, DYNAREG_SPDMEM, addr);
+		set_next_dst(ppc);
+		
 		// Perform the actual load
 		GEN_LBZ(ppc, rd, MIPS_GET_IMMED(mips), addr);
+		set_next_dst(ppc);
+		// Sign extend the byte
+		GEN_EXTSB(ppc, rd, rd);
 		set_next_dst(ppc);
 		
 		unmapRegisterTemp(addr);
@@ -705,6 +729,16 @@ static int LH(MIPS_instr mips){
 		int base = mapRegister( MIPS_GET_RS(mips) );
 		int rd   = mapRegisterNew( MIPS_GET_RT(mips) );
 		int addr = mapRegisterTemp();
+		
+		// If base >> 16 != 0xa400
+		GEN_SRAWI(ppc, 0, base, 16);
+		set_next_dst(ppc);
+		GEN_CMPI(ppc, 0, 0xa400, 1);
+		set_next_dst(ppc);
+		GEN_BEQ(ppc, 1, 4, 0, 0);
+		set_next_dst(ppc);
+		
+		// Use rdram
 #ifdef USE_EXPANSION
 		// Mask sp with 0x007FFFFF
 		GEN_RLWINM(ppc, addr, base, 0, 9, 31);
@@ -717,8 +751,20 @@ static int LH(MIPS_instr mips){
 		// Add rdram pointer
 		GEN_ADD(ppc, addr, DYNAREG_RDRAM, addr);
 		set_next_dst(ppc);
+		// Skip over else
+		GEN_B(ppc, 3, 0, 0);
+		set_next_dst(ppc);
+	  
+		// else use SP_DMEM
+		// Mask sp with 0x00001FFF
+		GEN_RLWINM(ppc, addr, base, 0, 19, 31);
+		set_next_dst(ppc);
+		// Add SP_DMEM pointer
+		GEN_ADD(ppc, addr, DYNAREG_SPDMEM, addr);
+		set_next_dst(ppc);
+		
 		// Perform the actual load
-		GEN_LHZ(ppc, rd, MIPS_GET_IMMED(mips), addr);
+		GEN_LHA(ppc, rd, MIPS_GET_IMMED(mips), addr);
 		set_next_dst(ppc);
 		
 		unmapRegisterTemp(addr);
@@ -808,8 +854,56 @@ static int LBU(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_LBU
-	// TODO: lbu
-	return CONVERT_ERROR;
+	// Recompile accesses to stack pointer
+	if(MIPS_GET_RS(mips) == MIPS_REG_SP){
+		int base = mapRegister( MIPS_GET_RS(mips) );
+		int rd   = mapRegisterNew( MIPS_GET_RT(mips) );
+		int addr = mapRegisterTemp();
+		
+		// If base >> 16 != 0xa400
+		GEN_SRAWI(ppc, 0, base, 16);
+		set_next_dst(ppc);
+		GEN_CMPI(ppc, 0, 0xa400, 1);
+		set_next_dst(ppc);
+		GEN_BEQ(ppc, 1, 4, 0, 0);
+		set_next_dst(ppc);
+		
+		// Use rdram
+#ifdef USE_EXPANSION
+		// Mask sp with 0x007FFFFF
+		GEN_RLWINM(ppc, addr, base, 0, 9, 31);
+		set_next_dst(ppc);
+#else
+		// Mask sp with 0x003FFFFF
+		GEN_RLWINM(ppc, addr, base, 0, 10, 31);
+		set_next_dst(ppc);
+#endif
+		// Add rdram pointer
+		GEN_ADD(ppc, addr, DYNAREG_RDRAM, addr);
+		set_next_dst(ppc);
+		// Skip over else
+		GEN_B(ppc, 3, 0, 0);
+		set_next_dst(ppc);
+		
+		// else use SP_DMEM
+		// Mask sp with 0x00001FFF
+		GEN_RLWINM(ppc, addr, base, 0, 19, 31);
+		set_next_dst(ppc);
+		// Add SP_DMEM pointer
+		GEN_ADD(ppc, addr, DYNAREG_SPDMEM, addr);
+		set_next_dst(ppc);
+		
+		// Perform the actual load
+		GEN_LBZ(ppc, rd, MIPS_GET_IMMED(mips), addr);
+		set_next_dst(ppc);
+		
+		unmapRegisterTemp(addr);
+		
+		return CONVERT_SUCCESS;
+	} else {
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
 #endif
 }
 
@@ -819,8 +913,56 @@ static int LHU(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_LHU
-	// TODO: lhu
-	return CONVERT_ERROR;
+	// Recompile accesses to stack pointer
+	if(MIPS_GET_RS(mips) == MIPS_REG_SP){
+		int base = mapRegister( MIPS_GET_RS(mips) );
+		int rd   = mapRegisterNew( MIPS_GET_RT(mips) );
+		int addr = mapRegisterTemp();
+		
+		// If base >> 16 != 0xa400
+		GEN_SRAWI(ppc, 0, base, 16);
+		set_next_dst(ppc);
+		GEN_CMPI(ppc, 0, 0xa400, 1);
+		set_next_dst(ppc);
+		GEN_BEQ(ppc, 1, 4, 0, 0);
+		set_next_dst(ppc);
+		
+		// Use rdram
+#ifdef USE_EXPANSION
+		// Mask sp with 0x007FFFFF
+		GEN_RLWINM(ppc, addr, base, 0, 9, 31);
+		set_next_dst(ppc);
+#else
+		// Mask sp with 0x003FFFFF
+		GEN_RLWINM(ppc, addr, base, 0, 10, 31);
+		set_next_dst(ppc);
+#endif
+		// Add rdram pointer
+		GEN_ADD(ppc, addr, DYNAREG_RDRAM, addr);
+		set_next_dst(ppc);
+		// Skip over else
+		GEN_B(ppc, 3, 0, 0);
+		set_next_dst(ppc);
+		
+		// else use SP_DMEM
+		// Mask sp with 0x00001FFF
+		GEN_RLWINM(ppc, addr, base, 0, 19, 31);
+		set_next_dst(ppc);
+		// Add SP_DMEM pointer
+		GEN_ADD(ppc, addr, DYNAREG_SPDMEM, addr);
+		set_next_dst(ppc);
+		
+		// Perform the actual load
+		GEN_LHZ(ppc, rd, MIPS_GET_IMMED(mips), addr);
+		set_next_dst(ppc);
+		
+		unmapRegisterTemp(addr);
+		
+		return CONVERT_SUCCESS;
+	} else {
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
 #endif
 }
 
@@ -854,10 +996,20 @@ static int SB(MIPS_instr mips){
 #else // INTERPRET_SB
 	
 	// Recompile accesses to stack pointer
-	if((MIPS_GET_RS(mips) == MIPS_REG_SP) && (((get_src_pc()>>24)&0xFF) == 0x80)){
+	if(MIPS_GET_RS(mips) == MIPS_REG_SP){
 		int base = mapRegister( MIPS_GET_RS(mips) );
 		int rd   = mapRegister( MIPS_GET_RT(mips) );
 		int addr = mapRegisterTemp();
+		
+		// If base >> 16 != 0xa400
+		GEN_SRAWI(ppc, 0, base, 16);
+		set_next_dst(ppc);
+		GEN_CMPI(ppc, 0, 0xa400, 1);
+		set_next_dst(ppc);
+		GEN_BEQ(ppc, 1, 4, 0, 0);
+		set_next_dst(ppc);
+		
+		// Use rdram
 #ifdef USE_EXPANSION
 		// Mask sp with 0x007FFFFF
 		GEN_RLWINM(ppc, addr, base, 0, 9, 31);
@@ -870,7 +1022,19 @@ static int SB(MIPS_instr mips){
 		// Add rdram pointer
 		GEN_ADD(ppc, addr, DYNAREG_RDRAM, addr);
 		set_next_dst(ppc);
-		// Perform the actual store
+		// Skip over else
+		GEN_B(ppc, 3, 0, 0);
+		set_next_dst(ppc);
+		
+		// else use SP_DMEM
+		// Mask sp with 0x00001FFF
+		GEN_RLWINM(ppc, addr, base, 0, 19, 31);
+		set_next_dst(ppc);
+		// Add SP_DMEM pointer
+		GEN_ADD(ppc, addr, DYNAREG_SPDMEM, addr);
+		set_next_dst(ppc);
+		
+		// Perform the actual save
 		GEN_STB(ppc, rd, MIPS_GET_IMMED(mips), addr);
 		set_next_dst(ppc);
 		
@@ -892,10 +1056,20 @@ static int SH(MIPS_instr mips){
 #else // INTERPRET_SH
 	
 	// Recompile accesses to stack pointer
-	if((MIPS_GET_RS(mips) == MIPS_REG_SP) && (((get_src_pc()>>24)&0xFF) == 0x80)){
+	if(MIPS_GET_RS(mips) == MIPS_REG_SP){
 		int base = mapRegister( MIPS_GET_RS(mips) );
 		int rd   = mapRegister( MIPS_GET_RT(mips) );
 		int addr = mapRegisterTemp();
+		
+		// If base >> 16 != 0xa400
+		GEN_SRAWI(ppc, 0, base, 16);
+		set_next_dst(ppc);
+		GEN_CMPI(ppc, 0, 0xa400, 1);
+		set_next_dst(ppc);
+		GEN_BEQ(ppc, 1, 4, 0, 0);
+		set_next_dst(ppc);
+		
+		// Use rdram
 #ifdef USE_EXPANSION
 		// Mask sp with 0x007FFFFF
 		GEN_RLWINM(ppc, addr, base, 0, 9, 31);
@@ -908,7 +1082,19 @@ static int SH(MIPS_instr mips){
 		// Add rdram pointer
 		GEN_ADD(ppc, addr, DYNAREG_RDRAM, addr);
 		set_next_dst(ppc);
-		// Perform the actual store
+		// Skip over else
+		GEN_B(ppc, 3, 0, 0);
+		set_next_dst(ppc);
+		
+		// else use SP_DMEM
+		// Mask sp with 0x00001FFF
+		GEN_RLWINM(ppc, addr, base, 0, 19, 31);
+		set_next_dst(ppc);
+		// Add SP_DMEM pointer
+		GEN_ADD(ppc, addr, DYNAREG_SPDMEM, addr);
+		set_next_dst(ppc);
+		
+		// Perform the actual save
 		GEN_STH(ppc, rd, MIPS_GET_IMMED(mips), addr);
 		set_next_dst(ppc);
 		
@@ -941,10 +1127,20 @@ static int SW(MIPS_instr mips){
 #else // INTERPRET_SW
 	
 	// Recompile accesses to stack pointer
-	if((MIPS_GET_RS(mips) == MIPS_REG_SP) && (((get_src_pc()>>24)&0xFF) == 0x80)){
+	if(MIPS_GET_RS(mips) == MIPS_REG_SP){
 		int base = mapRegister( MIPS_GET_RS(mips) );
 		int rd   = mapRegister( MIPS_GET_RT(mips) );
 		int addr = mapRegisterTemp();
+		
+		// If base >> 16 != 0xa400
+		GEN_SRAWI(ppc, 0, base, 16);
+		set_next_dst(ppc);
+		GEN_CMPI(ppc, 0, 0xa400, 1);
+		set_next_dst(ppc);
+		GEN_BEQ(ppc, 1, 4, 0, 0);
+		set_next_dst(ppc);
+		
+		// Use rdram
 #ifdef USE_EXPANSION
 		// Mask sp with 0x007FFFFF
 		GEN_RLWINM(ppc, addr, base, 0, 9, 31);
@@ -957,7 +1153,19 @@ static int SW(MIPS_instr mips){
 		// Add rdram pointer
 		GEN_ADD(ppc, addr, DYNAREG_RDRAM, addr);
 		set_next_dst(ppc);
-		// Perform the actual store
+		// Skip over else
+		GEN_B(ppc, 3, 0, 0);
+		set_next_dst(ppc);
+		
+		// else use SP_DMEM
+		// Mask sp with 0x00001FFF
+		GEN_RLWINM(ppc, addr, base, 0, 19, 31);
+		set_next_dst(ppc);
+		// Add SP_DMEM pointer
+		GEN_ADD(ppc, addr, DYNAREG_SPDMEM, addr);
+		set_next_dst(ppc);
+		
+		// Perform the actual save
 		GEN_STW(ppc, rd, MIPS_GET_IMMED(mips), addr);
 		set_next_dst(ppc);
 		
@@ -2477,4 +2685,3 @@ static int mips_is_jump(MIPS_instr instr){
                 (opcode == MIPS_OPCODE_COP1 &&
                  format == MIPS_FRMT_BC)    );
 }
-
