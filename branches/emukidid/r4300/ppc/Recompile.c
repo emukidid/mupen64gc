@@ -119,10 +119,10 @@ void recompile_block(PowerPC_block* ppc_block){
 		
 		ppc_block->code_addr[src-src_first] = dst;
 		if( convert() == CONVERT_ERROR ){
-			sprintf(txtbuffer,"Error converting MIPS instruction:\n"
+			/*sprintf(txtbuffer,"Error converting MIPS instruction:\n"
 			       "0x%08x   0x%08x\n",
 			        ppc_block->start_address + (int)(src-1-src_first)*4, *(src-1));
-			DEBUG_print(txtbuffer, DBG_USBGECKO);
+			DEBUG_print(txtbuffer, DBG_USBGECKO);*/
 			//int i=16; while(i--) VIDEO_WaitVSync();
 		}
 	}
@@ -461,6 +461,9 @@ int resizeCode(PowerPC_block* block, int newSize){
 	block->code = RecompCache_Realloc(block->code, newSize * sizeof(PowerPC_instr));
 	if(!block->code) return 0;
 	
+	block->max_length = newSize;
+	if(block->code == oldCode) return newSize;
+	
 	// Readjusting pointers
 	// Optimization: Sepp256 suggested storing offsets instead of pointers
 	//                 then this step won't be necessary
@@ -471,7 +474,6 @@ int resizeCode(PowerPC_block* block, int newSize){
 	for(i=0; i<current_jump; ++i)
 		jump_table[i].dst_instr = block->code + (jump_table[i].dst_instr - oldCode);
 	
-	block->max_length = newSize;
 	return newSize;
 }
 
@@ -480,8 +482,8 @@ static void genJumpPad(PowerPC_block* ppc_block){
 	PowerPC_instr ppc = NEW_PPC_INSTR();
 	
 	// XXX: Careful there won't be a block overflow
-	if(*code_length + 24 >= ppc_block->max_length)
-			resizeCode(ppc_block, ppc_block->max_length + 24);
+	if(*code_length + 8 >= ppc_block->max_length)
+			resizeCode(ppc_block, ppc_block->max_length + 8);
 	
 	// noCheckInterrupt = 1
 	GEN_LIS(ppc, 3, (unsigned int)(&noCheckInterrupt)>>16);
@@ -502,42 +504,6 @@ static void genJumpPad(PowerPC_block* ppc_block){
 	
 	jump_pad = dst;
 	
-	// Restore any saved registers
-	// Restore cr
-	GEN_LWZ(ppc, DYNAREG_REG, DYNAOFF_CR, 1);
-	set_next_dst(ppc);
-	GEN_MTCR(ppc, DYNAREG_REG);
-	set_next_dst(ppc);
-	// Restore r14
-	GEN_LWZ(ppc, DYNAREG_REG, DYNAOFF_REG, 1);
-	set_next_dst(ppc);
-	// Restore r15
-	GEN_LWZ(ppc, DYNAREG_ZERO, DYNAOFF_ZERO, 1);
-	set_next_dst(ppc);
-	// Restore r16
-	GEN_LWZ(ppc, DYNAREG_INTERP, DYNAOFF_INTERP, 1);
-	set_next_dst(ppc);
-	// Restore r17
-	GEN_LWZ(ppc, DYNAREG_UCOUNT, DYNAOFF_UCOUNT, 1);
-	set_next_dst(ppc);
-	// Restore r18
-	GEN_LWZ(ppc, DYNAREG_LADDR, DYNAOFF_LADDR, 1);
-	set_next_dst(ppc);
-	// Restore r19
-	GEN_LWZ(ppc, DYNAREG_RDRAM, DYNAOFF_RDRAM, 1);
-	set_next_dst(ppc);
-	// Restore r20
-	GEN_LWZ(ppc, DYNAREG_SPDMEM, DYNAOFF_SPDMEM, 1);
-	set_next_dst(ppc);
-	// Restore r21
-	GEN_LWZ(ppc, DYNAREG_FPR_32, DYNAOFF_FPR_32, 1);
-	set_next_dst(ppc);
-	// Restore r22
-	GEN_LWZ(ppc, DYNAREG_FPR_64, DYNAOFF_FPR_64, 1);
-	set_next_dst(ppc);
-	// Restore the sp
-	GEN_LWZ(ppc, 1, 0, 1);
-	set_next_dst(ppc);
 	// return destination
 	GEN_BLR(ppc,0);
 	set_next_dst(ppc);

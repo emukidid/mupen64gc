@@ -18,48 +18,38 @@ inline unsigned long update_invalid_addr(unsigned long addr);
 int noCheckInterrupt = 0;
 
 /* Recompiled code stack frame:
- *  $sp+44  | old r22 (new r22 holds reg_cop1_double)
- *  $sp+40  | old r21 (new r21 holds reg_cop1_simple)
- *  $sp+36  | old r20 (new r20 holds SP_DMEM)
- *  $sp+32  | old r19 (new r19 holds rdram)
- *  $sp+28  | old r18 (new r18 holds &last_addr)
- *  $sp+24  | old r17 (new r17 holds dyna_update_count)
- *  $sp+20  | old r16 (new r16 holds decodeNInterpret)
- *  $sp+16  | old r15 (new r15 holds 0)
- *  $sp+12  | old r14 (new r14 holds reg)
+ *  $sp+12  |
  *  $sp+8   | old cr
  *  $sp+4   | old lr
  *  $sp	    | old sp
  */
 
-#define DYNAREC_PRELUDE() \
-	__asm__ __volatile__ ( \
-		"stwu	1, -48(1) \n" \
-		"stw	14, 12(1) \n" \
-		"mfcr	14        \n" \
-		"stw	14, 8(1)  \n" \
-		"mr	14, %0    \n" \
-		"stw	15, 16(1) \n" \
-		"addi	15, 0, 0  \n" \
-		"stw	16, 20(1) \n" \
-		"mr	16, %1    \n" \
-		"stw	17, 24(1) \n" \
-		"mr	17, %2    \n" \
-		"stw	18, 28(1) \n" \
-		"mr	18, %3    \n" \
-		"stw    19, 32(1) \n" \
-		"mr     19, %4    \n" \
-		"stw    20, 36(1) \n" \
-		"mr     20, %5    \n" \
-		"stw    21, 40(1) \n" \
-		"mr     21, %6    \n" \
-		"stw    22, 44(1) \n" \
-		"mr     22, %7    \n" \
-		:: "r" (reg), "r" (decodeNInterpret), \
-		   "r" (dyna_update_count), "r" (&last_addr), \
-		   "r" (rdram), "r" (SP_DMEM), \
-		   "r" (reg_cop1_simple), "r" (reg_cop1_double) )
-
+inline unsigned int dyna_run(unsigned int (*code)(void)){
+	__asm__ volatile(
+		"stwu	1, -16(1) \n"
+		"mfcr	14        \n"
+		"stw	14, 8(1)  \n"
+		"mr	14, %0    \n"
+		"addi	15, 0, 0  \n"
+		"mr	16, %1    \n"
+		"mr	17, %2    \n"
+		"mr	18, %3    \n"
+		"mr	19, %4    \n"
+		"mr	20, %5    \n"
+		"mr	21, %6    \n"
+		"mr	22, %7    \n"
+		:: "r" (reg), "r" (decodeNInterpret),
+		   "r" (dyna_update_count), "r" (&last_addr),
+		   "r" (rdram), "r" (SP_DMEM),
+		   "r" (reg_cop1_simple), "r" (reg_cop1_double)
+		: "14", "15", "16", "17", "18", "19", "20", "21", "22");
+	
+	unsigned int naddr = code();
+	
+	__asm__ volatile("lwz	1, 0(1)\n");
+	
+	return naddr;
+}
 
 void dynarec(unsigned int address){
 	while(!stop){
@@ -91,6 +81,11 @@ void dynarec(unsigned int address){
 			start_section(COMPILER_SECTION);
 			recompile_block(dst_block);
 			end_section(COMPILER_SECTION);
+		} else {
+			/*static last_block = -1;
+			if(address>>12 != last_block)
+				RecompCache_Update(address>>12);
+			last_block = address>>12;*/
 		}
 		
 		// Recompute the block offset
@@ -100,9 +95,7 @@ void dynarec(unsigned int address){
 		sprintf(txtbuffer, "Entering dynarec code @ 0x%08x\n", code);
 		DEBUG_print(txtbuffer, DBG_USBGECKO);
 		*/
-		// FIXME: Try actually saving the lr now: use &&label after code() and then mr %address, 3
-		DYNAREC_PRELUDE();
-		address = code();
+		address = dyna_run(code);
 		
 		if(!noCheckInterrupt){
 			last_addr = interp_addr = address;

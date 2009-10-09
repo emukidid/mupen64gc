@@ -42,8 +42,8 @@ static void release(int minNeeded){
 	// Frees alloc'ed blocks so that at least minNeeded bytes are available
 	CacheMetaNode* n;
 	for(n = tail; n != NULL && minNeeded > 0;){
-		sprintf(txtbuffer, "Releasing block %05x from RecompCache\n", n->blockNum);
-		DEBUG_print(txtbuffer, DBG_USBGECKO);
+		/*sprintf(txtbuffer, "Releasing block %05x from RecompCache\n", n->blockNum);
+		DEBUG_print(txtbuffer, DBG_USBGECKO);*/
 		nodeRemove(n);
 		// Free the block associated with n, and adjust the size accordingly
 		free(n->memory);
@@ -83,8 +83,8 @@ static void release(int minNeeded){
 }
 
 void* RecompCache_Alloc(unsigned int size, unsigned int blockNum){
-	sprintf(txtbuffer, "RecompCache_Alloc(%d, %05x)\n", size, blockNum);
-	DEBUG_print(txtbuffer, DBG_USBGECKO);
+	/*sprintf(txtbuffer, "RecompCache_Alloc(%d, %05x)\n", size, blockNum);
+	DEBUG_print(txtbuffer, DBG_USBGECKO);*/
 	CacheMetaNode* newBlock = malloc( sizeof(CacheMetaNode) );
 	newBlock->blockNum = blockNum;
 	newBlock->size = size;
@@ -103,8 +103,8 @@ void* RecompCache_Alloc(unsigned int size, unsigned int blockNum){
 }
 
 void* RecompCache_Realloc(void* memory, unsigned int size){
-	sprintf(txtbuffer, "RecompCache_Realloc(%08x, %d)\n", memory, size);
-	DEBUG_print(txtbuffer, DBG_USBGECKO);
+	/*sprintf(txtbuffer, "RecompCache_Realloc(%08x, %d)\n", memory, size);
+	DEBUG_print(txtbuffer, DBG_USBGECKO);*/
 	
 	// Find the corresponding node
 	CacheMetaNode* n;
@@ -156,8 +156,8 @@ void RecompCache_Free(unsigned int blockNum){
 }
 
 void RecompCache_Update(unsigned int blockNum){
-	sprintf(txtbuffer, "RecompCache_Update(%05x)\n", blockNum);
-	DEBUG_print(txtbuffer, DBG_USBGECKO);
+	/*sprintf(txtbuffer, "RecompCache_Update(%05x)\n", blockNum);
+	DEBUG_print(txtbuffer, DBG_USBGECKO);*/
 	// Update any equivalent addresses as well
 	unsigned int blockNum2 = 0, blockNum3 = 0;
 	if(blockNum < 0x80000 || blockNum >= 0xc0000){
