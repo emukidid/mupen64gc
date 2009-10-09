@@ -32,7 +32,7 @@ int noCheckInterrupt = 0;
 
 #define DYNAREC_PRELUDE() \
 	__asm__ __volatile__ ( \
-		"stwu	1, -40(1) \n" \
+		"stwu	1, -48(1) \n" \
 		"stw	14, 12(1) \n" \
 		"mfcr	14        \n" \
 		"stw	14, 8(1)  \n" \
@@ -49,9 +49,12 @@ int noCheckInterrupt = 0;
 		"mr     19, %4    \n" \
 		"stw    20, 36(1) \n" \
 		"mr     20, %5    \n" \
+		"stw    21, 40(1) \n" \
+		"mr     21, %6     \n" \
 		:: "r" (reg), "r" (decodeNInterpret), \
 		   "r" (dyna_update_count), "r" (&last_addr), \
-		   "r" (rdram), "r" (reg_cop1_fgr_64) )
+		   "r" (rdram), "r" (reg_cop1_fgr_64), \
+		   "r" (SP_DMEM) )
 
 
 void dynarec(unsigned int address){

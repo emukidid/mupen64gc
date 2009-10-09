@@ -831,4 +831,18 @@ PowerPC_instr Instruction(int opcode, ...);
 	  PPC_SET_RA    (ppc, (rb)); \
 	  PPC_SET_IMMED (ppc, (immed)); }
 
+#define GEN_LFD(ppc,fd,immed,rb) \
+	{ ppc = NEW_PPC_INSTR(); \
+	  PPC_SET_OPCODE(ppc, PPC_OPCODE_LFD); \
+	  PPC_SET_RD    (ppc, (fd)); \
+	  PPC_SET_RA    (ppc, (rb)); \
+	  PPC_SET_IMMED (ppc, (immed)); }
+
+#define GEN_LFS(ppc,fd,immed,rb) \
+	{ ppc = NEW_PPC_INSTR(); \
+	  PPC_SET_OPCODE(ppc, PPC_OPCODE_LFS); \
+	  PPC_SET_RD    (ppc, (fd)); \
+	  PPC_SET_RA    (ppc, (rb)); \
+	  PPC_SET_IMMED (ppc, (immed)); }
+
 #endif

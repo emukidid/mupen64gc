@@ -14,8 +14,9 @@
 #define DYNAREG_LADDR  18
 #define DYNAREG_RDRAM  19
 #define DYNAREG_FPR    20
+#define DYNAREG_SPDMEM 21
 
-#define DYNAFRAME_SIZE 40
+#define DYNAFRAME_SIZE 48
 #define DYNAOFF_LR     (DYNAFRAME_SIZE+4)
 #define DYNAOFF_CR     8
 #define DYNAOFF_REG    12
@@ -25,7 +26,7 @@
 #define DYNAOFF_LADDR  28
 #define DYNAOFF_RDRAM  32
 #define DYNAOFF_FPR    36
-
+#define DYNAOFF_SPDMEM 40
 
 extern long long int reg[34]; // game's registers
 extern long long int reg_cop1_fgr_64[32]; // fprs
