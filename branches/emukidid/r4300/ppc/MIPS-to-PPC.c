@@ -2322,7 +2322,15 @@ static int DMFC1(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP
-	// TODO: dmfc1
+	
+	int fs = mapFPR( MIPS_GET_FS(mips), 1 );
+	int rt = MIPS_GET_RT(mips);
+	invalidateRegister(rt);
+	
+	GEN_STFD(ppc, fs, rt*8, DYNAREG_REG);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -2371,9 +2379,9 @@ static int DMTC1(MIPS_instr mips){
 	
 	GEN_LWZ(ppc, addr, fs*4, DYNAREG_FPR_64);
 	set_next_dst(ppc);
-	GEN_STW(ppc, rt.hi, 0, addr);
+	GEN_STW(ppc, rt.lo, 0, addr);
 	set_next_dst(ppc);
-	GEN_STW(ppc, rt.lo, 4, addr);
+	GEN_STW(ppc, rt.hi, 4, addr);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
