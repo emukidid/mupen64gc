@@ -2699,6 +2699,24 @@ static int NEG_FP(MIPS_instr mips, int dbl){
 }
 
 // -- Floating Point Rounding/Conversion --
+#define PPC_ROUNDING_NEAREST 0
+#define PPC_ROUNDING_TRUNC   1
+#define PPC_ROUNDING_CEIL    2
+#define PPC_ROUNDING_FLOOR   3
+static void set_rounding(int rounding_mode){
+	PowerPC_instr ppc;
+	
+	GEN_MTFSFI(ppc, 7, rounding_mode);
+	set_next_dst(ppc);
+}
+
+static void set_rounding_reg(int rs){
+	PowerPC_instr ppc;
+	
+	GEN_MTFSF(ppc, 1, rs);
+	set_next_dst(ppc);
+}
+
 static int ROUND_L_FP(MIPS_instr mips, int dbl){
 	PowerPC_instr ppc;
 #if defined(INTERPRET_FP) || defined(INTERPRET_FP_ROUND_L)
@@ -2749,8 +2767,27 @@ static int ROUND_W_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_ROUND_W
-	// TODO: ROUND_W
-	return CONVERT_ERROR;
+	
+	set_rounding(PPC_ROUNDING_NEAREST);
+	
+	int fd = MIPS_GET_FD(mips);
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	invalidateFPR(fd);
+	int addr = mapRegisterTemp();
+	
+	// fctiw f0, fs
+	GEN_FCTIW(ppc, 0, fs);
+	set_next_dst(ppc);
+	// addr = reg_cop1_simple[fd]
+	GEN_LWZ(ppc, addr, fd*4, DYNAREG_FPR_32);
+	set_next_dst(ppc);
+	// stfiwx f0, 0, addr
+	GEN_STFIWX(ppc, 0, 0, addr);
+	set_next_dst(ppc);
+	
+	unmapRegisterTemp(addr);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -2788,8 +2825,27 @@ static int CEIL_W_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_CEIL_W
-	// TODO: CEIL_W
-	return CONVERT_ERROR;
+	
+	set_rounding(PPC_ROUNDING_CEIL);
+	
+	int fd = MIPS_GET_FD(mips);
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	invalidateFPR(fd);
+	int addr = mapRegisterTemp();
+	
+	// fctiw f0, fs
+	GEN_FCTIW(ppc, 0, fs);
+	set_next_dst(ppc);
+	// addr = reg_cop1_simple[fd]
+	GEN_LWZ(ppc, addr, fd*4, DYNAREG_FPR_32);
+	set_next_dst(ppc);
+	// stfiwx f0, 0, addr
+	GEN_STFIWX(ppc, 0, 0, addr);
+	set_next_dst(ppc);
+	
+	unmapRegisterTemp(addr);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -2799,8 +2855,27 @@ static int FLOOR_W_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_FLOOR_W
-	// TODO: FLOOR_W
-	return CONVERT_ERROR;
+	
+	set_rounding(PPC_ROUNDING_FLOOR);
+	
+	int fd = MIPS_GET_FD(mips);
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	invalidateFPR(fd);
+	int addr = mapRegisterTemp();
+	
+	// fctiw f0, fs
+	GEN_FCTIW(ppc, 0, fs);
+	set_next_dst(ppc);
+	// addr = reg_cop1_simple[fd]
+	GEN_LWZ(ppc, addr, fd*4, DYNAREG_FPR_32);
+	set_next_dst(ppc);
+	// stfiwx f0, 0, addr
+	GEN_STFIWX(ppc, 0, 0, addr);
+	set_next_dst(ppc);
+	
+	unmapRegisterTemp(addr);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -2844,6 +2919,8 @@ static int CVT_W_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_CVT_W
+	
+	// TODO: Set rounding mode according to FCR31
 	
 	int fd = MIPS_GET_FD(mips);
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );

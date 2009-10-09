@@ -90,6 +90,10 @@ PowerPC_instr Instruction(int opcode, ...);
 #define PPC_ME_SHIFT     1
 #define PPC_SET_ME(instr,me)         instr |= (me&PPC_ME_MASK)         << PPC_ME_SHIFT
 
+#define PPC_FM_MASK      0xFF
+#define PPC_FM_SHIFT     17
+#define PPC_SET_FM(instr,fm)         instr |= (fm&PPC_FM_MASK)         << PPC_FM_MASK
+
 #define PPC_SET_SH       PPC_SET_RB
 #define PPC_SET_RC       PPC_SET_MB
 
@@ -238,6 +242,8 @@ PowerPC_instr Instruction(int opcode, ...);
 #define PPC_FUNC_FSUB            20
 #define PPC_FUNC_MTFSB0          70
 #define PPC_FUNC_MTFSB1          38
+#define PPC_FUNC_MTFSFI          134
+#define PPC_FUNC_MTFSF           711
 
 // X-Form
 #define PPC_FUNC_ICBI            982
@@ -934,5 +940,19 @@ PowerPC_instr Instruction(int opcode, ...);
 	  PPC_SET_RD    (ppc, (fs)); \
 	  PPC_SET_RA    (ppc, (ra)); \
 	  PPC_SET_RB    (ppc, (rb)); }
+
+#define GEN_MTFSFI(ppc,field,immed) \
+	{ ppc = NEW_PPC_INSTR(); \
+	  PPC_SET_OPCODE(ppc, PPC_OPCODE_FPD); \
+	  PPC_SET_FUNC  (ppc, PPC_FUNC_MTFSFI); \
+	  PPC_SET_CRF   (ppc, (field)); \
+	  PPC_SET_RB    (ppc, ((immed)<<1)); }
+
+#define GEN_MTFSF(ppc,fields,rs) \
+	{ ppc = NEW_PPC_INSTR(); \
+	  PPC_SET_OPCODE(ppc, PPC_OPCODE_FPD); \
+	  PPC_SET_FUNC  (ppc, PPC_FUNC_MTFSF); \
+	  PPC_SET_FM    (ppc, (fields)); \
+	  PPC_SET_RB    (ppc, (rs)); }
 
 #endif
