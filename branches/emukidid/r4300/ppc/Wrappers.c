@@ -82,10 +82,10 @@ void dynarec(unsigned int address){
 			recompile_block(dst_block);
 			end_section(COMPILER_SECTION);
 		} else {
-			/*static last_block = -1;
+			static int last_block = -1;
 			if(address>>12 != last_block)
 				RecompCache_Update(address>>12);
-			last_block = address>>12;*/
+			last_block = address>>12;
 		}
 		
 		// Recompute the block offset

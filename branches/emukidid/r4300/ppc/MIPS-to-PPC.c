@@ -162,9 +162,14 @@ static int branch(int offset, condition cond, int link, int likely){
 		GEN_ORI(ppc, 3, 3, get_src_pc()+4);
 		set_next_dst(ppc);
 		// If taking the interrupt, use the trampoline
+#if 0
 		// Branch to the jump pad
 		GEN_B(ppc, add_jump(-2, 1, 1), 0, 0);
 		set_next_dst(ppc);
+#else
+		GEN_BLR(ppc, 0);
+		set_next_dst(ppc);
+#endif
 		
 #ifndef INTERPRET_BRANCH		
 	} else {
@@ -190,9 +195,14 @@ static int branch(int offset, condition cond, int link, int likely){
 		GEN_BGT(ppc, 2, 2, 0, 0);
 		set_next_dst(ppc);
 		// If taking the interrupt, use the trampoline
+#if 0
 		// Branch to the jump pad
 		GEN_B(ppc, add_jump(-2, 1, 1), 0, 0);
 		set_next_dst(ppc);
+#else
+		GEN_BLR(ppc, 0);
+		set_next_dst(ppc);
+#endif
 		
 		// The actual branch
 #if 0
@@ -292,9 +302,14 @@ static int J(MIPS_instr mips){
 		set_next_dst(ppc);
 		
 		// If we're taking the interrupt, we have to use the trampoline
+#if 0
 		// Branch to the jump pad
 		GEN_B(ppc, add_jump(naddr, 1, 1), 0, 0);
 		set_next_dst(ppc);
+#else
+		GEN_BLR(ppc, 0);
+		set_next_dst(ppc);
+#endif
 	}
 #endif
 	
@@ -360,9 +375,14 @@ static int JAL(MIPS_instr mips){
 		set_next_dst(ppc);
 		
 		// If we're taking the interrupt, we have to use the trampoline
+#if 0
 		// Branch to the jump pad
 		GEN_B(ppc, add_jump(naddr, 1, 1), 0, 0);
 		set_next_dst(ppc);
+#else
+		GEN_BLR(ppc, 0);
+		set_next_dst(ppc);
+#endif
 	}
 #endif
 	
@@ -3198,7 +3218,9 @@ static void genCallInterp(MIPS_instr mips){
 #else
 	GEN_BEQ(ppc, 6, 2, 0, 0);
 	set_next_dst(ppc);
-	GEN_B(ppc, add_jump(-1, 1, 1), 0, 0);
+	/*GEN_B(ppc, add_jump(-1, 1, 1), 0, 0);
+	set_next_dst(ppc);*/
+	GEN_BLR(ppc, 0);
 	set_next_dst(ppc);
 #endif
 	if(mips_is_jump(mips)) delaySlotNext = 1;
@@ -3222,10 +3244,14 @@ static void genJumpTo(unsigned int loc, unsigned int type){
 		GEN_ORI(ppc, 3, 3, loc);
 		set_next_dst(ppc);
 	}
-	
+#if 0
 	// Branch to the jump pad
 	GEN_B(ppc, add_jump(loc, 1, 1), 0, 0);
 	set_next_dst(ppc);
+#else
+	GEN_BLR(ppc, 0);
+	set_next_dst(ppc);
+#endif
 }
 
 // Updates Count, and sets cr2 to (next_interupt ? Count)
