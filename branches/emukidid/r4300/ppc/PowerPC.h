@@ -333,6 +333,7 @@ PowerPC_instr Instruction(int opcode, ...);
 #define PPC_FUNC_SRW             536
 
 #define PPC_FUNC_STBX            215
+#define PPC_FUNC_STFIWX          983
 #define PPC_FUNC_STHBRX          918
 #define PPC_FUNC_STHUX           439
 #define PPC_FUNC_STHX            407
