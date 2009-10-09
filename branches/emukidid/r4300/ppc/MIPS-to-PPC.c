@@ -2308,7 +2308,7 @@ static int COP0(MIPS_instr mips){
 
 static int MFC1(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_FP
+#if defined(INTERPRET_FP) || defined(INTERPRET_MFC1)
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP
@@ -2318,7 +2318,7 @@ static int MFC1(MIPS_instr mips){
 
 static int DMFC1(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_FP
+#if defined(INTERPRET_FP) || defined(INTERPRET_DMFC1)
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP
@@ -2328,7 +2328,7 @@ static int DMFC1(MIPS_instr mips){
 
 static int CFC1(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_FP
+#if defined(INTERPRET_FP) || defined(INTERPRET_CFC1)
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP
@@ -2338,7 +2338,7 @@ static int CFC1(MIPS_instr mips){
 
 static int MTC1(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_FP
+#if defined(INTERPRET_FP) || defined(INTERPRET_MTC1)
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP
@@ -2348,7 +2348,7 @@ static int MTC1(MIPS_instr mips){
 
 static int DMTC1(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_FP
+#if defined(INTERPRET_FP) || defined(INTERPRET_DMTC1)
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP
@@ -2358,7 +2358,7 @@ static int DMTC1(MIPS_instr mips){
 
 static int CTC1(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_FP
+#if defined(INTERPRET_FP) || defined(INTERPRET_CTC1)
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP
@@ -2367,7 +2367,7 @@ static int CTC1(MIPS_instr mips){
 }
 
 static int BC(MIPS_instr mips){
-#ifdef INTERPRET_FP
+#if defined(INTERPRET_FP) || defined(INTERPRET_BC)
 	genCallInterp(mips);
 	return INTERPRETED;
 #else
@@ -2487,41 +2487,496 @@ static int BC(MIPS_instr mips){
 #endif // INTERPRET_FP
 }
 
-static int S(MIPS_instr mips){
-#ifdef INTERPRET_FP
+// -- Floating Point Arithmetic --
+static int ADD_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_ADD)
 	genCallInterp(mips);
 	return INTERPRETED;
-#else // INTERPRET_FP
-	// TODO: single-precision FP
+#else // INTERPRET_FP || INTERPRET_FP_ADD
+	
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
+	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl );
+	
+	GEN_FADD(ppc, fd, fs, ft);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+#endif
+}
+
+static int SUB_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_SUB)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_SUB
+	
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
+	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl );
+	
+	GEN_FSUB(ppc, fd, fs, ft);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+#endif
+}
+
+static int MUL_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_MUL)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_MUL
+	
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
+	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl );
+	
+	GEN_FMUL(ppc, fd, fs, ft);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+#endif
+}
+
+static int DIV_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_DIV)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_DIV
+	
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
+	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl );
+	
+	GEN_FDIV(ppc, fd, fs, ft);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+#endif
+}
+
+static int SQRT_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_SQRT)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_SQRT
+	// TODO: SQRT
 	return CONVERT_ERROR;
+#endif
+}
+
+static int ABS_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_ABS)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_ABS
+	
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl );
+	
+	GEN_FABS(ppc, fd, fs);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+#endif
+}
+
+static int MOV_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_MOV)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_MOV
+	
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl );
+	
+	GEN_FMR(ppc, fd, fs);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+#endif
+}
+
+static int NEG_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_NEG)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_NEG
+	
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl );
+	
+	GEN_FNEG(ppc, fd, fs);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+#endif
+}
+
+// -- Floating Point Rounding/Conversion --
+static int ROUND_L_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_ROUND_L)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_ROUND_L
+	// TODO: ROUND_L
+	return CONVERT_ERROR;
+#endif
+}
+
+static int TRUNC_L_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_TRUNC_L)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_TRUNC_L
+	// TODO: TRUNC_L
+	return CONVERT_ERROR;
+#endif
+}
+
+static int CEIL_L_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_CEIL_L)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_CEIL_L
+	// TODO: CEIL_L
+	return CONVERT_ERROR;
+#endif
+}
+
+static int FLOOR_L_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_FLOOR_L)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_FLOOR_L
+	// TODO: FLOOR_L
+	return CONVERT_ERROR;
+#endif
+}
+
+static int ROUND_W_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_ROUND_W)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_ROUND_W
+	// TODO: ROUND_W
+	return CONVERT_ERROR;
+#endif
+}
+
+static int TRUNC_W_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_TRUNC_W)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_TRUNC_W
+	// TODO: TRUNC_W
+	return CONVERT_ERROR;
+#endif
+}
+
+static int CEIL_W_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_CEIL_W)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_CEIL_W
+	// TODO: CEIL_W
+	return CONVERT_ERROR;
+#endif
+}
+
+static int FLOOR_W_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_FLOOR_W)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_FLOOR_W
+	// TODO: FLOOR_W
+	return CONVERT_ERROR;
+#endif
+}
+
+static int CVT_S_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_CVT_S)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_CVT_S
+	// TODO: CVT_S
+	return CONVERT_ERROR;
+#endif
+}
+
+static int CVT_D_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_CVT_D)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_CVT_D
+	// TODO: CVT_D
+	return CONVERT_ERROR;
+#endif
+}
+
+static int CVT_W_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_CVT_W)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_CVT_W
+	// TODO: CVT_W
+	return CONVERT_ERROR;
+#endif
+}
+
+static int CVT_L_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_CVT_L)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_CVT_L
+	// TODO: CVT_L
+	return CONVERT_ERROR;
+#endif
+}
+
+// -- Floating Point Comparisons --
+static int C_F_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_C_F)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_C_F
+	// TODO: C_F
+	return CONVERT_ERROR;
+#endif
+}
+
+static int C_UN_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_C_UN)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_C_UN
+	// TODO: C_UN
+	return CONVERT_ERROR;
+#endif
+}
+
+static int C_EQ_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_C_EQ)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_C_EQ
+	// TODO: C_EQ
+	return CONVERT_ERROR;
+#endif
+}
+
+static int C_UEQ_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_C_UEQ)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_C_UEQ
+	// TODO: C_UEQ
+	return CONVERT_ERROR;
+#endif
+}
+
+static int C_OLT_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_C_OLT)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_C_OLT
+	// TODO: C_OLT
+	return CONVERT_ERROR;
+#endif
+}
+
+static int C_ULT_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_C_ULT)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_C_ULT
+	// TODO: C_ULT
+	return CONVERT_ERROR;
+#endif
+}
+
+static int C_OLE_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_C_OLE)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_C_OLE
+	// TODO: C_OLE
+	return CONVERT_ERROR;
+#endif
+}
+
+static int C_ULE_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_C_ULE)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_C_ULE
+	// TODO: C_ULE
+	return CONVERT_ERROR;
+#endif
+}
+
+static int C_SF_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_C_SF)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_C_SF
+	// TODO: C_SF
+	return CONVERT_ERROR;
+#endif
+}
+
+static int C_NGLE_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_C_NGLE)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_C_NGLE
+	// TODO: C_NGLE
+	return CONVERT_ERROR;
+#endif
+}
+
+static int C_SEQ_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_C_SEQ)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_C_SEQ
+	// TODO: C_SEQ
+	return CONVERT_ERROR;
+#endif
+}
+
+static int C_NGL_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_C_NGL)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_C_NGL
+	// TODO: C_NGL
+	return CONVERT_ERROR;
+#endif
+}
+
+static int C_LT_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_C_LT)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_C_LT
+	// TODO: C_LT
+	return CONVERT_ERROR;
+#endif
+}
+
+static int C_NGE_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_C_NGE)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_C_NGE
+	// TODO: C_NGE
+	return CONVERT_ERROR;
+#endif
+}
+
+static int C_LE_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_C_LE)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_C_LE
+	// TODO: C_LE
+	return CONVERT_ERROR;
+#endif
+}
+
+static int C_NGT_FP(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_C_NGT)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_C_NGT
+	// TODO: C_NGT
+	return CONVERT_ERROR;
+#endif
+}
+
+static int (*gen_cop1_fp[64])(MIPS_instr, int) =
+{
+   ADD_FP    ,SUB_FP    ,MUL_FP   ,DIV_FP    ,SQRT_FP   ,ABS_FP    ,MOV_FP   ,NEG_FP    ,
+   ROUND_L_FP,TRUNC_L_FP,CEIL_L_FP,FLOOR_L_FP,ROUND_W_FP,TRUNC_W_FP,CEIL_W_FP,FLOOR_W_FP,
+   NI        ,NI        ,NI       ,NI        ,NI        ,NI        ,NI       ,NI        ,
+   NI        ,NI        ,NI       ,NI        ,NI        ,NI        ,NI       ,NI        ,
+   CVT_S_FP  ,CVT_D_FP  ,NI       ,NI        ,CVT_W_FP  ,CVT_L_FP  ,NI       ,NI        ,
+   NI        ,NI        ,NI       ,NI        ,NI        ,NI        ,NI       ,NI        ,
+   C_F_FP    ,C_UN_FP   ,C_EQ_FP  ,C_UEQ_FP  ,C_OLT_FP  ,C_ULT_FP  ,C_OLE_FP ,C_ULE_FP  ,
+   C_SF_FP   ,C_NGLE_FP ,C_SEQ_FP ,C_NGL_FP  ,C_LT_FP   ,C_NGE_FP  ,C_LE_FP  ,C_NGT_FP
+};
+
+static int S(MIPS_instr mips){
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_S)
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_FP || INTERPRET_FP_S
+	return gen_cop1_fp[ MIPS_GET_FUNC(mips) ](mips, 0);
 #endif
 }
 
 static int D(MIPS_instr mips){
-#ifdef INTERPRET_FP
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_D)
 	genCallInterp(mips);
 	return INTERPRETED;
-#else // INTERPRET_FP
-	// TODO: double-precision FP
-	return CONVERT_ERROR;
+#else // INTERPRET_FP || INTERPRET_FP_D
+	return gen_cop1_fp[ MIPS_GET_FUNC(mips) ](mips, 1);
 #endif
 }
 
 static int W(MIPS_instr mips){
-#ifdef INTERPRET_FP
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_W)
 	genCallInterp(mips);
 	return INTERPRETED;
-#else // INTERPRET_FP
+#else // INTERPRET_FP || INTERPRET_FP_W
 	// TODO: integer FP
 	return CONVERT_ERROR;
 #endif
 }
 
 static int L(MIPS_instr mips){
-#ifdef INTERPRET_FP
+#if defined(INTERPRET_FP) || defined(INTERPRET_FP_L)
 	genCallInterp(mips);
 	return INTERPRETED;
-#else // INTERPRET_FP
+#else // INTERPRET_FP || INTERPRET_FP_L
 	// TODO: long-integer FP
 	return CONVERT_ERROR;
 #endif
