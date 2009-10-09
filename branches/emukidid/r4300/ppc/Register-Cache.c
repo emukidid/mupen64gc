@@ -29,7 +29,7 @@ static int availableRegsDefault[32] = {
 static int availableRegs[32];
 
 // Actually perform the store for a dirty register mapping
-static void flushRegister(int reg){
+static void _flushRegister(int reg){
 	PowerPC_instr ppc;
 	if(regMap[reg].map.hi >= 0){
 		// Simply store the mapped MSW
@@ -69,7 +69,7 @@ static RegMapping flushLRURegister(void){
 	}
 	RegMapping map = regMap[lru_i].map;
 	// Flush the register if its dirty
-	if(regMap[lru_i].dirty) flushRegister(lru_i);
+	if(regMap[lru_i].dirty) _flushRegister(lru_i);
 	// Mark unmapped
 	regMap[lru_i].map.hi = regMap[lru_i].map.lo = -1;
 	return map;
@@ -232,6 +232,16 @@ void invalidateRegister(int reg){
 	regMap[reg].map.hi = regMap[reg].map.lo = -1;
 }
 
+void flushRegister(int reg){
+	if(regMap[reg].map.lo >= 0){
+		if(regMap[reg].dirty) _flushRegister(reg);
+		if(regMap[reg].map.hi >= 0)
+			availableRegs[ regMap[reg].map.hi ] = 1;
+		availableRegs[ regMap[reg].map.lo ] = 1;
+	}
+	regMap[reg].map.hi = regMap[reg].map.lo = -1;
+}
+
 
 // -- FPR mappings --
 static struct {
@@ -252,7 +262,7 @@ static int availableFPRsDefault[32] = {
 static int availableFPRs[32];
 
 // Actually perform the store for a dirty register mapping
-static void flushFPR(int reg){
+static void _flushFPR(int reg){
 	PowerPC_instr ppc;
 	// Store the register to memory (indirectly)
 	int addr = mapRegisterTemp();
@@ -293,7 +303,7 @@ static int flushLRUFPR(void){
 	}
 	int map = fprMap[lru_i].map;
 	// Flush the register if its dirty
-	if(fprMap[lru_i].dirty) flushFPR(lru_i);
+	if(fprMap[lru_i].dirty) _flushFPR(lru_i);
 	// Mark unmapped
 	fprMap[lru_i].map = -1;
 	return map;
@@ -358,6 +368,14 @@ void invalidateFPR(int fpr){
 	fprMap[fpr].map = -1;
 }
 
+void flushFPR(int fpr){
+	if(fprMap[fpr].map >= 0){
+		if(fprMap[fpr].dirty) _flushFPR(fpr);
+		availableFPRs[ fprMap[fpr].map ] = 1;
+	}
+	fprMap[fpr].map = -1;
+}
+
 
 // Unmapping registers
 int flushRegisters(void){
@@ -365,7 +383,7 @@ int flushRegisters(void){
 	// Flush GPRs
 	for(i=1; i<34; ++i){
 		if(regMap[i].map.lo >= 0 && regMap[i].dirty){
-			flushRegister(i);
+			_flushRegister(i);
 			++flushed;
 		}
 		// Mark unmapped
@@ -376,7 +394,7 @@ int flushRegisters(void){
 	// Flush FPRs
 	for(i=0; i<32; ++i){
 		if(fprMap[i].map >= 0 && fprMap[i].dirty){
-			flushFPR(i);
+			_flushFPR(i);
 			++flushed;
 		}
 		// Mark unmapped

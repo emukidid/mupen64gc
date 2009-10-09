@@ -21,6 +21,8 @@ RegMapping mapRegister64(int reg);
 RegMapping mapRegister64New(int reg);
 // Unmap a register (reg) without storing, even if its marked dirty
 void invalidateRegister(int reg);
+// Unmap a register (reg), storing if dirty
+void flushRegister(int reg);
 
 
 // -- FPRs --
@@ -32,6 +34,8 @@ int mapFPR(int fpr, int dbl);
 int mapFPRNew(int fpr, int dbl);
 // Unmap a FPR (fpr) without storing, even if its marked dirty
 void invalidateFPR(int fpr);
+// Unmap a FPR (fpr), storing if dirty
+void flushFPR(int fpr);
 
 
 // Unmap all registers, storing any dirty registers

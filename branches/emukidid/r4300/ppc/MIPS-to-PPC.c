@@ -3027,13 +3027,66 @@ static int D(MIPS_instr mips){
 #endif
 }
 
+static int CVT_FP_W(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+	
+	int fs = MIPS_GET_FS(mips);
+	flushFPR(fs);
+	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl );
+	int tmp = mapRegisterTemp();
+	
+	// Get the integer value into a GPR
+	// tmp = fpr32[fs]
+	GEN_LWZ(ppc, tmp, fs*4, DYNAREG_FPR_32);
+	set_next_dst(ppc);
+	// tmp = *tmp (src)
+	GEN_LWZ(ppc, tmp, 0, tmp);
+	set_next_dst(ppc);
+	
+	// lis r0, 0x4330
+	GEN_LIS(ppc, 0, 0x4330);
+	set_next_dst(ppc);
+	// stw r0, -8(r1)
+	GEN_STW(ppc, 0, -8, 1);
+	set_next_dst(ppc);
+	// lis r0, 0x8000
+	GEN_LIS(ppc, 0, 0x8000);
+	set_next_dst(ppc);
+	// stw r0, -4(r1)
+	GEN_STW(ppc, 0, -4, 1);
+	set_next_dst(ppc);
+	// xor r0, src, 0x80000000
+	GEN_XOR(ppc, 0, tmp, 0);
+	set_next_dst(ppc);
+	// lfd f0, -8(r1)
+	GEN_LFD(ppc, 0, -8, 1);
+	set_next_dst(ppc);
+	// stw r0 -4(r1)
+	GEN_STW(ppc, 0, -4, 1);
+	set_next_dst(ppc);
+	// lfd fd, -8(r1)
+	GEN_LFD(ppc, fd, -8, 1);
+	set_next_dst(ppc);
+	// fsub fd, fd, f0
+	GEN_FSUB(ppc, fd, fd, 0);
+	set_next_dst(ppc);
+	
+	unmapRegisterTemp(tmp);
+	
+	return CONVERT_SUCCESS;
+}
+
 static int W(MIPS_instr mips){
 #if defined(INTERPRET_FP) || defined(INTERPRET_FP_W)
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_W
-	// TODO: integer FP
-	return CONVERT_ERROR;
+	
+	int func = MIPS_GET_FUNC(mips);
+	
+	if(func == MIPS_FUNC_CVT_S_) return CVT_FP_W(mips, 0);
+	if(func == MIPS_FUNC_CVT_D_) return CVT_FP_W(mips, 1);
+	else return CONVERT_ERROR;
 #endif
 }
 
