@@ -844,12 +844,20 @@ static int BGTZL(MIPS_instr mips){
 
 static int DADDIU(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_DW
+#if defined(INTERPRET_DW) || defined(INTERPRET_DADDIU)
 	genCallInterp(mips);
 	return INTERPRETED;
-#else // INTERPRET_DW
-	// TODO: daddiu
-	return CONVERT_ERROR;
+#else // INTERPRET_DW || INTERPRET_DADDIU
+	
+	RegMapping rs = mapRegister64( MIPS_GET_RS(mips) );
+	RegMapping rt = mapRegister64New( MIPS_GET_RT(mips) );
+	
+	GEN_ADDIC(ppc, rt.lo, rs.lo, MIPS_GET_IMMED(mips));
+	set_next_dst(ppc);
+	GEN_ADDZE(ppc, rt.hi, rs.hi);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -1540,10 +1548,10 @@ static int DIVU(MIPS_instr mips){
 
 static int DSLLV(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_DW
+#if defined(INTERPRET_DW) || defined(INTERPRET_DSLLV)
 	genCallInterp(mips);
 	return INTERPRETED;
-#else  // INTERPRET_DW
+#else  // INTERPRET_DW || INTERPRET_DSLLV
 	// TODO: dsllv
 	return CONVERT_ERROR;
 #endif
@@ -1551,10 +1559,10 @@ static int DSLLV(MIPS_instr mips){
 
 static int DSRLV(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_DW
+#if defined(INTERPRET_DW) || defined(INTERPRET_DSRLV)
 	genCallInterp(mips);
 	return INTERPRETED;
-#else  // INTERPRET_DW
+#else  // INTERPRET_DW || INTERPRET_DSRLV
 	// TODO: dsrlv
 	return CONVERT_ERROR;
 #endif
@@ -1562,10 +1570,10 @@ static int DSRLV(MIPS_instr mips){
 
 static int DSRAV(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_DW
+#if defined(INTERPRET_DW) || defined(INTERPRET_DSRAV)
 	genCallInterp(mips);
 	return INTERPRETED;
-#else  // INTERPRET_DW
+#else  // INTERPRET_DW || INTERPRET_DSRAV
 	// TODO: dsrav
 	return CONVERT_ERROR;
 #endif
@@ -1573,10 +1581,10 @@ static int DSRAV(MIPS_instr mips){
 
 static int DMULT(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_DW
+#if defined(INTERPRET_DW) || defined(INTERPRET_DMULT)
 	genCallInterp(mips);
 	return INTERPRETED;
-#else // INTERPRET_DW
+#else // INTERPRET_DW || INTERPRET_DMULT
 	// TODO: dmult
 	return CONVERT_ERROR;
 #endif
@@ -1584,10 +1592,10 @@ static int DMULT(MIPS_instr mips){
 
 static int DMULTU(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_DW
+#if defined(INTERPRET_DW) || defined(INTERPRET_DMULTU)
 	genCallInterp(mips);
 	return INTERPRETED;
-#else // INTERPRET_DW
+#else // INTERPRET_DW || INTERPRET_DMULTU
 	// TODO: dmultu
 	return CONVERT_ERROR;
 #endif
@@ -1595,10 +1603,10 @@ static int DMULTU(MIPS_instr mips){
 
 static int DDIV(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_DW
+#if defined(INTERPRET_DW) || defined(INTERPRET_DDIV)
 	genCallInterp(mips);
 	return INTERPRETED;
-#else // INTERPRET_DW
+#else // INTERPRET_DW || INTERPRET_DDIV
 	// TODO: ddiv
 	return CONVERT_ERROR;
 #endif
@@ -1606,10 +1614,10 @@ static int DDIV(MIPS_instr mips){
 
 static int DDIVU(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_DW
+#if defined(INTERPRET_DW) || defined(INTERPRET_DDIVU)
 	genCallInterp(mips);
 	return INTERPRETED;
-#else // INTERPRET_DW
+#else // INTERPRET_DW || INTERPRET_DDIVU
 	// TODO: ddivu
 	return CONVERT_ERROR;
 #endif
@@ -1617,12 +1625,21 @@ static int DDIVU(MIPS_instr mips){
 
 static int DADDU(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_DW
+#if defined(INTERPRET_DW) || defined(INTERPRET_DADDU)
 	genCallInterp(mips);
 	return INTERPRETED;
-#else // INTERPRET_DW
-	// TODO: daddu
-	return CONVERT_ERROR;
+#else // INTERPRET_DW || INTERPRET_DADDU
+	
+	RegMapping rs = mapRegister64( MIPS_GET_RS(mips) );
+	RegMapping rt = mapRegister64( MIPS_GET_RT(mips) );
+	RegMapping rd = mapRegister64New( MIPS_GET_RD(mips) );
+	
+	GEN_ADDC(ppc, rd.lo, rs.lo, rt.lo);
+	set_next_dst(ppc);
+	GEN_ADDE(ppc, rd.hi, rs.hi, rt.hi);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -1632,12 +1649,21 @@ static int DADD(MIPS_instr mips){
 
 static int DSUBU(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_DW
+#if defined(INTERPRET_DW) || defined(INTERPRET_DSUBU)
 	genCallInterp(mips);
 	return INTERPRETED;
-#else // INTERPRET_DW
-	// TODO: dsubu
-	return CONVERT_ERROR;
+#else // INTERPRET_DW || INTERPRET_DSUBU
+	
+	RegMapping rs = mapRegister64( MIPS_GET_RS(mips) );
+	RegMapping rt = mapRegister64( MIPS_GET_RT(mips) );
+	RegMapping rd = mapRegister64New( MIPS_GET_RD(mips) );
+	
+	GEN_SUBFC(ppc, rd.lo, rt.lo, rs.lo);
+	set_next_dst(ppc);
+	GEN_SUBFE(ppc, rd.hi, rt.hi, rs.hi);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -1647,10 +1673,10 @@ static int DSUB(MIPS_instr mips){
 
 static int DSLL(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_DW
+#if defined(INTERPRET_DW) || defined(INTERPRET_DSLL)
 	genCallInterp(mips);
 	return INTERPRETED;
-#else // INTERPRET_DW
+#else // INTERPRET_DW || INTERPRET_DSLL
 	// TODO: dsll
 	return CONVERT_ERROR;
 #endif
@@ -1658,10 +1684,10 @@ static int DSLL(MIPS_instr mips){
 
 static int DSRL(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_DW
+#if defined(INTERPRET_DW) || defined(INTERPRET_DSRL)
 	genCallInterp(mips);
 	return INTERPRETED;
-#else // INTERPRET_DW
+#else // INTERPRET_DW || INTERPRET_DSRL
 	// TODO: dsrl
 	return CONVERT_ERROR;
 #endif
@@ -1669,10 +1695,10 @@ static int DSRL(MIPS_instr mips){
 
 static int DSRA(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_DW
+#if defined(INTERPRET_DW) || defined(INTERPRET_DSRA)
 	genCallInterp(mips);
 	return INTERPRETED;
-#else // INTERPRET_DW
+#else // INTERPRET_DW || INTERPRET_DSRA
 	// TODO: dsra
 	return CONVERT_ERROR;
 #endif
@@ -1680,10 +1706,10 @@ static int DSRA(MIPS_instr mips){
 
 static int DSLL32(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_DW
+#if defined(INTERPRET_DW) || defined(INTERPRET_DSLL32)
 	genCallInterp(mips);
 	return INTERPRETED;
-#else // INTERPRET_DW
+#else // INTERPRET_DW || INTERPRET_DSLL32
 	// TODO: dsll32
 	return CONVERT_ERROR;
 #endif
@@ -1691,10 +1717,10 @@ static int DSLL32(MIPS_instr mips){
 
 static int DSRL32(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_DW
+#if defined(INTERPRET_DW) || defined(INTERPRET_DSRL32)
 	genCallInterp(mips);
 	return INTERPRETED;
-#else // INTERPRET_DW
+#else // INTERPRET_DW || INTERPRET_DSRL32
 	// TODO: dsrl32
 	return CONVERT_ERROR;
 #endif
@@ -1702,10 +1728,10 @@ static int DSRL32(MIPS_instr mips){
 
 static int DSRA32(MIPS_instr mips){
 	PowerPC_instr ppc;
-#ifdef INTERPRET_DW
+#if defined(INTERPRET_DW) || defined(INTERPRET_DSRA32)
 	genCallInterp(mips);
 	return INTERPRETED;
-#else // INTERPRET_DW
+#else // INTERPRET_DW || INTERPRET_DSRA32
 	// TODO: dsra32
 	return CONVERT_ERROR;
 #endif
