@@ -1575,7 +1575,7 @@ static int DSLLV(MIPS_instr mips){
 #else  // INTERPRET_DW || INTERPRET_DSLLV
 	
 	int rs = mapRegister( MIPS_GET_RS(mips) );
-	int sa = mapReisterTemp();
+	int sa = mapRegisterTemp();
 	RegMapping rt = mapRegister64( MIPS_GET_RT(mips) );
 	RegMapping rd = mapRegister64New( MIPS_GET_RD(mips) );
 	
@@ -1621,7 +1621,7 @@ static int DSRLV(MIPS_instr mips){
 #else  // INTERPRET_DW || INTERPRET_DSRLV
 	
 	int rs = mapRegister( MIPS_GET_RS(mips) );
-	int sa = mapReisterTemp();
+	int sa = mapRegisterTemp();
 	RegMapping rt = mapRegister64( MIPS_GET_RT(mips) );
 	RegMapping rd = mapRegister64New( MIPS_GET_RD(mips) );
 	
