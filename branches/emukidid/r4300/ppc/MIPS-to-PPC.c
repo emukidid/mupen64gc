@@ -2760,8 +2760,25 @@ static int TRUNC_W_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_TRUNC_W
-	// TODO: TRUNC_W
-	return CONVERT_ERROR;
+	
+	int fd = MIPS_GET_FD(mips);
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	invalidateFPR(fd);
+	int addr = mapRegisterTemp();
+	
+	// fctiwz f0, fs
+	GEN_FCTIWZ(ppc, 0, fs);
+	set_next_dst(ppc);
+	// addr = reg_cop1_simple[fd]
+	GEN_LWZ(ppc, addr, fd*4, DYNAREG_FPR_32);
+	set_next_dst(ppc);
+	// stfiwx f0, 0, addr
+	GEN_STFIWX(ppc, 0, 0, addr);
+	set_next_dst(ppc);
+	
+	unmapRegisterTemp(addr);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
