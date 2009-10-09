@@ -2717,8 +2717,14 @@ static int CVT_S_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_CVT_S
-	// TODO: CVT_S
-	return CONVERT_ERROR;
+	
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	int fd = mapFPRNew( MIPS_GET_FD(mips), 0 );
+	
+	GEN_FMR(ppc, fd, fs);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -2728,8 +2734,14 @@ static int CVT_D_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_CVT_D
-	// TODO: CVT_D
-	return CONVERT_ERROR;
+	
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	int fd = mapFPRNew( MIPS_GET_FD(mips), 1 );
+	
+	GEN_FMR(ppc, fd, fs);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
