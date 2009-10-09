@@ -322,10 +322,11 @@ int mapFPR(int fpr, int dbl){
 	// FIXME: Do I need to worry about conversions between single and double?
 	if(fprMap[fpr].map >= 0) return fprMap[fpr].map;
 	
+	fprMap[fpr].dirty = 0; // If it hasn't previously been mapped, its clean
 	// Try to find any already available register
 	fprMap[fpr].map = getAvailableFPR();
 	// If didn't find an available register, flush one
-	if(fprMap[fpr].map < 0) return fprMap[fpr].map = flushLRUFPR();
+	if(fprMap[fpr].map < 0) fprMap[fpr].map = flushLRUFPR();
 	
 	if(dbl){
 		GEN_LFD(ppc, fprMap[fpr].map, fpr*8, DYNAREG_FPR);
