@@ -225,6 +225,10 @@ RegMapping mapRegister64(int reg){
 }
 
 void invalidateRegister(int reg){
+	if(regMap[reg].map.hi >= 0)
+		availableRegisters[ regMap[reg].map.hi ] = 1;
+	if(regMap[reg].map.lo >= 0)
+		availableRegisters[ regMap[reg].map.lo ] = 1;
 	regMap[reg].map.hi = regMap[reg].map.lo = -1;
 }
 
@@ -349,6 +353,8 @@ int mapFPR(int fpr, int dbl){
 }
 
 void invalidateFPR(int fpr){
+	if(fprMap[fpr].map >= 0)
+		availableFPRs[ fprMap[fpr].map ] = 1;
 	fprMap[fpr].map = -1;
 }
 
