@@ -226,9 +226,9 @@ RegMapping mapRegister64(int reg){
 
 void invalidateRegister(int reg){
 	if(regMap[reg].map.hi >= 0)
-		availableRegisters[ regMap[reg].map.hi ] = 1;
+		availableRegs[ regMap[reg].map.hi ] = 1;
 	if(regMap[reg].map.lo >= 0)
-		availableRegisters[ regMap[reg].map.lo ] = 1;
+		availableRegs[ regMap[reg].map.lo ] = 1;
 	regMap[reg].map.hi = regMap[reg].map.lo = -1;
 }
 

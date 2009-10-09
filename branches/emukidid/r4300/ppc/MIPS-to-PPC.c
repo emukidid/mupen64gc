@@ -2787,8 +2787,25 @@ static int CVT_W_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_CVT_W
-	// TODO: CVT_W
-	return CONVERT_ERROR;
+	
+	int fd = MIPS_GET_FD(mips);
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	invalidateFPR(fd);
+	int addr = mapRegisterTemp();
+	
+	// fctiw f0, fs
+	GEN_FCTIW(ppc, 0, fs);
+	set_next_dst(ppc);
+	// addr = reg_cop1_simple[fd]
+	GEN_LWZ(ppc, addr, fd*4, DYNAREG_FPR_32);
+	set_next_dst(ppc);
+	// stfiwx f0, 0, addr
+	GEN_STFIWX(ppc, 0, 0, addr);
+	set_next_dst(ppc);
+	
+	unmapRegisterTemp(addr);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
