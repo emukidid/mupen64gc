@@ -19,6 +19,7 @@ typedef struct {
 	PowerPC_instr** code_addr;     // table of block offsets to code pointer,
 	                               //   its length is end_addr - start_addr
 	unsigned long   adler32;       // Used for TLB
+	unsigned int    lru;           // Used for RecompCache
 } PowerPC_block;
 
 #define MAX_JUMPS        1024

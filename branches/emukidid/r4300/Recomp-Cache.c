@@ -124,18 +124,9 @@ void* RecompCache_Realloc(void* memory, unsigned int size){
 	
 	// We have the necessary space for this alloc, so just call malloc
 	cacheSize += neededSpace;
-#if 1
 	n->memory = realloc(n->memory, size);
-#else
-	void* old = n->memory;
-	n->memory = malloc(size);
-	memcpy(n->memory, old, n->size);
-	free(old);
-#endif
 	n->size = size;
-	// Update it to the head of the linked list
-	nodeRemove(n);
-	nodeAdd(n);
+	
 	// Return the actual pointer
 	return n->memory;
 }
