@@ -1428,7 +1428,7 @@ static int MULT(MIPS_instr mips){
 	int lo = mapRegisterNew( MIPS_REG_LO );
 	
 	// Don't multiply if they're using r0
-	if(rs && rt){
+	if(MIPS_GET_RS(mips) && MIPS_GET_RT(mips)){
 		// mullw lo, rs, rt
 		GEN_MULLW(ppc, lo, rs, rt);
 		set_next_dst(ppc);
@@ -1454,13 +1454,13 @@ static int MULTU(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_MULTU
-	int rs = MIPS_GET_RS(mips);
-	int rt = MIPS_GET_RT(mips);
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	int rt = mapRegister( MIPS_GET_RT(mips) );
 	int hi = mapRegisterNew( MIPS_REG_HI );
 	int lo = mapRegisterNew( MIPS_REG_LO );
 	
 	// Don't multiply if they're using r0
-	if(rs && rt){
+	if(MIPS_GET_RS(mips) && MIPS_GET_RT(mips)){
 		// mullw lo, rs, rt
 		GEN_MULLW(ppc, lo, rs, rt);
 		set_next_dst(ppc);
@@ -1488,13 +1488,13 @@ static int DIV(MIPS_instr mips){
 #else // INTERPRET_DIV
 	// This instruction computes the quotient and remainder
 	//   and stores the results in lo and hi respectively
-	int rs = MIPS_GET_RS(mips);
-	int rt = MIPS_GET_RT(mips);
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	int rt = mapRegister( MIPS_GET_RT(mips) );
 	int hi = mapRegisterNew( MIPS_REG_HI );
 	int lo = mapRegisterNew( MIPS_REG_LO );
 	
 	// Don't divide if they're using r0
-	if(rs && rt){
+	if(MIPS_GET_RS(mips) && MIPS_GET_RT(mips)){
 		// divw lo, rs, rt
 		GEN_DIVW(ppc, lo, rs, rt);
 		set_next_dst(ppc);
@@ -1521,13 +1521,13 @@ static int DIVU(MIPS_instr mips){
 #else // INTERPRET_DIVU
 	// This instruction computes the quotient and remainder
 	//   and stores the results in lo and hi respectively
-	int rs = MIPS_GET_RS(mips);
-	int rt = MIPS_GET_RT(mips);
+	int rs = mapRegister( MIPS_GET_RS(mips) );
+	int rt = mapRegister( MIPS_GET_RT(mips) );
 	int hi = mapRegisterNew( MIPS_REG_HI );
 	int lo = mapRegisterNew( MIPS_REG_LO );
 	
 	// Don't divide if they're using r0
-	if(rs && rt){
+	if(MIPS_GET_RS(mips) && MIPS_GET_RT(mips)){
 		// divwu lo, rs, rt
 		GEN_DIVWU(ppc, lo, rs, rt);
 		set_next_dst(ppc);
