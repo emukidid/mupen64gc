@@ -1674,8 +1674,14 @@ static int DSRAV(MIPS_instr mips){
 	// Mask off the shift amount (0x3f)
 	GEN_RLWINM(ppc, sa, rs, 0, 26, 31);
 	set_next_dst(ppc);
+	// Check whether the shift amount is < 32
+	GEN_CMPI(ppc, sa, 32, 1);
+	set_next_dst(ppc);
 	// Shift the LSW
 	GEN_SRW(ppc, rd.lo, rt.lo, sa);
+	set_next_dst(ppc);
+	// Skip over this code if sh >= 32
+	GEN_BGE(ppc, 1, 5, 0, 0);
 	set_next_dst(ppc);
 	// Calculate 32-sh
 	GEN_SUBFIC(ppc, 0, sa, 32);
@@ -1685,6 +1691,9 @@ static int DSRAV(MIPS_instr mips){
 	set_next_dst(ppc);
 	// Insert the bits into the LSW
 	GEN_OR(ppc, rd.lo, rd.lo, 0);
+	set_next_dst(ppc);
+	// Skip over the else
+	GEN_B(ppc, 4, 0, 0);
 	set_next_dst(ppc);
 	// Calculate sh-32
 	GEN_ADDI(ppc, 0, sa, -32);
