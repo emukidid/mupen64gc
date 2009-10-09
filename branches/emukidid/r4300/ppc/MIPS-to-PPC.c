@@ -2342,7 +2342,18 @@ static int MTC1(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP
-	// TODO: mtc1
+	
+	int rt = mapRegister( MIPS_GET_RT(mips) );
+	int fs = MIPS_GET_FS(mips);
+	int addr = mapRegisterTemp();
+	invalidateFPR(fs);
+	
+	GEN_LWZ(ppc, addr, fs*4, DYNAREG_FPR_32);
+	set_next_dst(ppc);
+	GEN_STW(ppc, rt, 0, addr);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -2352,7 +2363,20 @@ static int DMTC1(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP
-	// TODO: dmtc1
+	
+	RegMapping rt = mapRegister64( MIPS_GET_RT(mips) );
+	int fs = MIPS_GET_FS(mips);
+	int addr = mapRegisterTemp();
+	invalidateFPR(fs);
+	
+	GEN_LWZ(ppc, addr, fs*4, DYNAREG_FPR_64);
+	set_next_dst(ppc);
+	GEN_STW(ppc, rt.hi, 0, addr);
+	set_next_dst(ppc);
+	GEN_STW(ppc, rt.lo, 4, addr);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 

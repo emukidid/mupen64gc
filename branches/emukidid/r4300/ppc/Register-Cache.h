@@ -8,30 +8,40 @@
 // -- GPRs --
 typedef struct { int hi, lo; } RegMapping;
 // Create a mapping for a 32-bit register (reg) to a HW register (returned)
-// Loading the registers' value if the mapping doesn't already exist
+// Loading the register's value if the mapping doesn't already exist
 int mapRegister(int reg);
 // Create a mapping for a 32-bit register (reg) to a HW register (returned)
 // Marking the mapping dirty so that it is stored when flushed
 int mapRegisterNew(int reg);
 // Create a mapping for a 64-bit register (reg) to 2 HW registers (returned)
-// Loading the registers' value if the mapping doesn't already exist
+// Loading the register's value if the mapping doesn't already exist
 RegMapping mapRegister64(int reg);
 // Create a mapping for a 64-bit register (reg) to 2 HW registers (returned)
 // Marking the mapping dirty so that it is stored when flushed
 RegMapping mapRegister64New(int reg);
-// Reserve a HW register to be used but not associated with any registers
-// When the register is no longer needed, be sure to call unmapRegisterTemp
-int mapRegisterTemp(void);
-// Frees a previously reserved register
-void unmapRegisterTemp(int tmp);
+// Unmap a register (reg) without storing, even if its marked dirty
+void invalidateRegister(int reg);
+
 
 // -- FPRs --
-// TODO
+// Create a mapping for a FPR (fpr) treated as double or single (dbl)
+// Loading the FPR's value if the mapping doesn't already exist
+int mapFPR(int fpr, int dbl);
+// Create a mapping for a FPR (fpr) treated as double or single (dbl)
+// Marking the mapping dirty so that it is stored when flushed
+int mapFPRNew(int fpr, int dbl);
+// Unmap a FPR (fpr) without storing, even if its marked dirty
+void invalidateFPR(int fpr);
 
 
 // Unmap all registers, storing any dirty registers
 int flushRegisters(void);
 // Unmap all registers without storing any
 void invalidateRegisters(void);
+// Reserve a HW register to be used but not associated with any registers
+// When the register is no longer needed, be sure to call unmapRegisterTemp
+int mapRegisterTemp(void);
+// Frees a previously reserved register
+void unmapRegisterTemp(int tmp);
 
 #endif

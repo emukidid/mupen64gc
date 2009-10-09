@@ -224,19 +224,10 @@ RegMapping mapRegister64(int reg){
 	return regMap[reg].map;
 }
 
-int mapRegisterTemp(void){
-	// Try to find an already available register
-	int available = getAvailableHWReg();
-	if(available >= 0) return available;
-	// If there are none, flush the LRU and use it
-	RegMapping lru = flushLRURegister();
-	if(lru.hi >= 0) availableRegs[lru.hi] = 1;
-	return lru.lo;
+void invalidateRegister(int reg){
+	regMap[reg].map.hi = regMap[reg].map.lo = -1;
 }
 
-void unmapRegisterTemp(int reg){
-	availableRegs[reg] = 1;
-}
 
 // -- FPR mappings --
 static struct {
@@ -357,6 +348,10 @@ int mapFPR(int fpr, int dbl){
 	return fprMap[fpr].map;
 }
 
+void invalidateFPR(int fpr){
+	fprMap[fpr].map = -1;
+}
+
 
 // Unmapping registers
 int flushRegisters(void){
@@ -390,16 +385,27 @@ int flushRegisters(void){
 void invalidateRegisters(void){
 	int i;
 	// Invalidate GPRs
-	for(i=0; i<34; ++i)
-		// Mark unmapped
-		regMap[i].map.hi = regMap[i].map.lo = -1;
+	for(i=0; i<34; ++i) invalidateRegister(i);
 	memcpy(availableRegs, availableRegsDefault, 32*sizeof(int));
 	nextLRUVal = 0;
 	// Invalidate FPRs
-	for(i=0; i<32; ++i)
-		// Mark unmapped
-		fprMap[i].map = -1;
+	for(i=0; i<32; ++i) invalidateFPR(i);
 	memcpy(availableFPRs, availableFPRsDefault, 32*sizeof(int));
 	nextLRUValFPR = 0;
 }
+
+int mapRegisterTemp(void){
+	// Try to find an already available register
+	int available = getAvailableHWReg();
+	if(available >= 0) return available;
+	// If there are none, flush the LRU and use it
+	RegMapping lru = flushLRURegister();
+	if(lru.hi >= 0) availableRegs[lru.hi] = 1;
+	return lru.lo;
+}
+
+void unmapRegisterTemp(int reg){
+	availableRegs[reg] = 1;
+}
+
 
