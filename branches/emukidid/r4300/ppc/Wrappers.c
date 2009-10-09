@@ -18,7 +18,9 @@ inline unsigned long update_invalid_addr(unsigned long addr);
 int noCheckInterrupt = 0;
 
 /* Recompiled code stack frame:
- *  $sp+36  | old r20 (new r20 holds reg_cop1_fgr_64)
+ *  $sp+44  | old r22 (new r22 holds reg_cop1_double)
+ *  $sp+40  | old r21 (new r21 holds reg_cop1_simple)
+ *  $sp+36  | old r20 (new r20 holds SP_DMEM)
  *  $sp+32  | old r19 (new r19 holds rdram)
  *  $sp+28  | old r18 (new r18 holds &last_addr)
  *  $sp+24  | old r17 (new r17 holds dyna_update_count)
@@ -50,11 +52,13 @@ int noCheckInterrupt = 0;
 		"stw    20, 36(1) \n" \
 		"mr     20, %5    \n" \
 		"stw    21, 40(1) \n" \
-		"mr     21, %6     \n" \
+		"mr     21, %6    \n" \
+		"stw    22, 44(1) \n" \
+		"mr     22, %7    \n" \
 		:: "r" (reg), "r" (decodeNInterpret), \
 		   "r" (dyna_update_count), "r" (&last_addr), \
-		   "r" (rdram), "r" (reg_cop1_fgr_64), \
-		   "r" (SP_DMEM) )
+		   "r" (rdram), "r" (SP_DMEM), \
+		   "r" (reg_cop1_simple), "r" (reg_cop1_double) )
 
 
 void dynarec(unsigned int address){
