@@ -11,6 +11,7 @@ struct VIInfo
 	int which_fb;
 	bool updateOSD;
 	bool copy_fb;
+	bool doFrameBufferRender;
 #endif // __GX__
 };
 
@@ -24,6 +25,7 @@ void VI_UpdateScreen();
 void VI_GX_init();
 void VI_GX_setFB(unsigned int* fb1, unsigned int* fb2);
 unsigned int* VI_GX_getScreenPointer();
+void VI_GX_clearEFB();
 void VI_GX_showFPS();
 void VI_GX_showLoadProg(float percent);
 void VI_GX_updateDEBUG();

@@ -1354,7 +1354,7 @@ void NOTCOMPILED()
 {
    if ((PC->addr>>16) == 0xa400){
 #ifdef PPC_DYNAREC
-     recompile_block(blocks[0xa4000000>>12]);
+     //recompile_block(blocks[0xa4000000>>12]);
 #else
      recompile_block(SP_DMEM, blocks[0xa4000000>>12], PC->addr);
 #endif
@@ -1371,19 +1371,20 @@ void NOTCOMPILED()
 		  //printf("not compiled rom:%x\n", paddr);
 #ifdef PPC_DYNAREC
 		  // FIXME: We need to read from the romcache into a buffer and recompile the buffer
-		  recompile_block(blocks[PC->addr>>12]);
+		  //recompile_block(blocks[PC->addr>>12]);
 #else
 		  recompile_block((unsigned long*)rom+((((paddr-(PC->addr-blocks[PC->addr>>12]->start)) & 0x1FFFFFFF) - 0x10000000)>>2),
 				  blocks[PC->addr>>12], PC->addr);
 #endif
 	       }
-	     else
+	     else {
 #ifdef PPC_DYNAREC
-		recompile_block(blocks[PC->addr>>12]);
+		//recompile_block(blocks[PC->addr>>12]);
 #else
 	       recompile_block(rdram+(((paddr-(PC->addr-blocks[PC->addr>>12]->start)) & 0x1FFFFFFF)>>2),
 			       blocks[PC->addr>>12], PC->addr);
 #endif
+		}
 	  }
 	else printf("not compiled exception\n");
      }
@@ -1532,7 +1533,7 @@ void init_blocks()
 #else
    blocks[0xa4000000>>12] = malloc(sizeof(PowerPC_block));
    blocks[0xa4000000>>12]->code_addr = NULL;
-   blocks[0xa4000000>>12]->code = NULL;
+   blocks[0xa4000000>>12]->funcs = NULL;
    blocks[0xa4000000>>12]->start_address = 0xa4000000;
    blocks[0xa4000000>>12]->end_address = 0xa4001000;
 #endif
@@ -1884,7 +1885,7 @@ void cpu_deinit(void){
 #else
 			if (blocks[i]->block) {
 #ifdef USE_RECOMP_CACHE
-				RecompCache_Free(i);
+				invalidate_block(blocks[i]);
 #else
 				free(blocks[i]->block);
 #endif
