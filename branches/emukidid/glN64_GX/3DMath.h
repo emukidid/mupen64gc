@@ -239,7 +239,7 @@ MultMatrix_Loop:
 	: /* no output */
 	: "S"(m0), "D"(m1), "c"(4)
 	: "memory" );
-#elif defined(GEKKO)
+#elif defined(GEKKO) // X86_ASM
 	int i, j, k;
 	float dst[4][4] = {{0.0f}};
 	
@@ -268,8 +268,7 @@ MultMatrix_Loop:
 		}
 	}
 	memcpy( m0, dst, sizeof(float) * 16 );
-# else // X86_ASM
-#  ifndef __GX__
+# else // GEKKO
 	int i;
 	float dst[4][4];
 
@@ -281,37 +280,7 @@ MultMatrix_Loop:
 		dst[3][i] = m0[3][i]*m1[3][3] + m0[2][i]*m1[3][2] + m0[1][i]*m1[3][1] + m0[0][i]*m1[3][0];
 	}
 	memcpy( m0, dst, sizeof(float) * 16 );
-#  else //!__GX__
-	int i, j, k;
-	float dst[4][4] = {{0.0f}};
-	
-	for (k = 0; k < 4; j++)
-	{
-		for (i = 0; i < 4; i++)
-		{
-			// 2 = m0[i][k], m0[i][k]
-			__asm__ volatile(
-				"psq_l       2, 0(%0), 0, 0 \n"
-				"ps_merge00  2, 2, 2        \n"
-				:: "r" (&m0[i][k])
-				:  "fr2");
-			for (j = 0; j < 4; j+=2)
-			{
-				//dst[i][j]   += m0[i][k]*m1[k][j];
-				//dst[i][j+1] += m0[i][k]*m1[k][j+1];
-				__asm__ volatile(
-					"psq_l    3, 0(%0), 0, 0   \n"
-					"psq_l    4, 0(%1), 0, 0   \n"
-					"ps_madd  4, 2, 3, 4       \n"
-					"psq_st   4, 0(%1), 0, 0   \n"
-					:: "r" (&m1[k][j]), "r" (&dst[i][j])
-					: "fr3", "fr4");
-			}
-		}
-	}
-	memcpy( m0, dst, sizeof(float) * 16 );
-#  endif //__GX__
-# endif // !X86_ASM
+# endif // !( X86_ASM || GEKKO )
 #endif // __LINUX__
 }
 
