@@ -16,7 +16,7 @@ CFLAGS  = -g -O2 -Wall $(MACHDEP) $(INCLUDE) \
 	  -DNOASM -DNGC -DNOASM -DPIXEL_FORMAT=RGB565  \
 	  -fno-exceptions -Wno-unused-parameter -pipe \
 	  -DUSE_GUI -DSHOW_DEBUG -DTHREADED_AUDIO -DUSE_RECOMP_CACHE -DUSE_TLB_CACHE \
-	  -DPPC_DYNAREC -DEMBEDDED_FONTS
+	  -DPPC_DYNAREC -DEMBEDDED_FONTS -DPROFILE
 #	  -DDEBUGON  -DGLN64_SDLOG -DUSE_EXPANSION -DEMBEDDED_FONTS -DUSE_RECOMP_CACHE -DPPC_DYNAREC
 
 MACHDEP	= -DGEKKO -mcpu=750 -meabi -mhard-float 
@@ -51,7 +51,7 @@ OBJ		=main/rom_gc.o \
 		r4300/regimm.o \
 		r4300/exception.o \
 		r4300/Invalid_Code.o \
-		r4300/Recomp-Cache.o \
+		r4300/Recomp-Cache-Heap.o \
 		gc_memory/ARAM.o \
 		gc_memory/tlb.o \
 		gc_memory/TLB-Cache-hash.o \
@@ -77,7 +77,8 @@ OBJ		=main/rom_gc.o \
 		
 OBJ_PPC		=r4300/ppc/MIPS-to-PPC.o \
 		r4300/ppc/Recompile.o \
-		r4300/ppc/Wrappers.o
+		r4300/ppc/Wrappers.o \
+		r4300/ppc/Register-Cache.o
 
 OBJ_X86         =r4300/x86/gr4300.o \
 		r4300/x86/gcop0.o \
@@ -352,7 +353,7 @@ glN64_GX/F3DWRUS.o:		glN64_GX/F3DWRUS.cpp
 				$(CXX) $(CFLAGS) -D__LINUX__ -D__GX__ -c -o $@ $<
 
 
-mupen64gc-glN64.elf:	$(OBJ) $(OBJ_INPUT) $(OBJ_GLN64_GX) $(OBJ_AUDIO) $(OBJ_RSPHLE) main/main_gc-menu.o $(OBJ_PPC)
+mupen64gc-glN64.elf:	$(OBJ) $(OBJ_INPUT) $(OBJ_GLN64_GX) $(OBJ_AUDIO) $(OBJ_RSPHLE) $(OBJ_PPC)
 		$(LD) $^ $(LDFLAGS) $(LIBPATHS) $(LIB) -Wl -o $@
 		#strip --strip-all $@
 		powerpc-gekko-objcopy -O binary $@ mupen64gc-glN64.dol
