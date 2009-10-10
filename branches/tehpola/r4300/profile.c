@@ -54,7 +54,7 @@ void end_section(int section_type)
 void refresh_stat()
 {
    long long this_tick = gettime();
-   if(diff_sec(this_tick, last_refresh) >= 2)
+   if(diff_sec(last_refresh, this_tick) >= 1)
      {
 	time_in_section[0] = this_tick - last_start[0];
 	
@@ -69,6 +69,12 @@ void refresh_stat()
 	
 	sprintf(txtbuffer, "fp=%f%%", 100.0f * (float)time_in_section[FP_SECTION] / (float)time_in_section[0]);
 	DEBUG_print(txtbuffer, DBG_PROFILE_FP);
+	
+	sprintf(txtbuffer, "comp=%f%%", 100.0f * (float)time_in_section[COMPILER_SECTION] / (float)time_in_section[0]);
+	DEBUG_print(txtbuffer, DBG_PROFILE_COMP);
+	
+	sprintf(txtbuffer, "interp=%f%%", 100.0f * (float)time_in_section[INTERP_SECTION] / (float)time_in_section[0]);
+	DEBUG_print(txtbuffer, DBG_PROFILE_INTERP);
 	
 	int i;
 	for(i=1; i<=NUM_SECTIONS; ++i) time_in_section[i] = 0;

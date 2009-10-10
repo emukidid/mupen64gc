@@ -499,44 +499,46 @@ const struct
 	GetTexelFunc	GetGX;
 	u8				GXtexfmt;
 	u32				GXsize;
-#endif // __GX__
+#else // __GX__
 	GetTexelFunc	Get16;
 	GLenum			glType16;
 	GLint			glInternalFormat16;
 	GetTexelFunc	Get32;
 	GLenum			glType32;
 	GLint			glInternalFormat32;
-	u32				autoFormat, lineShift, maxTexels;
+	u32				autoFormat; 
+#endif // !__GX__
+	u32				lineShift, maxTexels;
 } imageFormat[4][5] =
 #ifdef __GX__
-{ //		GetGX					GXtexfmt		GXsize	Get16					glType16						glInternalFormat16	Get32					glType32						glInternalFormat32	autoFormat
+{ //		GetGX					GXtexfmt		GXsize	lineShift	maxTexels
 	{ // 4-bit
-		{	GXGetCI4RGBA_RGB5A3,	GX_TF_RGB5A3,	2,	GetCI4RGBA_RGBA5551,	GL_UNSIGNED_SHORT_5_5_5_1_EXT,	GL_RGB5_A1,			GetCI4RGBA_RGBA8888,	GL_UNSIGNED_BYTE,				GL_RGBA8,			GL_RGB5_A1, 4, 4096 }, // CI (Banjo-Kazooie uses this, doesn't make sense, but it works...)
-		{	GetNone,				GX_TF_RGB5A3,	0,	GetNone,				GL_UNSIGNED_SHORT_4_4_4_4_EXT,	GL_RGBA4,			GetNone,				GL_UNSIGNED_BYTE,				GL_RGBA8,			GL_RGBA4, 4, 8192 }, // YUV
-		{	GXGetCI4RGBA_RGB5A3,	GX_TF_RGB5A3,	2,	GetCI4RGBA_RGBA5551,	GL_UNSIGNED_SHORT_5_5_5_1_EXT,	GL_RGB5_A1,			GetCI4RGBA_RGBA8888,	GL_UNSIGNED_BYTE,				GL_RGBA8,			GL_RGB5_A1, 4, 4096 }, // CI
-		{	GXGetIA31_IA4,			GX_TF_IA4,		1,	GetIA31_RGBA4444,		GL_UNSIGNED_SHORT_4_4_4_4_EXT,	GL_RGBA4,			GetIA31_RGBA8888,		GL_UNSIGNED_BYTE,				GL_RGBA8,			GL_RGBA4, 4, 8192 }, // IA
-		{	GXGetI4_IA4,			GX_TF_IA4,		1,	GetI4_RGBA4444,			GL_UNSIGNED_SHORT_4_4_4_4_EXT,	GL_RGBA4,			GetI4_RGBA8888,			GL_UNSIGNED_BYTE,				GL_RGBA8,			GL_RGBA4, 4, 8192 }, // I
+		{	GXGetCI4RGBA_RGB5A3,	GX_TF_RGB5A3,	2,		4,			4096 }, // CI (Banjo-Kazooie uses this, doesn't make sense, but it works...)
+		{	GetNone,				GX_TF_RGB5A3,	0,		4,			8192 }, // YUV
+		{	GXGetCI4RGBA_RGB5A3,	GX_TF_RGB5A3,	2,		4,			4096 }, // CI
+		{	GXGetIA31_IA4,			GX_TF_IA4,		1,		4,			8192 }, // IA
+		{	GXGetI4_IA4,			GX_TF_IA4,		1,		4,			8192 }, // I
 	},
 	{ // 8-bit
-		{	GXGetCI8RGBA_RGB5A3,	GX_TF_RGB5A3,	2,	GetCI8RGBA_RGBA5551,	GL_UNSIGNED_SHORT_5_5_5_1_EXT,	GL_RGB5_A1,			GetCI8RGBA_RGBA8888,	GL_UNSIGNED_BYTE,				GL_RGBA8,			GL_RGB5_A1, 3, 2048 }, // RGBA
-		{	GetNone,				GX_TF_RGB5A3,	0,	GetNone,				GL_UNSIGNED_SHORT_4_4_4_4_EXT,	GL_RGBA4,			GetNone,				GL_UNSIGNED_BYTE,				GL_RGBA8,			GL_RGBA4, 0, 4096 }, // YUV
-		{	GXGetCI8RGBA_RGB5A3,	GX_TF_RGB5A3,	2,	GetCI8RGBA_RGBA5551,	GL_UNSIGNED_SHORT_5_5_5_1_EXT,	GL_RGB5_A1,			GetCI8RGBA_RGBA8888,	GL_UNSIGNED_BYTE,				GL_RGBA8,			GL_RGB5_A1, 3, 2048 }, // CI
-		{	GXGetIA44_IA4,			GX_TF_IA4,		1,	GetIA44_RGBA4444,		GL_UNSIGNED_SHORT_4_4_4_4_EXT,	GL_RGBA4,			GetIA44_RGBA8888,		GL_UNSIGNED_BYTE,				GL_RGBA8,			GL_RGBA4, 3, 4096 }, // IA
-		{	GXGetI8_IA8,			GX_TF_IA8,		2,	GetI8_RGBA4444,			GL_UNSIGNED_SHORT_4_4_4_4_EXT,	GL_RGBA4,			GetI8_RGBA8888,			GL_UNSIGNED_BYTE,				GL_RGBA8,			GL_RGBA8, 3, 4096 }, // I
+		{	GXGetCI8RGBA_RGB5A3,	GX_TF_RGB5A3,	2,		3,			2048 }, // RGBA
+		{	GetNone,				GX_TF_RGB5A3,	0,		0,			4096 }, // YUV
+		{	GXGetCI8RGBA_RGB5A3,	GX_TF_RGB5A3,	2,		3,			2048 }, // CI
+		{	GXGetIA44_IA4,			GX_TF_IA4,		1,		3,			4096 }, // IA
+		{	GXGetI8_IA8,			GX_TF_IA8,		2,		3,			4096 }, // I
 	},
 	{ // 16-bit
-		{	GXGetRGBA5551_RGB5A3,	GX_TF_RGB5A3,	2,	GetRGBA5551_RGBA5551,	GL_UNSIGNED_SHORT_5_5_5_1_EXT,	GL_RGB5_A1,			GetRGBA5551_RGBA8888,	GL_UNSIGNED_BYTE,				GL_RGBA8,			GL_RGB5_A1, 2, 2048 }, // RGBA
-		{	GetNone,				GX_TF_RGB5A3,	0,	GetNone,				GL_UNSIGNED_SHORT_4_4_4_4_EXT,	GL_RGBA4,			GetNone,				GL_UNSIGNED_BYTE,				GL_RGBA8,			GL_RGBA4, 2, 2048 }, // YUV
-		{	GetNone,				GX_TF_RGB5A3,	0,	GetNone,				GL_UNSIGNED_SHORT_4_4_4_4_EXT,	GL_RGBA4,			GetNone,				GL_UNSIGNED_BYTE,				GL_RGBA8,			GL_RGBA4, 0, 2048 }, // CI
-		{	GXGetIA88_IA8,			GX_TF_IA8,		2,	GetIA88_RGBA4444,		GL_UNSIGNED_SHORT_4_4_4_4_EXT,	GL_RGBA4,			GetIA88_RGBA8888,		GL_UNSIGNED_BYTE,				GL_RGBA8,			GL_RGBA8, 2, 2048 }, // IA
-		{	GetNone,				GX_TF_RGB5A3,	0,	GetNone,				GL_UNSIGNED_SHORT_4_4_4_4_EXT,	GL_RGBA4,			GetNone,				GL_UNSIGNED_BYTE,				GL_RGBA8,			GL_RGBA4, 0, 2048 }, // I
+		{	GXGetRGBA5551_RGB5A3,	GX_TF_RGB5A3,	2,		2,			2048 }, // RGBA
+		{	GetNone,				GX_TF_RGB5A3,	0,		2,			2048 }, // YUV
+		{	GetNone,				GX_TF_RGB5A3,	0,		0,			2048 }, // CI
+		{	GXGetIA88_IA8,			GX_TF_IA8,		2,		2,			2048 }, // IA
+		{	GetNone,				GX_TF_RGB5A3,	0,		0,			2048 }, // I
 	},
 	{ // 32-bit
-		{	GXGetRGBA8888_RGBA8,	GX_TF_RGBA8,	4,	GetRGBA8888_RGBA4444,	GL_UNSIGNED_SHORT_4_4_4_4_EXT,	GL_RGBA4,			GetRGBA8888_RGBA8888,	GL_UNSIGNED_BYTE,				GL_RGBA8,			GL_RGBA8, 2, 1024 }, // RGBA
-		{	GetNone,				GX_TF_RGB5A3,	0,	GetNone,				GL_UNSIGNED_SHORT_4_4_4_4_EXT,	GL_RGBA4,			GetNone,				GL_UNSIGNED_BYTE,				GL_RGBA8,			GL_RGBA4, 0, 1024 }, // YUV
-		{	GetNone,				GX_TF_RGB5A3,	0,	GetNone,				GL_UNSIGNED_SHORT_4_4_4_4_EXT,	GL_RGBA4,			GetNone,				GL_UNSIGNED_BYTE,				GL_RGBA8,			GL_RGBA4, 0, 1024 }, // CI
-		{	GetNone,				GX_TF_RGB5A3,	0,	GetNone,				GL_UNSIGNED_SHORT_4_4_4_4_EXT,	GL_RGBA4,			GetNone,				GL_UNSIGNED_BYTE,				GL_RGBA8,			GL_RGBA4, 0, 1024 }, // IA
-		{	GetNone,				GX_TF_RGB5A3,	0,	GetNone,				GL_UNSIGNED_SHORT_4_4_4_4_EXT,	GL_RGBA4,			GetNone,				GL_UNSIGNED_BYTE,				GL_RGBA8,			GL_RGBA4, 0, 1024 }, // I
+		{	GXGetRGBA8888_RGBA8,	GX_TF_RGBA8,	4,		2,			1024 }, // RGBA
+		{	GetNone,				GX_TF_RGB5A3,	0,		0,			1024 }, // YUV
+		{	GetNone,				GX_TF_RGB5A3,	0,		0,			1024 }, // CI
+		{	GetNone,				GX_TF_RGB5A3,	0,		0,			1024 }, // IA
+		{	GetNone,				GX_TF_RGB5A3,	0,		0,			1024 }, // I
 	}
 };
 #else // __GX__
@@ -925,7 +927,11 @@ void TextureCache_LoadBackground( CachedTexture *texInfo )
 	bpl = gSP.bgImage.width << gSP.bgImage.size >> 1;
 	numBytes = bpl * gSP.bgImage.height;
 	swapped = (u8*)malloc( numBytes );
+#ifndef _BIG_ENDIAN
 	UnswapCopy( &RDRAM[gSP.bgImage.address], swapped, numBytes );
+#else // !_BIG_ENDIAN
+	memcpy( swapped, &RDRAM[gSP.bgImage.address], numBytes );
+#endif // _BIG_ENDIAN
 	dest = (u32*)malloc( texInfo->textureBytes );
 
 	clampSClamp = texInfo->width - 1;
@@ -1101,6 +1107,7 @@ void TextureCache_LoadBackground( CachedTexture *texInfo )
 
 		glTexImage2D( GL_TEXTURE_2D, 0, glInternalFormat, texInfo->realWidth << 1, texInfo->realHeight << 1, 0, GL_RGBA, glType, scaledDest );
 
+		free( swapped );
 		free( dest );
 		free( scaledDest );
 	}
@@ -1108,6 +1115,7 @@ void TextureCache_LoadBackground( CachedTexture *texInfo )
 	{
 		glTexImage2D( GL_TEXTURE_2D, 0, glInternalFormat, texInfo->realWidth, texInfo->realHeight, 0, GL_RGBA, glType, dest );
 
+		free (swapped );
 		free( dest );
 	}
 #else // !__GX__
@@ -1476,13 +1484,17 @@ void TextureCache_ActivateTexture( u32 t, CachedTexture *texture )
 	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, texture->clampS ? GL_CLAMP_TO_EDGE : GL_REPEAT );
 	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, texture->clampT ? GL_CLAMP_TO_EDGE : GL_REPEAT );
 #else // !__GX__
-	//TODO: Implement LOD LINEAR/NEAREST filtering.
-	if (texture->GXtexture != NULL) 
+	if (!((gDP.otherMode.textureFilter == G_TF_BILERP) || (gDP.otherMode.textureFilter == G_TF_AVERAGE) || (OGL.forceBilinear)))
+		OGL.GXuseMinMagNearest = true;
+
+	if (texture->GXtexture != NULL && !OGL.GXrenderTexRect) 
 	{
 		GX_InitTexObj(&texture->GXtex, texture->GXtexture, (u16) texture->realWidth, (u16) texture->realHeight, texture->GXtexfmt, 
-			texture->clampS ? GX_CLAMP : GX_REPEAT, texture->clampT ? GX_CLAMP : GX_REPEAT, GX_FALSE); 
-//		GX_InvalidateTexAll();
+			texture->clampS ? GX_CLAMP : GX_REPEAT, 
+			texture->clampT ? GX_CLAMP : GX_REPEAT, GX_FALSE); 
+		if (OGL.GXuseMinMagNearest) GX_InitTexObjLOD(&texture->GXtex, GX_NEAR, GX_NEAR, 0.0f, 0.0f, 0.0f, GX_FALSE, GX_FALSE, GX_ANISO_1);
 		GX_LoadTexObj(&texture->GXtex, t); // t = 0 is GX_TEXMAP0 and t = 1 is GX_TEXMAP1
+		OGL.GXuseMinMagNearest = false;
 #ifdef GLN64_SDLOG
 	sprintf(txtbuffer,"Texture_ActivateTex: MAP%d, GXtexfmt %d, wd %d, ht %d, GXwd %d, GXht %d, clampS %d, clampT %d, fmt %d, size %d\n", t, texture->GXtexfmt, texture->realWidth, texture->realHeight, texture->GXrealWidth, texture->GXrealHeight, texture->clampS, texture->clampT, texture->format, texture->size);
 	DEBUG_print(txtbuffer,DBG_SDGECKOPRINT);

@@ -23,6 +23,8 @@ extern PowerPC_instr* get_curr_dst(void);
 extern void unget_last_src(void);
 extern void nop_ignored(void);
 extern unsigned int get_src_pc(void);
+// Adjust code_addr to not include flushing of previous mappings
+void reset_code_addr(void);
 /* Adds src and dst address, and src jump address to tables
     it returns a unique address identifier.
    This data should be used to fill in addresses in pass two. */

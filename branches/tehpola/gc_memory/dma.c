@@ -222,6 +222,7 @@ void dma_pi_write()
 	     //  rom[(((pi_register.pi_cart_addr_reg-0x10000000)&0x3FFFFFF)+i)^S8];
 	     //ROMCache_read((char*)rdram + (pi_register.pi_dram_addr_reg+i)^S8, (((pi_register.pi_cart_addr_reg-0x10000000)&0x3FFFFFF)+i)^S8, 1);
 	     
+#if 0
 	     if(!invalid_code_get(rdram_address1>>12))
 	       //if(blocks[rdram_address1>>12]->block[(rdram_address1&0xFFF)/4].ops != NOTCOMPILED)
 		 invalid_code_set(rdram_address1>>12, 1);
@@ -229,6 +230,15 @@ void dma_pi_write()
 	     if(!invalid_code_get(rdram_address2>>12))
 	       //if(blocks[rdram_address2>>12]->block[(rdram_address2&0xFFF)/4].ops != NOTCOMPILED)
 		 invalid_code_set(rdram_address2>>12, 1);
+#else
+             if(!invalid_code_get(rdram_address1>>12))
+	       if(blocks[rdram_address1>>12]->code_addr[(rdram_address1&0xFFF)/4])
+		 invalid_code_set(rdram_address1>>12, 1);
+	     
+	     if(!invalid_code_get(rdram_address2>>12))
+	       if(blocks[rdram_address2>>12]->code_addr[(rdram_address2&0xFFF)/4])
+		 invalid_code_set(rdram_address2>>12, 1);
+#endif
 	  }
      }
    else
@@ -258,10 +268,10 @@ void dma_pi_write()
 	   case 2:
 	   case 3:
 	   case 6:
-	     rdram[0x318/4] = 0x800000;
+	     rdram[0x318/4] = 0x400000;
 	     break;
 	   case 5:
-	     rdram[0x3F0/4] = 0x800000;
+	     rdram[0x3F0/4] = 0x400000;
 	     break;
 	  }
      }
