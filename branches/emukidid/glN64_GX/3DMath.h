@@ -247,24 +247,26 @@ MultMatrix_Loop:
 	{
 		for (i = 0; i < 4; i++)
 		{
-			// fr2 = m1[i][k], m1[i][k]
+			//dst[i][0] += m1[i][k]*m0[k][0];
+			//dst[i][1] += m1[i][k]*m0[k][1];
+			//dst[i][2] += m1[i][k]*m0[k][2];
+			//dst[i][3] += m1[i][k]*m0[k][3];
 			__asm__ volatile(
 				"psq_lx      2, %1, %0, 1, 0 \n"
 				"ps_merge00  2,  2,  2       \n"
-				:: "r" (m1+i), "r" (k*4)
-				:  "r0", "fr2");
-			for (j = 0; j < 4; j+=2)
-			{
-				//dst[i][j]   += m1[i][k]*m0[k][j];
-				//dst[i][j+1] += m1[i][k]*m0[k][j+1];
-				__asm__ volatile(
-					"psq_lx   3, %2, %0, 0, 0 \n"
-					"psq_lx   4, %2, %1, 0, 0 \n"
-					"ps_madd  4,  2,  3, 4    \n"
-					"psq_stx  4, %2, %1, 0, 0 \n"
-					:: "r" (m0+k), "r" (dst+i), "r" (j*4)
-					: "r0", "fr3", "fr4", "memory");
-			}
+				
+				"psq_l       3, 0(%2), 0, 0  \n"
+				"psq_l       4, 0(%3), 0, 0  \n"
+				"ps_madd     4,  2,  3, 4    \n"
+				"psq_st      4, 0(%3), 0, 0  \n"
+				
+				"psq_l       3, 8(%2), 0, 0  \n"
+				"psq_l       4, 8(%3), 0, 0  \n"
+				"ps_madd     4,  2,  3, 4    \n"
+				"psq_st      4, 8(%3), 0, 0  \n"
+				:: "r" (m1+i), "r" (k*4),
+				   "r" (m0+k), "r" (dst+i)
+				:  "r0", "fr2", "fr3", "fr4", "memory");
 		}
 	}
 	memcpy( m0, dst, sizeof(float) * 16 );
