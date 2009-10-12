@@ -641,6 +641,41 @@ inline void TransformVector( float vec[3], float mtx[4][4] )
 	: /* no output */
 	: "S"(vec), "b"(mtx)
 	: "memory" );
+
+#elif defined(GEKKO)
+	
+	__asm__ volatile(
+		"psq_l      2, 0(%0), 1, 0 \n" // fr2 = Vj,  1.0f
+		"psq_l      3, 0(%1), 0, 0 \n" // fr3 = Mj0, Mj1
+		"psq_l      5, 8(%1), 1, 0 \n" // fr5 = Mj2, 1.0f
+		
+		"ps_merge00 2, 2, 2     \n" // fr2 = Vj,  Vj
+		"ps_mul    4, 3, 2  \n" // fr4 = fr3 * fr2
+		"ps_mul    6, 5, 2  \n" // fr6 = fr5 * fr2
+		
+		"psq_l      2,  4(%0), 1, 0 \n" // fr2 = Vj,  1.0f
+		"psq_l      3, 16(%1), 0, 0 \n" // fr3 = Mj0, Mj1
+		"psq_l      5, 24(%1), 1, 0 \n" // fr5 = Mj2, 1.0f
+		
+		"ps_merge00 2, 2, 2     \n" // fr2 = Vj,  Vj
+		"ps_madd    4, 3, 2, 4  \n" // fr4 = fr3 * fr2 + fr4
+		"ps_madd    6, 5, 2, 6  \n" // fr6 = fr5 * fr2 + fr6
+		
+		"psq_l      2,  8(%0), 1, 0 \n" // fr2 = Vj,  1.0f
+		"psq_l      3, 32(%1), 0, 0 \n" // fr3 = Mj0, Mj1
+		"psq_l      5, 40(%1), 1, 0 \n" // fr5 = Mj2, 1.0f
+		
+		"ps_merge00 2, 2, 2     \n" // fr2 = Vj,  Vj
+		"ps_madd    4, 3, 2, 4  \n" // fr4 = fr3 * fr2 + fr4
+		"ps_madd    6, 5, 2, 6  \n" // fr6 = fr5 * fr2 + fr6
+		
+		"psq_st     4, 0(%0), 0, 0 \n" // D0, D1 = fr4
+		"psq_st     6, 8(%0), 1, 0 \n" // D2     = fr6
+		
+		:: "r" (vec), "r" (mtx)
+		:  "fr2", "fr3", "fr4", "fr5", "fr6",
+		   "r0", "memory");
+
 # else // X86_ASM
 	vec[0] = mtx[0][0] * vec[0]
 		   + mtx[1][0] * vec[1]
