@@ -3708,9 +3708,10 @@ static void genCheckFP(void){
 		set_next_dst(ppc);
 		GEN_BNELR(ppc, 6, 0);
 		set_next_dst(ppc);
+		// FIXME: It looks like I can't get away with this; why not?
 		// Don't check for the rest of this mapping
 		// Unless this instruction is in a delay slot
-		FP_need_check = isDelaySlot;
+		FP_need_check = /*isDelaySlot*/ 1;
 	}
 }
 
