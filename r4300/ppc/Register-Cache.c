@@ -198,6 +198,7 @@ RegMapping mapRegister64(int reg){
 		// Return the mapping
 		return regMap[reg].map;
 	}
+	regMap[reg].dirty = 0; // If it hasn't previously been mapped, its clean
 	
 	// Try to find any already available registers
 	regMap[reg].map.lo = getAvailableHWReg();
