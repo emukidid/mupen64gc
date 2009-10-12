@@ -111,6 +111,7 @@ void dynarec(unsigned int address){
 		}
 		noCheckInterrupt = 0;
 	}
+	interp_addr = address;
 }
 
 unsigned int decodeNInterpret(MIPS_instr mips, unsigned int pc,
