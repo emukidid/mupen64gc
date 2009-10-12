@@ -100,6 +100,18 @@ void recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 	func->start_addr = addr_first&0xffff;
 	func->end_addr = addr_last&0xffff;
 	
+	// Checks for and removes any overlapping functions
+	PowerPC_func_node* fn, * next;
+	for(fn = ppc_block->funcs; fn != NULL; fn = next){
+		next = fn->next;
+		if((fn->function->start_addr >= func->start_addr &&
+		    fn->function->start_addr <  func->end_addr) ||
+		   (fn->function->end_addr >= func->start_addr &&
+		    fn->function->end_addr <  func->end_addr))
+			RecompCache_Free(ppc_block->start_address |
+			                 fn->function->start_addr);
+	}
+	
 	PowerPC_func_node* node = malloc(sizeof(PowerPC_func_node));
 	node->function = func;
 	node->next = ppc_block->funcs;
