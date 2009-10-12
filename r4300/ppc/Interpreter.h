@@ -120,14 +120,16 @@ unsigned int decodeNInterpret();
 //#define INTERPRET_FP_W
 #define INTERPRET_FP_L
 
-//#define INTERPRET_FP_ADD
-//#define INTERPRET_FP_SUB
-//#define INTERPRET_FP_MUL
-//#define INTERPRET_FP_DIV
+#if 0
+#define INTERPRET_FP_ADD
+#define INTERPRET_FP_SUB
+#define INTERPRET_FP_MUL
+#define INTERPRET_FP_DIV
 #define INTERPRET_FP_SQRT
-//#define INTERPRET_FP_ABS
-//#define INTERPRET_FP_MOV
-//#define INTERPRET_FP_NEG
+#define INTERPRET_FP_ABS
+#define INTERPRET_FP_MOV
+#define INTERPRET_FP_NEG
+#endif
 
 #define INTERPRET_FP_ROUND_L
 #define INTERPRET_FP_TRUNC_L
@@ -144,12 +146,13 @@ unsigned int decodeNInterpret();
 //#define INTERPRET_FP_CVT_W
 #define INTERPRET_FP_CVT_L
 
+#if 0
 #define INTERPRET_FP_C_F
 #define INTERPRET_FP_C_UN
-//#define INTERPRET_FP_C_EQ
-//#define INTERPRET_FP_C_UEQ
-//#define INTERPRET_FP_C_OLT
-//#define INTERPRET_FP_C_ULT
+#define INTERPRET_FP_C_EQ
+#define INTERPRET_FP_C_UEQ
+#define INTERPRET_FP_C_OLT
+#define INTERPRET_FP_C_ULT
 #define INTERPRET_FP_C_OLE
 #define INTERPRET_FP_C_ULE
 #define INTERPRET_FP_C_SF
@@ -160,6 +163,7 @@ unsigned int decodeNInterpret();
 #define INTERPRET_FP_C_NGE
 #define INTERPRET_FP_C_LE
 #define INTERPRET_FP_C_NGT
+#endif
 
 #endif
 

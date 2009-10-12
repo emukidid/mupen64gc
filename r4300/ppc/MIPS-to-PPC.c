@@ -2333,8 +2333,21 @@ static int CFC1(MIPS_instr mips){
 #if defined(INTERPRET_FP) || defined(INTERPRET_CFC1)
 	genCallInterp(mips);
 	return INTERPRETED;
-#else // INTERPRET_FP
-	// TODO: cfc1
+#else // INTERPRET_FP || INTERPRET_CFC1
+	
+	if(MIPS_GET_FS(mips) == 31){
+		int rt = mapRegisterNew( MIPS_GET_RT(mips) );
+		
+		GEN_LWZ(ppc, rt, 0, DYNAREG_FCR31);
+		set_next_dst(ppc);
+	} else if(MIPS_GET_FS(mips) == 0){
+		int rt = mapRegisterNew( MIPS_GET_RT(mips) );
+		
+		GEN_LI(ppc, rt, 0, 0x511);
+		set_next_dst(ppc);
+	}
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -2393,8 +2406,16 @@ static int CTC1(MIPS_instr mips){
 #if defined(INTERPRET_FP) || defined(INTERPRET_CTC1)
 	genCallInterp(mips);
 	return INTERPRETED;
-#else // INTERPRET_FP
-	// TODO: ctc1
+#else // INTERPRET_FP || INTERPRET_CTC1
+	
+	if(MIPS_GET_FS(mips) == 31){
+		int rt = mapRegister( MIPS_GET_RT(mips) );
+		
+		GEN_STW(ppc, rt, 0, DYNAREG_FCR31);
+		set_next_dst(ppc);
+	}
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
