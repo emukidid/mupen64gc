@@ -48,42 +48,41 @@ unsigned int decodeNInterpret();
 
 //#define INTERPRET_DW
 
-//#define INTERPRET_DADDIU
-//#define INTERPRET_DSLLV
-//#define INTERPRET_DSRLV
-//#define INTERPRET_DSRAV
+#if 0
+#define INTERPRET_DADDIU
+#define INTERPRET_DSLLV
+#define INTERPRET_DSRLV
+#define INTERPRET_DSRAV
+#define INTERPRET_DADDU
+#define INTERPRET_DSUBU
+#define INTERPRET_DSLL
+#define INTERPRET_DSRL
+#define INTERPRET_DSRA
+#define INTERPRET_DSLL32
+#define INTERPRET_DSRL32
+#define INTERPRET_DSRA32
+#endif
+
 #define INTERPRET_DMULT
 #define INTERPRET_DMULTU
 #define INTERPRET_DDIV
 #define INTERPRET_DDIVU
-//#define INTERPRET_DADDU
-//#define INTERPRET_DSUBU
-//#define INTERPRET_DSLL
-//#define INTERPRET_DSRL
-//#define INTERPRET_DSRA
-//#define INTERPRET_DSLL32
-//#define INTERPRET_DSRL32
-//#define INTERPRET_DSRA32
-
-//#define INTERPRET_CLO
 
 //#define INTERPRET_HILO
 
-//#define INTERPRET_MULT
-//#define INTERPRET_MULTU
-//#define INTERPRET_DIV
-//#define INTERPRET_DIVU
+#if 0
+#define INTERPRET_MULT
+#define INTERPRET_MULTU
+#define INTERPRET_DIV
+#define INTERPRET_DIVU
+#endif
 
-
-//#define INTERPRET_MOVN
-//#define INTERPRET_MOVZ
-
-
-//#define INTERPRET_SLT
-//#define INTERPRET_SLTU
-//#define INTERPRET_SLTI
-//#define INTERPRET_SLTIU
-
+#if 0
+#define INTERPRET_SLT
+#define INTERPRET_SLTU
+#define INTERPRET_SLTI
+#define INTERPRET_SLTIU
+#endif
 
 //#define INTERPRET_J
 //#define INTERPRET_JAL
