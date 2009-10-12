@@ -41,13 +41,15 @@ static void heapUp(int i){
 static void heapDown(int i){
 	// While the given element is out of order
 	while(1){
-		// Check against the 1st child
-		if(HEAP_CHILD1(i) < heapSize &&
-		   cacheHeap[i]->func->lru > cacheHeap[HEAP_CHILD1(i)]->func->lru){
+		unsigned int lru = cacheHeap[i]->func->lru;
+		CacheMetaNode* c1 = cacheHeap[HEAP_CHILD1(i)];
+		CacheMetaNode* c2 = cacheHeap[HEAP_CHILD2(i)];
+		// Check against the children, swapping with the min if parent isn't
+		if(HEAP_CHILD1(i) < heapSize && lru > c1->func->lru &&
+		   (HEAP_CHILD2(i) >= heapSize || c1->func->lru < c2->func->lru)){
 			heapSwap(i, HEAP_CHILD1(i));
 			i = HEAP_CHILD1(i);
-		} else if(HEAP_CHILD2(i) < heapSize &&
-		          cacheHeap[i]->func->lru > cacheHeap[HEAP_CHILD2(i)]->func->lru){
+		} else if(HEAP_CHILD2(i) < heapSize && lru > c2->func->lru){
 			heapSwap(i, HEAP_CHILD2(i));
 			i = HEAP_CHILD2(i);
 		} else break;
@@ -108,9 +110,32 @@ static void free_func(PowerPC_func* func, unsigned int addr){
 	}
 }
 
+static inline void update_lru(PowerPC_func* func){
+	static unsigned int nextLRU = 0;
+	if(func->lru != nextLRU-1) func->lru = nextLRU++;
+	
+	if(!nextLRU){
+		// Handle nextLRU overflows
+		// By heap-sorting and assigning new LRUs
+		heapify();
+		// Since you can't do an in-place min-heap ascending-sort
+		//   I have to create a new heap
+		CacheMetaNode** newHeap = malloc(maxHeapSize * sizeof(CacheMetaNode*));
+		int i, savedSize = heapSize;
+		for(i=0; i<heapSize; ++i){
+			newHeap[i] = heapPop();
+			newHeap[i]->func->lru = i;
+		}
+		free(cacheHeap);
+		cacheHeap = newHeap;
+		
+		nextLRU = heapSize = savedSize;
+	}
+}
+
 static void release(int minNeeded){
 	// Frees alloc'ed blocks so that at least minNeeded bytes are available
-	int toFree = minNeeded*2; // Free 2x what is needed
+	int toFree = minNeeded * 2; // Free 2x what is needed
 	// Restore the heap properties to pop the LRU
 	heapify();
 	// Release nodes' memory until we've freed enough
@@ -141,8 +166,8 @@ void RecompCache_Alloc(unsigned int size, unsigned int address, PowerPC_func* fu
 	newBlock->func->code = malloc(size);
 	// Add it to the heap
 	heapPush(newBlock);
-	// Make this block the LRU
-	RecompCache_Update(address);
+	// Make this function the LRU
+	update_lru(func);
 }
 
 void RecompCache_Realloc(PowerPC_func* func, unsigned int size){
@@ -152,8 +177,8 @@ void RecompCache_Realloc(PowerPC_func* func, unsigned int size){
 	for(i=heapSize-1; !n; --i)
 		if(cacheHeap[i]->func == func)
 			n = cacheHeap[i];
-	// Make this block the LRU
-	RecompCache_Update(n->addr);
+	// Make this function the LRU
+	update_lru(func);
 	
 	int neededSpace = size - n->size;
 	
@@ -171,7 +196,7 @@ void RecompCache_Free(unsigned int addr){
 	int i;
 	CacheMetaNode* n = NULL;
 	// Find the corresponding node
-	for(i=heapSize-1; !n && i>=0; --i){
+	for(i=heapSize-1; i>=0; --i){
 		if(cacheHeap[i]->addr == addr){
 			n = cacheHeap[i];
 			// Remove from the heap
@@ -187,13 +212,12 @@ void RecompCache_Free(unsigned int addr){
 }
 
 void RecompCache_Update(unsigned int addr){
-	static unsigned int nextLRU = 0;
 	PowerPC_func_node* n = blocks[addr>>12]->funcs;
 	addr &= 0xffff;
 	for(; n != NULL; n = n->next){
 		if(addr >= n->function->start_addr &&
 		   addr <  n->function->end_addr){
-			n->function->lru = nextLRU++;
+			update_lru(n->function);
 			break;
 		}
 	}
