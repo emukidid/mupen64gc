@@ -14,6 +14,7 @@ extern int stop;
 extern unsigned long instructionCount;
 extern void (*interp_ops[64])(void);
 inline unsigned long update_invalid_addr(unsigned long addr);
+unsigned int dyna_check_cop1_unusable(unsigned int, int);
 
 int noCheckInterrupt = 0;
 
@@ -39,12 +40,14 @@ inline unsigned int dyna_run(unsigned int (*code)(void)){
 		"mr	21, %6    \n"
 		"mr	22, %7    \n"
 		"mr	23, %8    \n"
+		"mr	24, %9    \n"
 		:: "r" (reg), "r" (decodeNInterpret),
 		   "r" (dyna_update_count), "r" (&last_addr),
 		   "r" (rdram), "r" (SP_DMEM),
 		   "r" (reg_cop1_simple), "r" (reg_cop1_double),
-		   "r" (&FCR31)
-		: "14", "15", "16", "17", "18", "19", "20", "21", "22", "23");
+		   "r" (&FCR31), "r" (dyna_check_cop1_unusable)
+		: "14", "15", "16", "17", "18", "19", "20", "21",
+		  "22", "23", "24");
 	
 	unsigned int naddr = code();
 	
@@ -130,5 +133,20 @@ int dyna_update_count(unsigned int pc){
 	last_addr = pc;
 	
 	return next_interupt - Count;
+}
+
+unsigned int dyna_check_cop1_unusable(unsigned int pc, int isDelaySlot){
+	// Check if FP unusable bit is set
+	if(!(Status & 0x20000000)){
+		// Set state so it can be recovered after exception
+		delay_slot = isDelaySlot;
+		PC->addr = interp_addr = pc;
+		// Take a FP unavailable exception
+		Cause = (11 << 2) | 0x10000000;
+		exception_general();
+		// Return the address to trampoline to
+		return interp_addr;
+	} else
+		return 0;
 }
 

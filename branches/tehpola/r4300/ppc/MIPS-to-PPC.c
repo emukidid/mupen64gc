@@ -27,9 +27,11 @@ static void genCallInterp(MIPS_instr);
 #define JUMPTO_ADDR_SIZE 3
 static void genJumpTo(unsigned int loc, unsigned int type);
 static void genUpdateCount(void);
+static void genCheckFP(void);
 static int inline mips_is_jump(MIPS_instr);
 void jump_to(unsigned int);
 
+static int FP_need_check;
 
 // Variable to indicate whether the next recompiled instruction
 //   is a delay slot (which needs to have its registers flushed)
@@ -61,6 +63,7 @@ void start_new_block(void){
 }
 void start_new_mapping(void){
 	flushRegisters();
+	FP_need_check = 1;
 }
 
 static inline int signExtend(int value, int size){
@@ -229,7 +232,7 @@ int convert(void){
 	return result;
 }
 
-static int NI(MIPS_instr mips){
+static int NI(){
 	return CONVERT_ERROR;
 }
 
@@ -2294,6 +2297,8 @@ static int MFC1(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP
+
+	genCheckFP();
 	
 	int fs = MIPS_GET_FS(mips);
 	int rt = mapRegisterNew( MIPS_GET_RT(mips) );
@@ -2317,6 +2322,8 @@ static int DMFC1(MIPS_instr mips){
 	return INTERPRETED;
 #else // INTERPRET_FP
 	
+	genCheckFP();
+	
 	int fs = mapFPR( MIPS_GET_FS(mips), 1 );
 	int rt = MIPS_GET_RT(mips);
 	invalidateRegister(rt);
@@ -2334,6 +2341,8 @@ static int CFC1(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_CFC1
+	
+	genCheckFP();
 	
 	if(MIPS_GET_FS(mips) == 31){
 		int rt = mapRegisterNew( MIPS_GET_RT(mips) );
@@ -2357,6 +2366,8 @@ static int MTC1(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP
+	
+	genCheckFP();
 	
 	int rt = mapRegister( MIPS_GET_RT(mips) );
 	int fs = MIPS_GET_FS(mips);
@@ -2383,6 +2394,8 @@ static int DMTC1(MIPS_instr mips){
 	return INTERPRETED;
 #else // INTERPRET_FP
 	
+	genCheckFP();
+	
 	RegMapping rt = mapRegister64( MIPS_GET_RT(mips) );
 	int fs = MIPS_GET_FS(mips);
 	int addr = mapRegisterTemp();
@@ -2408,6 +2421,8 @@ static int CTC1(MIPS_instr mips){
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_CTC1
 	
+	genCheckFP();
+	
 	if(MIPS_GET_FS(mips) == 31){
 		int rt = mapRegister( MIPS_GET_RT(mips) );
 		
@@ -2425,6 +2440,8 @@ static int BC(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_BC
+	
+	genCheckFP();
 	
 	int cond   = mips & 0x00010000;
 	int likely = mips & 0x00020000;
@@ -2448,6 +2465,8 @@ static int ADD_FP(MIPS_instr mips, int dbl){
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_ADD
 	
+	genCheckFP();
+	
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
 	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl );
@@ -2465,6 +2484,8 @@ static int SUB_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_SUB
+	
+	genCheckFP();
 	
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
@@ -2484,6 +2505,8 @@ static int MUL_FP(MIPS_instr mips, int dbl){
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_MUL
 	
+	genCheckFP();
+	
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
 	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl );
@@ -2502,6 +2525,8 @@ static int DIV_FP(MIPS_instr mips, int dbl){
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_DIV
 	
+	genCheckFP();
+	
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
 	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl );
@@ -2519,6 +2544,8 @@ static int SQRT_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_SQRT
+	
+	genCheckFP();
 	
 	static double one = 1.0;
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
@@ -2553,6 +2580,8 @@ static int ABS_FP(MIPS_instr mips, int dbl){
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_ABS
 	
+	genCheckFP();
+	
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl );
 	
@@ -2570,6 +2599,8 @@ static int MOV_FP(MIPS_instr mips, int dbl){
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_MOV
 	
+	genCheckFP();
+	
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl );
 	
@@ -2586,6 +2617,8 @@ static int NEG_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_NEG
+	
+	genCheckFP();
 	
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl );
@@ -2667,6 +2700,8 @@ static int ROUND_W_FP(MIPS_instr mips, int dbl){
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_ROUND_W
 	
+	genCheckFP();
+	
 	set_rounding(PPC_ROUNDING_NEAREST);
 	
 	int fd = MIPS_GET_FD(mips);
@@ -2697,6 +2732,8 @@ static int TRUNC_W_FP(MIPS_instr mips, int dbl){
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_TRUNC_W
 	
+	genCheckFP();
+	
 	int fd = MIPS_GET_FD(mips);
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	invalidateFPR(fd);
@@ -2724,6 +2761,8 @@ static int CEIL_W_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_CEIL_W
+	
+	genCheckFP();
 	
 	set_rounding(PPC_ROUNDING_CEIL);
 	
@@ -2755,6 +2794,8 @@ static int FLOOR_W_FP(MIPS_instr mips, int dbl){
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_FLOOR_W
 	
+	genCheckFP();
+	
 	set_rounding(PPC_ROUNDING_FLOOR);
 	
 	int fd = MIPS_GET_FD(mips);
@@ -2785,6 +2826,8 @@ static int CVT_S_FP(MIPS_instr mips, int dbl){
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_CVT_S
 	
+	genCheckFP();
+	
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int fd = mapFPRNew( MIPS_GET_FD(mips), 0 );
 	
@@ -2802,6 +2845,8 @@ static int CVT_D_FP(MIPS_instr mips, int dbl){
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_CVT_D
 	
+	genCheckFP();
+	
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int fd = mapFPRNew( MIPS_GET_FD(mips), 1 );
 	
@@ -2818,6 +2863,8 @@ static int CVT_W_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_CVT_W
+	
+	genCheckFP();
 	
 	// Set rounding mode according to FCR31
 	GEN_LWZ(ppc, 0, 0, DYNAREG_FCR31);
@@ -2867,6 +2914,8 @@ static int C_F_FP(MIPS_instr mips, int dbl){
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_F
 	
+	genCheckFP();
+	
 	// lwz r0, 0(&fcr31)
 	GEN_LWZ(ppc, 0, 0, DYNAREG_FCR31);
 	set_next_dst(ppc);
@@ -2887,6 +2936,8 @@ static int C_UN_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_UN
+	
+	genCheckFP();
 	
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
@@ -2921,6 +2972,8 @@ static int C_EQ_FP(MIPS_instr mips, int dbl){
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_EQ
 	
+	genCheckFP();
+	
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
 	
@@ -2953,6 +3006,8 @@ static int C_UEQ_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_UEQ
+	
+	genCheckFP();
 	
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
@@ -2990,6 +3045,8 @@ static int C_OLT_FP(MIPS_instr mips, int dbl){
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_OLT
 	
+	genCheckFP();
+	
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
 	
@@ -3022,6 +3079,8 @@ static int C_ULT_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_ULT
+	
+	genCheckFP();
 	
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
@@ -3059,6 +3118,8 @@ static int C_OLE_FP(MIPS_instr mips, int dbl){
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_OLE
 	
+	genCheckFP();
+	
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
 	
@@ -3095,6 +3156,8 @@ static int C_ULE_FP(MIPS_instr mips, int dbl){
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_ULE
 	
+	genCheckFP();
+	
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
 	
@@ -3128,6 +3191,8 @@ static int C_SF_FP(MIPS_instr mips, int dbl){
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_SF
 	
+	genCheckFP();
+	
 	// lwz r0, 0(&fcr31)
 	GEN_LWZ(ppc, 0, 0, DYNAREG_FCR31);
 	set_next_dst(ppc);
@@ -3149,6 +3214,8 @@ static int C_NGLE_FP(MIPS_instr mips, int dbl){
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_NGLE
 	
+	genCheckFP();
+	
 	// lwz r0, 0(&fcr31)
 	GEN_LWZ(ppc, 0, 0, DYNAREG_FCR31);
 	set_next_dst(ppc);
@@ -3169,6 +3236,8 @@ static int C_SEQ_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_SEQ
+	
+	genCheckFP();
 	
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
@@ -3203,6 +3272,8 @@ static int C_NGL_FP(MIPS_instr mips, int dbl){
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_NGL
 	
+	genCheckFP();
+	
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
 	
@@ -3235,6 +3306,8 @@ static int C_LT_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_LT
+	
+	genCheckFP();
 	
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
@@ -3269,6 +3342,8 @@ static int C_NGE_FP(MIPS_instr mips, int dbl){
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_NGE
 	
+	genCheckFP();
+	
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
 	
@@ -3302,6 +3377,8 @@ static int C_LE_FP(MIPS_instr mips, int dbl){
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_LE
 	
+	genCheckFP();
+	
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
 	
@@ -3334,6 +3411,8 @@ static int C_NGT_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_NGT
+	
+	genCheckFP();
 	
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
@@ -3393,6 +3472,8 @@ static int D(MIPS_instr mips){
 
 static int CVT_FP_W(MIPS_instr mips, int dbl){
 	PowerPC_instr ppc;
+	
+	genCheckFP();
 	
 	int fs = MIPS_GET_FS(mips);
 	flushFPR(fs);
@@ -3590,6 +3671,47 @@ static void genUpdateCount(void){
 	// If next_interupt <= Count (cr2)
 	GEN_CMPI(ppc, 3, 0, 2);
 	set_next_dst(ppc);
+}
+
+// Check whether we need to take a FP unavailable exception
+static void genCheckFP(void){
+	PowerPC_instr ppc;
+	if(FP_need_check){
+		flushRegisters();
+		reset_code_addr();
+		// Move &dyna_check_cop1_unusable to ctr for call
+		GEN_MTCTR(ppc, DYNAREG_CHKFP);
+		set_next_dst(ppc);
+		// Save the lr
+		GEN_MFLR(ppc, 0);
+		set_next_dst(ppc);
+		GEN_STW(ppc, 0, DYNAOFF_LR, 1);
+		set_next_dst(ppc);
+		// Load the current PC as the argument
+		GEN_LIS(ppc, 3, (get_src_pc()+4)>>16);
+		set_next_dst(ppc);
+		GEN_ORI(ppc, 3, 3, get_src_pc()+4);
+		set_next_dst(ppc);
+		// Pass in whether this instruction is in the delay slot
+		GEN_LI(ppc, 4, 0, isDelaySlot ? 1 : 0);
+		set_next_dst(ppc);
+		// Call dyna_check_cop1_unusable
+		GEN_BCTRL(ppc);
+		set_next_dst(ppc);
+		// Load the lr
+		GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
+		set_next_dst(ppc);
+		GEN_MTLR(ppc, 0);
+		set_next_dst(ppc);
+		// if chkFP returned an address jumpTo it
+		GEN_CMPI(ppc, 3, 0, 6);
+		set_next_dst(ppc);
+		GEN_BNELR(ppc, 6, 0);
+		set_next_dst(ppc);
+		// Don't check for the rest of this mapping
+		// Unless this instruction is in a delay slot
+		FP_need_check = isDelaySlot;
+	}
 }
 
 static int mips_is_jump(MIPS_instr instr){
