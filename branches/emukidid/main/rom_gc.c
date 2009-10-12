@@ -192,6 +192,9 @@ int rom_read(fileBrowser_file* file){
    // FIXME: ROM_SETTINGS.goodname needs to be filled out
    strcpy(ROM_SETTINGS.goodname, ROM_HEADER->nom);
    
+  //Set VI limit based on ROM header
+  InitTimer();
+
 /*#if 0 // I don't think I can/need to support this yet
    // loading rom settings and checking if it's a good dump
    md5_init(&state);
