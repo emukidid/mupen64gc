@@ -2845,8 +2845,18 @@ static int C_F_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_F
-	// TODO: C_F
-	return CONVERT_ERROR;
+	
+	// lwz r0, 0(&fcr31)
+	GEN_LWZ(ppc, 0, 0, DYNAREG_FCR31);
+	set_next_dst(ppc);
+	// and r0, r0, 0xff7fffff (clear cond)
+	GEN_RLWINM(ppc, 0, 0, 0, 9, 7);
+	set_next_dst(ppc);
+	// stw r0, 0(&fcr31)
+	GEN_STW(ppc, 0, 0, DYNAREG_FCR31);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -2856,8 +2866,30 @@ static int C_UN_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_UN
-	// TODO: C_UN
-	return CONVERT_ERROR;
+	
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
+	
+	// lwz r0, 0(&fcr31)
+	GEN_LWZ(ppc, 0, 0, DYNAREG_FCR31);
+	set_next_dst(ppc);
+	// fcmpu cr0, fs, ft
+	GEN_FCMPU(ppc, fs, ft, 0);
+	set_next_dst(ppc);
+	// and r0, r0, 0xff7fffff (clear cond)
+	GEN_RLWINM(ppc, 0, 0, 0, 9, 7);
+	set_next_dst(ppc);
+	// bord cr0, 2 (past setting cond)
+	GEN_BC(ppc, 2, 0, 0, 0x4, 3);
+	set_next_dst(ppc);
+	// oris r0, r0, 0x0080 (set cond)
+	GEN_ORIS(ppc, 0, 0, 0x0080);
+	set_next_dst(ppc);
+	// stw r0, 0(&fcr31)
+	GEN_STW(ppc, 0, 0, DYNAREG_FCR31);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -2949,8 +2981,8 @@ static int C_OLT_FP(MIPS_instr mips, int dbl){
 	// and r0, r0, 0xff7fffff (clear cond)
 	GEN_RLWINM(ppc, 0, 0, 0, 9, 7);
 	set_next_dst(ppc);
-	// blt cr0, 2 (past setting cond)
-	GEN_BLT(ppc, 0, 2, 0, 0);
+	// bge cr0, 2 (past setting cond)
+	GEN_BGE(ppc, 0, 2, 0, 0);
 	set_next_dst(ppc);
 	// oris r0, r0, 0x0080 (set cond)
 	GEN_ORIS(ppc, 0, 0, 0x0080);
@@ -3018,8 +3050,11 @@ static int C_OLE_FP(MIPS_instr mips, int dbl){
 	// and r0, r0, 0xff7fffff (clear cond)
 	GEN_RLWINM(ppc, 0, 0, 0, 9, 7);
 	set_next_dst(ppc);
-	// ble cr0, 2 (past setting cond)
-	GEN_BLE(ppc, 0, 2, 0, 0);
+	// cror cr0[gt], cr0[gt], cr0[un]
+	GEN_CROR(ppc, 1, 1, 3);
+	set_next_dst(ppc);
+	// bgt cr0, 2 (past setting cond)
+	GEN_BGT(ppc, 0, 2, 0, 0);
 	set_next_dst(ppc);
 	// oris r0, r0, 0x0080 (set cond)
 	GEN_ORIS(ppc, 0, 0, 0x0080);
@@ -3038,8 +3073,30 @@ static int C_ULE_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_ULE
-	// TODO: C_ULE
-	return CONVERT_ERROR;
+	
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
+	
+	// lwz r0, 0(&fcr31)
+	GEN_LWZ(ppc, 0, 0, DYNAREG_FCR31);
+	set_next_dst(ppc);
+	// fcmpu cr0, fs, ft
+	GEN_FCMPU(ppc, fs, ft, 0);
+	set_next_dst(ppc);
+	// and r0, r0, 0xff7fffff (clear cond)
+	GEN_RLWINM(ppc, 0, 0, 0, 9, 7);
+	set_next_dst(ppc);
+	// bgt cr0, 2 (past setting cond)
+	GEN_BGT(ppc, 0, 2, 0, 0);
+	set_next_dst(ppc);
+	// oris r0, r0, 0x0080 (set cond)
+	GEN_ORIS(ppc, 0, 0, 0x0080);
+	set_next_dst(ppc);
+	// stw r0, 0(&fcr31)
+	GEN_STW(ppc, 0, 0, DYNAREG_FCR31);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -3049,8 +3106,18 @@ static int C_SF_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_SF
-	// TODO: C_SF
-	return CONVERT_ERROR;
+	
+	// lwz r0, 0(&fcr31)
+	GEN_LWZ(ppc, 0, 0, DYNAREG_FCR31);
+	set_next_dst(ppc);
+	// and r0, r0, 0xff7fffff (clear cond)
+	GEN_RLWINM(ppc, 0, 0, 0, 9, 7);
+	set_next_dst(ppc);
+	// stw r0, 0(&fcr31)
+	GEN_STW(ppc, 0, 0, DYNAREG_FCR31);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -3060,8 +3127,18 @@ static int C_NGLE_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_NGLE
-	// TODO: C_NGLE
-	return CONVERT_ERROR;
+	
+	// lwz r0, 0(&fcr31)
+	GEN_LWZ(ppc, 0, 0, DYNAREG_FCR31);
+	set_next_dst(ppc);
+	// and r0, r0, 0xff7fffff (clear cond)
+	GEN_RLWINM(ppc, 0, 0, 0, 9, 7);
+	set_next_dst(ppc);
+	// stw r0, 0(&fcr31)
+	GEN_STW(ppc, 0, 0, DYNAREG_FCR31);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -3071,8 +3148,30 @@ static int C_SEQ_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_SEQ
-	// TODO: C_SEQ
-	return CONVERT_ERROR;
+	
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
+	
+	// lwz r0, 0(&fcr31)
+	GEN_LWZ(ppc, 0, 0, DYNAREG_FCR31);
+	set_next_dst(ppc);
+	// fcmpu cr0, fs, ft
+	GEN_FCMPU(ppc, fs, ft, 0);
+	set_next_dst(ppc);
+	// and r0, r0, 0xff7fffff (clear cond)
+	GEN_RLWINM(ppc, 0, 0, 0, 9, 7);
+	set_next_dst(ppc);
+	// bne cr0, 2 (past setting cond)
+	GEN_BNE(ppc, 0, 2, 0, 0);
+	set_next_dst(ppc);
+	// oris r0, r0, 0x0080 (set cond)
+	GEN_ORIS(ppc, 0, 0, 0x0080);
+	set_next_dst(ppc);
+	// stw r0, 0(&fcr31)
+	GEN_STW(ppc, 0, 0, DYNAREG_FCR31);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -3082,8 +3181,30 @@ static int C_NGL_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_NGL
-	// TODO: C_NGL
-	return CONVERT_ERROR;
+	
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
+	
+	// lwz r0, 0(&fcr31)
+	GEN_LWZ(ppc, 0, 0, DYNAREG_FCR31);
+	set_next_dst(ppc);
+	// fcmpu cr0, fs, ft
+	GEN_FCMPU(ppc, fs, ft, 0);
+	set_next_dst(ppc);
+	// and r0, r0, 0xff7fffff (clear cond)
+	GEN_RLWINM(ppc, 0, 0, 0, 9, 7);
+	set_next_dst(ppc);
+	// bne cr0, 2 (past setting cond)
+	GEN_BNE(ppc, 0, 2, 0, 0);
+	set_next_dst(ppc);
+	// oris r0, r0, 0x0080 (set cond)
+	GEN_ORIS(ppc, 0, 0, 0x0080);
+	set_next_dst(ppc);
+	// stw r0, 0(&fcr31)
+	GEN_STW(ppc, 0, 0, DYNAREG_FCR31);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -3093,8 +3214,30 @@ static int C_LT_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_LT
-	// TODO: C_LT
-	return CONVERT_ERROR;
+	
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
+	
+	// lwz r0, 0(&fcr31)
+	GEN_LWZ(ppc, 0, 0, DYNAREG_FCR31);
+	set_next_dst(ppc);
+	// fcmpu cr0, fs, ft
+	GEN_FCMPU(ppc, fs, ft, 0);
+	set_next_dst(ppc);
+	// and r0, r0, 0xff7fffff (clear cond)
+	GEN_RLWINM(ppc, 0, 0, 0, 9, 7);
+	set_next_dst(ppc);
+	// bge cr0, 2 (past setting cond)
+	GEN_BGE(ppc, 0, 2, 0, 0);
+	set_next_dst(ppc);
+	// oris r0, r0, 0x0080 (set cond)
+	GEN_ORIS(ppc, 0, 0, 0x0080);
+	set_next_dst(ppc);
+	// stw r0, 0(&fcr31)
+	GEN_STW(ppc, 0, 0, DYNAREG_FCR31);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -3104,8 +3247,30 @@ static int C_NGE_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_NGE
-	// TODO: C_NGE
-	return CONVERT_ERROR;
+	
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
+	
+	// lwz r0, 0(&fcr31)
+	GEN_LWZ(ppc, 0, 0, DYNAREG_FCR31);
+	set_next_dst(ppc);
+	// fcmpu cr0, fs, ft
+	GEN_FCMPU(ppc, fs, ft, 0);
+	set_next_dst(ppc);
+	// and r0, r0, 0xff7fffff (clear cond)
+	GEN_RLWINM(ppc, 0, 0, 0, 9, 7);
+	set_next_dst(ppc);
+	// bge cr0, 2 (past setting cond)
+	GEN_BGE(ppc, 0, 2, 0, 0);
+	set_next_dst(ppc);
+	// oris r0, r0, 0x0080 (set cond)
+	GEN_ORIS(ppc, 0, 0, 0x0080);
+	set_next_dst(ppc);
+	// stw r0, 0(&fcr31)
+	GEN_STW(ppc, 0, 0, DYNAREG_FCR31);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -3115,8 +3280,30 @@ static int C_LE_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_LE
-	// TODO: C_LE
-	return CONVERT_ERROR;
+	
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
+	
+	// lwz r0, 0(&fcr31)
+	GEN_LWZ(ppc, 0, 0, DYNAREG_FCR31);
+	set_next_dst(ppc);
+	// fcmpu cr0, fs, ft
+	GEN_FCMPU(ppc, fs, ft, 0);
+	set_next_dst(ppc);
+	// and r0, r0, 0xff7fffff (clear cond)
+	GEN_RLWINM(ppc, 0, 0, 0, 9, 7);
+	set_next_dst(ppc);
+	// bgt cr0, 2 (past setting cond)
+	GEN_BGT(ppc, 0, 2, 0, 0);
+	set_next_dst(ppc);
+	// oris r0, r0, 0x0080 (set cond)
+	GEN_ORIS(ppc, 0, 0, 0x0080);
+	set_next_dst(ppc);
+	// stw r0, 0(&fcr31)
+	GEN_STW(ppc, 0, 0, DYNAREG_FCR31);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -3126,8 +3313,30 @@ static int C_NGT_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_C_NGT
-	// TODO: C_NGT
-	return CONVERT_ERROR;
+	
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
+	
+	// lwz r0, 0(&fcr31)
+	GEN_LWZ(ppc, 0, 0, DYNAREG_FCR31);
+	set_next_dst(ppc);
+	// fcmpu cr0, fs, ft
+	GEN_FCMPU(ppc, fs, ft, 0);
+	set_next_dst(ppc);
+	// and r0, r0, 0xff7fffff (clear cond)
+	GEN_RLWINM(ppc, 0, 0, 0, 9, 7);
+	set_next_dst(ppc);
+	// bgt cr0, 2 (past setting cond)
+	GEN_BGT(ppc, 0, 2, 0, 0);
+	set_next_dst(ppc);
+	// oris r0, r0, 0x0080 (set cond)
+	GEN_ORIS(ppc, 0, 0, 0x0080);
+	set_next_dst(ppc);
+	// stw r0, 0(&fcr31)
+	GEN_STW(ppc, 0, 0, DYNAREG_FCR31);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
