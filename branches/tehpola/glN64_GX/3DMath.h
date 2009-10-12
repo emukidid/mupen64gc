@@ -253,20 +253,24 @@ MultMatrix_Loop:
 			//dst[i][3] += m1[i][k]*m0[k][3];
 			__asm__ volatile(
 				"psq_lx      2, %1, %0, 1, 0 \n"
-				"ps_merge00  2,  2,  2       \n"
 				
 				"psq_l       3, 0(%2), 0, 0  \n"
 				"psq_l       4, 0(%3), 0, 0  \n"
-				"ps_madd     4,  2,  3, 4    \n"
-				"psq_st      4, 0(%3), 0, 0  \n"
 				
-				"psq_l       3, 8(%2), 0, 0  \n"
-				"psq_l       4, 8(%3), 0, 0  \n"
-				"ps_madd     4,  2,  3, 4    \n"
-				"psq_st      4, 8(%3), 0, 0  \n"
+				"psq_l       5, 8(%2), 0, 0  \n"
+				"psq_l       6, 8(%3), 0, 0  \n"
+				
+				"ps_merge00  2, 2, 2         \n"
+				
+				"ps_madd     4, 2, 3, 4      \n"
+				"ps_madd     6, 2, 5, 6      \n"
+				
+				"psq_st      4, 0(%3), 0, 0  \n"
+				"psq_st      6, 8(%3), 0, 0  \n"
 				:: "r" (m1+i), "r" (k*4),
 				   "r" (m0+k), "r" (dst+i)
-				:  "r0", "fr2", "fr3", "fr4", "memory");
+				:  "r0", "fr2", "fr3", "fr4", "fr5", "fr6",
+				   "memory");
 		}
 	}
 	memcpy( m0, dst, sizeof(float) * 16 );
