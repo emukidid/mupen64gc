@@ -6,6 +6,7 @@
 #define WRAPPERS_H
 
 #include "Recompile.h"
+#include "../macros.h"
 
 #define DYNAREG_REG    14
 #define DYNAREG_ZERO   15
@@ -28,8 +29,6 @@ extern int noCheckInterrupt;
 
 unsigned int decodeNInterpret(MIPS_instr, unsigned int, int);
 int dyna_update_count(unsigned int pc);
-
-#define Count reg_cop0[9]
 
 #endif
 
