@@ -400,7 +400,10 @@ static void Initialise (void){
 		"lis	3, 7     \n"
 		"addi	3, 3, 7  \n"
 		"mtspr	916, 3   \n" // GQR4 = signed short
-		::: "r3");
+		"lis	3, %0    \n"
+		"addi	3, 3, %0 \n"
+		"mtspr	917, 3   \n" // GQR5 = unsigned short / (2^16)
+		:: "n" (16<<8 | 5) : "r3");
 }
 
 /* Reinitialize GX */ 
