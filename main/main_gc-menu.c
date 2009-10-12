@@ -321,8 +321,8 @@ static void rsp_info_init(void){
 
 void ScanPADSandReset() {
 	PAD_ScanPads();
-	/*if(!((*(u32*)0xCC003000)>>16))
-		stop = 1;*/
+	if(!((*(u32*)0xCC003000)>>16))
+		stop = 1;
 }
 void ResetCallBack() {stop = 1;}
 
@@ -385,6 +385,22 @@ static void Initialise (void){
 	else
 		isWii = 0;
 	//SYS_SetResetCallback(ResetCallBack);	//not working, use old method for now
+	
+	// Init PS GQRs so I can load signed/unsigned chars/shorts as PS values
+	__asm__ volatile(
+		"lis	3, 4     \n"
+		"addi	3, 3, 4  \n"
+		"mtspr	913, 3   \n" // GQR1 = unsigned char
+		"lis	3, 6     \n"
+		"addi	3, 3, 6  \n"
+		"mtspr	914, 3   \n" // GQR2 = signed char
+		"lis	3, 5     \n"
+		"addi	3, 3, 5  \n"
+		"mtspr	915, 3   \n" // GQR3 = unsigned short
+		"lis	3, 7     \n"
+		"addi	3, 3, 7  \n"
+		"mtspr	916, 3   \n" // GQR4 = signed short
+		::: "r3");
 }
 
 /* Reinitialize GX */ 
