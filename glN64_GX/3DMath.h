@@ -240,38 +240,56 @@ MultMatrix_Loop:
 	: "S"(m0), "D"(m1), "c"(4)
 	: "memory" );
 #elif defined(GEKKO) // X86_ASM
-	int i, j, k;
-	float dst[4][4] = {{0.0f}};
 	
-	for (k = 0; k < 4; k++)
+	float dst[4][4]/* = {{0.0f}}*/;
+	
+	for (int i = 0; i < 4; i++)
 	{
-		for (i = 0; i < 4; i++)
+		/*for (int k = 0; k < 4; k++)
 		{
-			//dst[i][0] += m1[i][k]*m0[k][0];
-			//dst[i][1] += m1[i][k]*m0[k][1];
-			//dst[i][2] += m1[i][k]*m0[k][2];
-			//dst[i][3] += m1[i][k]*m0[k][3];
-			__asm__ volatile(
-				"psq_lx      2, %1, %0, 1, 0 \n"
-				
-				"psq_l       3, 0(%2), 0, 0  \n"
-				"psq_l       4, 0(%3), 0, 0  \n"
-				
-				"psq_l       5, 8(%2), 0, 0  \n"
-				"psq_l       6, 8(%3), 0, 0  \n"
-				
-				"ps_merge00  2, 2, 2         \n"
-				
-				"ps_madd     4, 2, 3, 4      \n"
-				"ps_madd     6, 2, 5, 6      \n"
-				
-				"psq_st      4, 0(%3), 0, 0  \n"
-				"psq_st      6, 8(%3), 0, 0  \n"
-				:: "r" (m1+i), "r" (k*4),
-				   "r" (m0+k), "r" (dst+i)
-				:  "r0", "fr2", "fr3", "fr4", "fr5", "fr6",
-				   "memory");
-		}
+			dst[i][0] += m1[i][k]*m0[k][0];
+			dst[i][1] += m1[i][k]*m0[k][1];
+			dst[i][2] += m1[i][k]*m0[k][2];
+			dst[i][3] += m1[i][k]*m0[k][3];
+		}*/
+		__asm__ volatile(
+			"psq_l       2, 0(%0), 1, 0 \n"
+			"psq_l       3, 0(%1), 0, 0  \n"
+			"psq_l       5, 8(%1), 0, 0  \n"
+			
+			"ps_merge00  2, 2, 2         \n"
+			"ps_mul      4, 2, 3      \n"
+			"ps_mul      6, 2, 5      \n"
+			
+			"psq_l       2,  4(%0), 1, 0 \n"
+			"psq_l       3, 16(%1), 0, 0  \n"
+			"psq_l       5, 24(%1), 0, 0  \n"
+			
+			"ps_merge00  2, 2, 2         \n"
+			"ps_madd     4, 2, 3, 4      \n"
+			"ps_madd     6, 2, 5, 6      \n"
+			
+			"psq_l       2,  8(%0), 1, 0 \n"
+			"psq_l       3, 32(%1), 0, 0  \n"
+			"psq_l       5, 40(%1), 0, 0  \n"
+			
+			"ps_merge00  2, 2, 2         \n"
+			"ps_madd     4, 2, 3, 4      \n"
+			"ps_madd     6, 2, 5, 6      \n"
+			
+			"psq_l       2, 12(%0), 1, 0 \n"
+			"psq_l       3, 48(%1), 0, 0  \n"
+			"psq_l       5, 56(%1), 0, 0  \n"
+			
+			"ps_merge00  2, 2, 2         \n"
+			"ps_madd     4, 2, 3, 4      \n"
+			"ps_madd     6, 2, 5, 6      \n"
+			
+			"psq_st      4, 0(%2), 0, 0  \n"
+			"psq_st      6, 8(%2), 0, 0  \n"
+			:: "r" (m1+i), "r" (m0), "r" (dst+i)
+			:  "r0", "fr2", "fr3", "fr4", "fr5", "fr6",
+			   "memory");
 	}
 	memcpy( m0, dst, sizeof(float) * 16 );
 # else // GEKKO
@@ -470,6 +488,46 @@ inline void TransformVertex( float vtx[4], float mtx[4][4] )//, float perspNorm 
 	: /* no output */
 	: "S"(vtx), "b"(mtx)
 	: "memory" );
+#elif defined(GEKKO)
+	
+	__asm__ volatile(
+		"psq_l      2, 0(%0), 1, 0 \n" // fr2 = Vj,  1.0f
+		"psq_l      3, 0(%1), 0, 0 \n" // fr3 = Mj0, Mj1
+		"psq_l      5, 8(%1), 0, 0 \n" // fr5 = Mj2, Mj3
+		
+		"ps_merge00 2, 2, 2     \n" // fr2 = Vj,  Vj
+		"ps_mul    4, 3, 2  \n" // fr4 = fr3 * fr2
+		"ps_mul    6, 5, 2  \n" // fr6 = fr5 * fr2
+		
+		"psq_l      2, 4(%0), 1, 0 \n" // fr2 = Vj,  1.0f
+		"psq_l      3, 16(%1), 0, 0 \n" // fr3 = Mj0, Mj1
+		"psq_l      5, 24(%1), 0, 0 \n" // fr5 = Mj2, Mj3
+		
+		"ps_merge00 2, 2, 2     \n" // fr2 = Vj,  Vj
+		"ps_madd    4, 3, 2, 4  \n" // fr4 = fr3 * fr2 + fr4
+		"ps_madd    6, 5, 2, 6  \n" // fr6 = fr5 * fr2 + fr6
+		
+		"psq_l      2, 8(%0), 1, 0 \n" // fr2 = Vj,  1.0f
+		"psq_l      3, 32(%1), 0, 0 \n" // fr3 = Mj0, Mj1
+		"psq_l      5, 40(%1), 0, 0 \n" // fr5 = Mj2, Mj3
+		
+		"ps_merge00 2, 2, 2     \n" // fr2 = Vj,  Vj
+		"ps_madd    4, 3, 2, 4  \n" // fr4 = fr3 * fr2 + fr4
+		"ps_madd    6, 5, 2, 6  \n" // fr6 = fr5 * fr2 + fr6
+		
+		"psq_l	3, 48(%1), 0, 0 \n" // fr3 = M30, M31
+		"psq_l	5, 56(%1), 0, 0 \n" // fr5 = M32, M33
+	
+		"ps_add	4, 3, 4 \n" // fr4 = fr3 + fr4
+		"ps_add 6, 5, 6 \n" // fr6 = fr5 + fr6
+		
+		"psq_st     4, 0(%0), 0, 0 \n" // D0, D1 = fr4
+		"psq_st     6, 8(%0), 0, 0 \n" // D2, D3 = fr6
+		
+		:: "r" (vtx), "r" (mtx)
+		:  "fr2", "fr3", "fr4", "fr5", "fr6",
+		   "r0", "memory");
+	
 # else // X86_ASM
 	float x, y, z, w;
 	x = vtx[0];
