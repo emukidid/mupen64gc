@@ -65,11 +65,6 @@ unsigned int decodeNInterpret();
 //#define INTERPRET_DSRL32
 //#define INTERPRET_DSRA32
 
-#define INTERPRET_MADD
-#define INTERPRET_MADDU
-#define INTERPRET_MSUB
-#define INTERPRET_MSUBU
-
 //#define INTERPRET_CLO
 
 //#define INTERPRET_HILO
@@ -110,10 +105,10 @@ unsigned int decodeNInterpret();
 
 //#define INTERPRET_MFC1
 #define INTERPRET_DMFC1
-#define INTERPRET_CFC1
+//#define INTERPRET_CFC1
 #define INTERPRET_MTC1
 #define INTERPRET_DMTC1
-#define INTERPRET_CTC1
+//#define INTERPRET_CTC1
 
 //#define INTERPRET_FP_S
 //#define INTERPRET_FP_D
