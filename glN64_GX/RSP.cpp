@@ -129,24 +129,18 @@ LoadLoop:
 		WORD fraction[4][4];
 	} *n64Mat = (struct _N64Matrix *)&RDRAM[address];
 	
-	__asm__ volatile(
-		"psq_l      2, 0(%0), 1, 0 \n"
-		"ps_merge00 2, 2, 2        \n"
-		:: "r" (&recip)
-		 : "fr2", "r0");
-	
 	for(int i=0; i<4; ++i){
 		/*for(int j=0; j<4; ++j)
 			mtx[i][j] = (float)n64Mat->integer[i][j] + (float)n64Mat->fraction[i][j] * recip;*/
 		
 		__asm__ volatile(
-			"psq_l    3,   (%3*8)(%0), 0, 3 \n"
+			"psq_l    3,   (%3*8)(%0), 0, 5 \n"
 			"psq_l    4,   (%3*8)(%1), 0, 4 \n"
-			"psq_l    5, (%3*8+4)(%0), 0, 3 \n"
+			"psq_l    5, (%3*8+4)(%0), 0, 5 \n"
 			"psq_l    6, (%3*8+4)(%1), 0, 4 \n"
 			
-			"ps_madd  4, 2, 3, 4     \n"
-			"ps_madd  6, 2, 5, 6     \n"
+			"ps_add  4, 3, 4     \n"
+			"ps_add  6, 5, 6     \n"
 			
 			"psq_st   4,   (%3*16)(%2), 0, 0 \n"
 			"psq_st   6, (%3*16+8)(%2), 0, 0 \n"
