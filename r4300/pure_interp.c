@@ -53,7 +53,9 @@ extern void update_debugger();
 #ifdef PPC_DYNAREC
 #include "Invalid_Code.h"
 #define check_memory() \
-	if(dynacore) invalid_code_set(address>>12, 1);
+	if(dynacore && blocks[address>>12] && \
+	   blocks[address>>12]->code_addr[(address&0xfff)>>2]) \
+		invalid_code_set(address>>12, 1);
 #else
 #define check_memory()
 #endif
