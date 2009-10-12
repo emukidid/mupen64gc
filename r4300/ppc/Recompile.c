@@ -106,8 +106,8 @@ void recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 		next = fn->next;
 		if((fn->function->start_addr >= func->start_addr &&
 		    fn->function->start_addr <  func->end_addr) ||
-		   (fn->function->end_addr >= func->start_addr &&
-		    fn->function->end_addr <  func->end_addr))
+		   (fn->function->end_addr > func->start_addr &&
+		    fn->function->end_addr < func->end_addr))
 			RecompCache_Free(ppc_block->start_address |
 			                 fn->function->start_addr);
 	}

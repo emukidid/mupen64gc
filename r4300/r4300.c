@@ -1624,11 +1624,13 @@ void go()
      {
 	dynacore = 1;
 	//printf("dynamic recompiler\n");
-	init_blocks();
+	if(cpu_inited){
+		init_blocks();
+		cpu_inited = 0;
+	}
 #ifdef PPC_DYNAREC
 	//jump_to(0xa4000040);
-	dynarec(0xa4000040);
-	_break();
+	dynarec(interp_addr);
 #else
 	code = (void *)(actual->code+(actual->block[0x40/4].local_addr));
 	dyna_start(code);
