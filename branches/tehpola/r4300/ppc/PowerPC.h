@@ -966,7 +966,7 @@ PowerPC_instr Instruction(int opcode, ...);
 #define GEN_FRSQRTE(ppc,fd,fs) \
 	{ ppc = NEW_PPC_INSTR(); \
 	  PPC_SET_OPCODE(ppc, PPC_OPCODE_FPD); \
-	  PPC_SET_FUNC  (ppc, PPC_FUNC_FSQRTE); \
+	  PPC_SET_FUNC  (ppc, PPC_FUNC_FRSQRTE); \
 	  PPC_SET_RD    (ppc, (fd)); \
 	  PPC_SET_RB    (ppc, (fs)); }
 
