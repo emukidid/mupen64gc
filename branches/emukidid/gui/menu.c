@@ -733,7 +733,7 @@ static inline void menuStack_push(menu_item*);
 	
 	static char* toggleViLimit_func(void){
 		Timers.limitVIs = (Timers.limitVIs+1) % 3;
-		devFeatures_submenu[2].caption = &toggleViLimit_strings[Timers.limitVIs][0];
+		devFeatures_submenu[3].caption = &toggleViLimit_strings[Timers.limitVIs][0];
 		return NULL;
 	}
 
@@ -743,7 +743,7 @@ static inline void menuStack_push(menu_item*);
 			DEBUG_print("open",DBG_SDGECKOOPEN);
 		else
 			DEBUG_print("close",DBG_SDGECKOCLOSE);
-		devFeatures_submenu[3].caption = &toggleSDDebug_strings[printToSD][0];
+		devFeatures_submenu[4].caption = &toggleSDDebug_strings[printToSD][0];
 		return NULL;
 	}
 
