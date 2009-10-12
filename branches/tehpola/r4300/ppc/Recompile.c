@@ -176,6 +176,7 @@ void init_block(MIPS_instr* mips_code, PowerPC_block* ppc_block){
 	}
 	ppc_block->mips_code = mips_code;
 	
+	// FIXME: Equivalent addresses should point to the same funcs?
 	if(ppc_block->end_address < 0x80000000 || ppc_block->start_address >= 0xc0000000){	
 		unsigned long paddr;
 		
@@ -184,6 +185,7 @@ void init_block(MIPS_instr* mips_code, PowerPC_block* ppc_block){
 		if(!blocks[paddr>>12]){
 		     blocks[paddr>>12] = malloc(sizeof(PowerPC_block));
 		     blocks[paddr>>12]->code_addr = ppc_block->code_addr;
+		     blocks[paddr>>12]->funcs = NULL;
 		     blocks[paddr>>12]->start_address = paddr & ~0xFFF;
 		     blocks[paddr>>12]->end_address = (paddr & ~0xFFF) + 0x1000;
 		}
@@ -193,6 +195,7 @@ void init_block(MIPS_instr* mips_code, PowerPC_block* ppc_block){
 		if(!blocks[paddr>>12]){
 		     blocks[paddr>>12] = malloc(sizeof(PowerPC_block));
 		     blocks[paddr>>12]->code_addr = ppc_block->code_addr;
+		     blocks[paddr>>12]->funcs = NULL;
 		     blocks[paddr>>12]->start_address = paddr & ~0xFFF;
 		     blocks[paddr>>12]->end_address = (paddr & ~0xFFF) + 0x1000;
 		}
@@ -206,6 +209,7 @@ void init_block(MIPS_instr* mips_code, PowerPC_block* ppc_block){
 			if(!blocks[(start+0x20000000)>>12]){
 				blocks[(start+0x20000000)>>12] = malloc(sizeof(PowerPC_block));
 				blocks[(start+0x20000000)>>12]->code_addr = ppc_block->code_addr;
+				blocks[(start+0x20000000)>>12]->funcs = NULL;
 				blocks[(start+0x20000000)>>12]->start_address
 					= (start+0x20000000) & ~0xFFF;
 				blocks[(start+0x20000000)>>12]->end_address
@@ -218,6 +222,7 @@ void init_block(MIPS_instr* mips_code, PowerPC_block* ppc_block){
 			if (!blocks[(start-0x20000000)>>12]){
 				blocks[(start-0x20000000)>>12] = malloc(sizeof(PowerPC_block));
 				blocks[(start-0x20000000)>>12]->code_addr = ppc_block->code_addr;
+				blocks[(start-0x20000000)>>12]->funcs = NULL;
 				blocks[(start-0x20000000)>>12]->start_address
 					= (start-0x20000000) & ~0xFFF;
 				blocks[(start-0x20000000)>>12]->end_address
