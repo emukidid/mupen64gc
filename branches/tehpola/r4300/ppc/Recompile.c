@@ -28,7 +28,6 @@ static MIPS_instr*    src_first;
 static unsigned int   code_length;
 static unsigned int   addr_first;
 static unsigned int   addr_last;
-static PowerPC_instr* jump_pad;
 static jump_node    jump_table[MAX_JUMPS];
 static unsigned int current_jump;
 static PowerPC_instr** code_addr;
@@ -359,7 +358,6 @@ static int pass0(PowerPC_block* ppc_block){
 	// Zero out the jump destinations table
 	for(i=0; i<1024; ++i) isJmpDst[i] = 0;
 	// Go through each instruction and map every branch instruction's destination
-	// TODO: Make a loop breaking condition be code_addr[...] != NULL
 	for(src = src_first; (pc < addr_last >> 2); ++src, ++pc){
 		int opcode = MIPS_GET_OPCODE(*src);
 		if(opcode == MIPS_OPCODE_J || opcode == MIPS_OPCODE_JAL){
@@ -470,8 +468,6 @@ static void genJumpPad(void){
 	set_next_dst(ppc);
 	GEN_ORI(ppc, 3, 3, addr_last);
 	set_next_dst(ppc);
-	
-	jump_pad = dst;
 	
 	// return destination
 	GEN_BLR(ppc,0);

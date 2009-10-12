@@ -60,6 +60,7 @@ void start_new_block(void){
 	//   and thus whether this block begins with a delay slot
 	unget_last_src();
 	if(mips_is_jump(get_next_src())) delaySlotNext = 1;
+	else delaySlotNext = 0;
 }
 void start_new_mapping(void){
 	flushRegisters();
