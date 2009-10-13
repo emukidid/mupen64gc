@@ -3848,7 +3848,7 @@ static void genUpdateCount(void){
 // Check whether we need to take a FP unavailable exception
 static void genCheckFP(void){
 	PowerPC_instr ppc;
-	if(FP_need_check){
+	if(FP_need_check || isDelaySlot){
 		flushRegisters();
 		reset_code_addr();
 		// Move &dyna_check_cop1_unusable to ctr for call
@@ -3880,10 +3880,9 @@ static void genCheckFP(void){
 		set_next_dst(ppc);
 		GEN_BNELR(ppc, 6, 0);
 		set_next_dst(ppc);
-		// FIXME: It looks like I can't get away with this; why not?
 		// Don't check for the rest of this mapping
 		// Unless this instruction is in a delay slot
-		FP_need_check = /*isDelaySlot*/ 1;
+		FP_need_check = isDelaySlot;
 	}
 }
 
