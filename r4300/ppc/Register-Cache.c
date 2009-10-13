@@ -22,7 +22,7 @@ static int availableRegsDefault[32] = {
 	0, /* sp: leave alone! */
 	0, /* gp: leave alone! */
 	1,1,1,1,1,1,1,1, /* Volatile argument registers */
-	0,0, /* Volatile registers used for special purposes: dunno */
+	1,1, /* Volatile registers */
 	/* Non-volatile registers: using might be too costly */
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 	};
