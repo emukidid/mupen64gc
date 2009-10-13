@@ -289,7 +289,7 @@ EXPORT void CALL MoveScreen (int xpos, int ypos)
 EXPORT void CALL ProcessDList(void)
 {
 #ifdef DEBUGON
-	_break();
+//	_break();
 #endif
 
 #ifdef RSPTHREAD
@@ -304,13 +304,13 @@ EXPORT void CALL ProcessDList(void)
 	sprintf(txtbuffer,"\nPROCESS D LIST!!\n\n");
 	DEBUG_print(txtbuffer,DBG_SDGECKOPRINT);
 #endif // GLN64_SDLOG
-	VI_GX_clearEFB();
+//	VI_GX_clearEFB();
 #endif // __GX__
 	RSP_ProcessDList();
 #endif
 
 #ifdef DEBUGON
-	_break();
+//	_break();
 #endif
 
 #ifdef __GX__
