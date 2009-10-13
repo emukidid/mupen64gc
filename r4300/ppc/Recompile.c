@@ -177,7 +177,7 @@ void init_block(MIPS_instr* mips_code, PowerPC_block* ppc_block){
 	}
 	ppc_block->mips_code = mips_code;
 	
-	// FIXME: Equivalent addresses should point to the same funcs?
+	// FIXME: Equivalent addresses should point to the same code/funcs?
 	if(ppc_block->end_address < 0x80000000 || ppc_block->start_address >= 0xc0000000){	
 		unsigned long paddr;
 		
