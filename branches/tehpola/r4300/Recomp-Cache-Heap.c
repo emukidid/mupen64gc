@@ -42,14 +42,16 @@ static void heapDown(int i){
 	// While the given element is out of order
 	while(1){
 		unsigned int lru = cacheHeap[i]->func->lru;
-		CacheMetaNode* c1 = cacheHeap[HEAP_CHILD1(i)];
-		CacheMetaNode* c2 = cacheHeap[HEAP_CHILD2(i)];
+		CacheMetaNode* c1 = (HEAP_CHILD1(i) < heapSize) ?
+		                     cacheHeap[HEAP_CHILD1(i)] : NULL;
+		CacheMetaNode* c2 = (HEAP_CHILD2(i) < heapSize) ?
+		                     cacheHeap[HEAP_CHILD2(i)] : NULL;
 		// Check against the children, swapping with the min if parent isn't
-		if(HEAP_CHILD1(i) < heapSize && lru > c1->func->lru &&
-		   (HEAP_CHILD2(i) >= heapSize || c1->func->lru < c2->func->lru)){
+		if(c1 && lru > c1->func->lru &&
+		   (!c2 || c1->func->lru < c2->func->lru)){
 			heapSwap(i, HEAP_CHILD1(i));
 			i = HEAP_CHILD1(i);
-		} else if(HEAP_CHILD2(i) < heapSize && lru > c2->func->lru){
+		} else if(c2 && lru > c2->func->lru){
 			heapSwap(i, HEAP_CHILD2(i));
 			i = HEAP_CHILD2(i);
 		} else break;
@@ -112,7 +114,7 @@ static void free_func(PowerPC_func* func, unsigned int addr){
 
 static inline void update_lru(PowerPC_func* func){
 	static unsigned int nextLRU = 0;
-	if(func->lru != nextLRU-1) func->lru = nextLRU++;
+	/*if(func->lru != nextLRU-1)*/ func->lru = nextLRU++;
 	
 	if(!nextLRU){
 		// Handle nextLRU overflows
