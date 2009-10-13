@@ -74,7 +74,7 @@ int fileBrowser_libfat_readFile(fileBrowser_file* file, void* buffer, unsigned i
 }
 
 int fileBrowser_libfat_writeFile(fileBrowser_file* file, void* buffer, unsigned int length){
-	FILE* f = fopen( file->name, "rb" );
+	FILE* f = fopen( file->name, "wb" );
 	if(!f) return FILE_BROWSER_ERROR;
 	
 	fseek(f, file->offset, SEEK_SET);
@@ -86,7 +86,7 @@ int fileBrowser_libfat_writeFile(fileBrowser_file* file, void* buffer, unsigned 
 }
 
 int fileBrowser_libfat_init(fileBrowser_file* f){
-	static int inited;
+	static int inited = 0;
 	if(!inited){ fatInitDefault(); inited = 1; }
 	return 0;
 }
