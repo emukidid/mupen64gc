@@ -52,10 +52,24 @@ extern void update_debugger();
 
 #ifdef PPC_DYNAREC
 #include "Invalid_Code.h"
+
+static void invalidate_func(unsigned int addr){
+	PowerPC_block* block = blocks[address>>12];
+	PowerPC_func_node* fn;
+	for(fn = block->funcs; fn != NULL; fn = fn->next){
+		if((addr&0xffff) >= fn->function->start_addr &&
+		   (addr&0xffff) <  fn->function->end_addr){
+			RecompCache_Free(block->start_address |
+			                 fn->function->start_addr);
+			break;
+		}
+	}
+}
+
 #define check_memory() \
-	if(dynacore && blocks[address>>12] && \
+	if(dynacore && !invalid_code_get(address>>12) && \
 	   blocks[address>>12]->code_addr[(address&0xfff)>>2]) \
-		invalid_code_set(address>>12, 1);
+		invalidate_func(address); //invalid_code_set(address>>12, 1);
 #else
 #define check_memory()
 #endif
