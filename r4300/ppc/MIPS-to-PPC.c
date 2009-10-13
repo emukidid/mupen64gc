@@ -3860,9 +3860,9 @@ static void genCheckFP(void){
 		GEN_STW(ppc, 0, DYNAOFF_LR, 1);
 		set_next_dst(ppc);
 		// Load the current PC as the argument
-		GEN_LIS(ppc, 3, (get_src_pc()+4)>>16);
+		GEN_LIS(ppc, 3, get_src_pc()>>16);
 		set_next_dst(ppc);
-		GEN_ORI(ppc, 3, 3, get_src_pc()+4);
+		GEN_ORI(ppc, 3, 3, get_src_pc());
 		set_next_dst(ppc);
 		// Pass in whether this instruction is in the delay slot
 		GEN_LI(ppc, 4, 0, isDelaySlot ? 1 : 0);
