@@ -1288,36 +1288,45 @@ static int SC(MIPS_instr mips){
 
 static int SLL(MIPS_instr mips){
 	PowerPC_instr ppc;
-	int rt = mapRegister( MIPS_GET_RT(mips) );
-	GEN_SLWI(ppc,
-	         mapRegisterNew( MIPS_GET_RD(mips) ),
-	         rt,
-	         MIPS_GET_SA(mips));
-	set_next_dst(ppc);
+	
+	if(MIPS_GET_SA(mips)){
+		int rt = mapRegister( MIPS_GET_RT(mips) );
+		GEN_SLWI(ppc,
+			 mapRegisterNew( MIPS_GET_RD(mips) ),
+			 rt,
+			 MIPS_GET_SA(mips));
+		set_next_dst(ppc);
+	}
 	
 	return CONVERT_SUCCESS;
 }
 
 static int SRL(MIPS_instr mips){
 	PowerPC_instr ppc;
-	int rt = mapRegister( MIPS_GET_RT(mips) );
-	GEN_SRWI(ppc,
-	         mapRegisterNew( MIPS_GET_RD(mips) ),
-	         rt,
-	         MIPS_GET_SA(mips));
-	set_next_dst(ppc);
+	
+	if(MIPS_GET_SA(mips)){
+		int rt = mapRegister( MIPS_GET_RT(mips) );
+		GEN_SRWI(ppc,
+			 mapRegisterNew( MIPS_GET_RD(mips) ),
+			 rt,
+			 MIPS_GET_SA(mips));
+		set_next_dst(ppc);
+	}
 	
 	return CONVERT_SUCCESS;
 }
 
 static int SRA(MIPS_instr mips){
 	PowerPC_instr ppc;
-	int rt = mapRegister( MIPS_GET_RT(mips) );
-	GEN_SRAWI(ppc,
-	          mapRegisterNew( MIPS_GET_RD(mips) ),
-	          rt,
-	          MIPS_GET_SA(mips));
-	set_next_dst(ppc);
+	
+	if(MIPS_GET_SA(mips)){
+		int rt = mapRegister( MIPS_GET_RT(mips) );
+		GEN_SRAWI(ppc,
+			  mapRegisterNew( MIPS_GET_RD(mips) ),
+			  rt,
+			  MIPS_GET_SA(mips));
+		set_next_dst(ppc);
+	}
 	
 	return CONVERT_SUCCESS;
 }
@@ -1326,10 +1335,12 @@ static int SLLV(MIPS_instr mips){
 	PowerPC_instr ppc;
 	int rt = mapRegister( MIPS_GET_RT(mips) );
 	int rs = mapRegister( MIPS_GET_RS(mips) );
+	GEN_RLWINM(ppc, 0, rs, 0, 27, 31); // Mask the lower 5-bits of rs
+	set_next_dst(ppc);
 	GEN_SLW(ppc,
 	        mapRegisterNew( MIPS_GET_RD(mips) ),
 	        rt,
-	        rs);
+	        0);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -1354,10 +1365,12 @@ static int SRAV(MIPS_instr mips){
 	PowerPC_instr ppc;
 	int rt = mapRegister( MIPS_GET_RT(mips) );
 	int rs = mapRegister( MIPS_GET_RS(mips) );
+	GEN_RLWINM(ppc, 0, rs, 0, 27, 31); // Mask the lower 5-bits of rs
+	set_next_dst(ppc);
 	GEN_SRAW(ppc,
 	         mapRegisterNew( MIPS_GET_RD(mips) ),
 	         rt,
-	         rs);
+	         0);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
