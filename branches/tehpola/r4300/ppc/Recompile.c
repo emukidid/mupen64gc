@@ -38,6 +38,7 @@ static void pass2(PowerPC_block* ppc_block);
 //static void genRecompileBlock(PowerPC_block*);
 static void genJumpPad(void);
 int resizeCode(PowerPC_block* block, PowerPC_func* func, int newSize);
+void invalidate_block(PowerPC_block* ppc_block);
 
 MIPS_instr get_next_src(void) { return *(src++); }
 MIPS_instr peek_next_src(void){ return *src;     }
@@ -95,13 +96,19 @@ void recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 	
 	unsigned int max_length = addr_last - addr_first; // 4x size
 	
+	// Create a PowerPC_func for this function
 	PowerPC_func* func = malloc(sizeof(PowerPC_func));
 	func->start_addr = addr_first&0xffff;
 	func->end_addr = addr_last&0xffff;
+	// Create a corresponding PowerPC_func_node to add to ppc_block->funcs
+	PowerPC_func_node* node = malloc(sizeof(PowerPC_func_node));
+	node->function = func;
+	node->next = ppc_block->funcs;
+	ppc_block->funcs = node;
 	
-	// Checks for and removes any overlapping functions
+	// Check for and remove any overlapping functions
 	PowerPC_func_node* fn, * next;
-	for(fn = ppc_block->funcs; fn != NULL; fn = next){
+	for(fn = node->next; fn != NULL; fn = next){
 		next = fn->next;
 		if((fn->function->start_addr >= func->start_addr &&
 		    fn->function->start_addr <  func->end_addr) ||
@@ -110,11 +117,6 @@ void recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 			RecompCache_Free(ppc_block->start_address |
 			                 fn->function->start_addr);
 	}
-	
-	PowerPC_func_node* node = malloc(sizeof(PowerPC_func_node));
-	node->function = func;
-	node->next = ppc_block->funcs;
-	ppc_block->funcs = node;
 	
 #ifdef USE_RECOMP_CACHE
 	RecompCache_Alloc(max_length * sizeof(PowerPC_instr), addr, func);
