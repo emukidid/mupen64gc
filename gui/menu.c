@@ -410,6 +410,7 @@ static inline void menuStack_push(menu_item*);
 		
 		// Try loading everything
 		int result = 0;
+		saveFile_init(saveFile_dir);
 		result += loadEeprom(saveFile_dir);
 		result += loadSram(saveFile_dir);
 		result += loadMempak(saveFile_dir);
@@ -506,6 +507,7 @@ static inline void menuStack_push(menu_item*);
 		
 		// Try loading everything
 		int result = 0;
+		saveFile_init(saveFile_dir);
 		result += saveEeprom(saveFile_dir);
 		result += saveSram(saveFile_dir);
 		result += saveMempak(saveFile_dir);
