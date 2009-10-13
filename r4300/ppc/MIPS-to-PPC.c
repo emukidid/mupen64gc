@@ -1,14 +1,11 @@
 /* MIPS-to-PPC.c - convert MIPS code into PPC (take 2 1/2)
    by Mike Slegeir for Mupen64-GC
  ************************************************
-   TODO: FP comparison/branch and conversion to/from longs
-         If possible (and not too complicated), it would be nice to leave out
-           the in-place delay slot which is skipped if it is not branched to
-           (That might be tricky as you don't know whether an outside branch
-            or an interpreted branch might branch there)
+   TODO: FP conversion to/from longs and mtc1
          Optimize idle branches (generate a call to gen_interrupt)
-   FIXME: In check_delaySlot, I should check that I'm not reaching into
-            the next virtual block (physical blocks are ok)
+   FIXME: In check_delaySlot, I should check that I'm not reaching into the
+            next virtual block (physical blocks are ok)
+          Branch comparisons need to operate on 64-bit values when necessary
  */
 
 #include <string.h>
@@ -2499,12 +2496,22 @@ static int DMFC1(MIPS_instr mips){
 	
 	genCheckFP();
 	
-	int fs = mapFPR( MIPS_GET_FS(mips), 1 );
-	int rt = MIPS_GET_RT(mips);
-	invalidateRegister(rt);
+	int fs = MIPS_GET_FS(mips);
+	RegMapping rt = mapRegister64New( MIPS_GET_RT(mips) );
+	int addr = mapRegisterTemp();
+	flushFPR(fs);
 	
-	GEN_STFD(ppc, fs, rt*8, DYNAREG_REG);
+	// addr = reg_cop1_double[fs]
+	GEN_LWZ(ppc, addr, fs*4, DYNAREG_FPR_64);
 	set_next_dst(ppc);
+	// rt[hi] = *addr
+	GEN_LWZ(ppc, rt.hi, 0, addr);
+	set_next_dst(ppc);
+	// rt[lo] = *(addr+4)
+	GEN_LWZ(ppc, rt.lo, 4, addr);
+	set_next_dst(ppc);
+	
+	unmapRegisterTemp(addr);
 	
 	return CONVERT_SUCCESS;
 #endif
