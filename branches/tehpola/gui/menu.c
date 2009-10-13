@@ -17,6 +17,7 @@
 #include "../main/gc_dvd.h"
 #include "../gui/DEBUG.h"
 #include "../main/savestates.h"
+#include "../main/timers.h"
 // -- ACTUAL MENU LAYOUT --
 
 #ifdef WII
@@ -681,10 +682,17 @@ static inline void menuStack_push(menu_item*);
 	
 	char* TLBCache_dump();
 
+	extern timers Timers;
+	static char toggleViLimit_strings[3][26] =
+		{ "VI Limit: disabled",
+		  "VI Limit: enabled",
+		  "VI Limit: wait for frame" };
+	static char* toggleViLimit_func(void);
+
 #ifdef SDPRINT
-	#define NUM_DEV_FEATURES 4
+	#define NUM_DEV_FEATURES 5
 #else
-	#define NUM_DEV_FEATURES 3
+	#define NUM_DEV_FEATURES 4
 #endif
 	static menu_item devFeatures_submenu[] =
 		{{ &toggleFPS_strings[1][0],
@@ -698,6 +706,10 @@ static inline void menuStack_push(menu_item*);
 		 { "Dump TLB Cache",
 		   MENU_ATTR_NONE,
 		   { .func = TLBCache_dump }
+		  },
+		 { &toggleViLimit_strings[1][0],
+		   MENU_ATTR_NONE,
+		   { .func = toggleViLimit_func }
 		  },
 #ifdef SDPRINT
 		 { &toggleSDDebug_strings[0][0],
@@ -719,13 +731,19 @@ static inline void menuStack_push(menu_item*);
 		return NULL;
 	}
 	
+	static char* toggleViLimit_func(void){
+		Timers.limitVIs = (Timers.limitVIs+1) % 3;
+		devFeatures_submenu[3].caption = &toggleViLimit_strings[Timers.limitVIs][0];
+		return NULL;
+	}
+
 	static char* toggleSDDebug_func(void){
 		printToSD ^= 1;
 		if(printToSD)
 			DEBUG_print("open",DBG_SDGECKOOPEN);
 		else
 			DEBUG_print("close",DBG_SDGECKOCLOSE);
-		devFeatures_submenu[2].caption = &toggleSDDebug_strings[printToSD][0];
+		devFeatures_submenu[4].caption = &toggleSDDebug_strings[printToSD][0];
 		return NULL;
 	}
 
