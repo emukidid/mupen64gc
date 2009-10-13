@@ -3,6 +3,7 @@
  ************************************************
    TODO: FP conversion to/from longs and mtc1
          Optimize idle branches (generate a call to gen_interrupt)
+         Optimize instruction scheduling & reduce branch instructions
    FIXME: In check_delaySlot, I should check that I'm not reaching into the
             next virtual block (physical blocks are ok)
           Branch comparisons need to operate on 64-bit values when necessary
@@ -27,6 +28,11 @@ static void genUpdateCount(void);
 static void genCheckFP(void);
 static int inline mips_is_jump(MIPS_instr);
 void jump_to(unsigned int);
+
+#define CANT_COMPILE_DELAY() \
+	((get_src_pc()&0xFFF) == 0xFFC && \
+	 (get_src_pc() <  0x80000000 || \
+	  get_src_pc() >= 0xC0000000))
 
 static int FP_need_check;
 
@@ -246,8 +252,8 @@ static int J(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	unsigned int naddr = (MIPS_GET_LI(mips)<<2)|((get_src_pc()+4)&0xf0000000);
 	
-	if(naddr == get_src_pc()){
-		// J_IDLE
+	if(naddr == get_src_pc() || CANT_COMPILE_DELAY()){
+		// J_IDLE || virtual delay
 		genCallInterp(mips);
 		return INTERPRETED;
 	}
@@ -302,6 +308,11 @@ static int J(MIPS_instr mips){
 static int JAL(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	unsigned int naddr = (MIPS_GET_LI(mips)<<2)|((get_src_pc()+4)&0xf0000000);
+	
+	if(CANT_COMPILE_DELAY()){
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
 	
 	flushRegisters();
 	reset_code_addr();
@@ -364,9 +375,10 @@ static int JAL(MIPS_instr mips){
 static int BEQ(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	
-	if(MIPS_GET_IMMED(mips) == 0xffff &&
-	   MIPS_GET_RA(mips) == MIPS_GET_RB(mips)){
-		// BEQ_IDLE
+	if((MIPS_GET_IMMED(mips) == 0xffff &&
+	    MIPS_GET_RA(mips) == MIPS_GET_RB(mips)) ||
+	   CANT_COMPILE_DELAY()){
+		// BEQ_IDLE || virtual delay
 		genCallInterp(mips);
 		return INTERPRETED;
 	}
@@ -384,6 +396,11 @@ static int BEQ(MIPS_instr mips){
 static int BNE(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	
+	if(CANT_COMPILE_DELAY()){
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
+	
 	// cmp ra, rb
 	GEN_CMP(ppc,
 	        mapRegister(MIPS_GET_RA(mips)),
@@ -397,6 +414,11 @@ static int BNE(MIPS_instr mips){
 static int BLEZ(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	
+	if(CANT_COMPILE_DELAY()){
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
+	
 	// cmpi ra, 0
 	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 4);
 	set_next_dst(ppc);
@@ -406,6 +428,11 @@ static int BLEZ(MIPS_instr mips){
 
 static int BGTZ(MIPS_instr mips){
 	PowerPC_instr  ppc;
+	
+	if(CANT_COMPILE_DELAY()){
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
 	
 	// cmpi ra, 0
 	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 4);
@@ -542,6 +569,11 @@ static int LUI(MIPS_instr mips){
 static int BEQL(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	
+	if(CANT_COMPILE_DELAY()){
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
+	
 	// cmp ra, rb
 	GEN_CMP(ppc,
 	        mapRegister(MIPS_GET_RA(mips)),
@@ -554,6 +586,11 @@ static int BEQL(MIPS_instr mips){
 
 static int BNEL(MIPS_instr mips){
 	PowerPC_instr  ppc;
+	
+	if(CANT_COMPILE_DELAY()){
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
 	
 	// cmp ra, rb
 	GEN_CMP(ppc,
@@ -568,6 +605,11 @@ static int BNEL(MIPS_instr mips){
 static int BLEZL(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	
+	if(CANT_COMPILE_DELAY()){
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
+	
 	// cmpi ra, 0
 	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 4);
 	set_next_dst(ppc);
@@ -577,6 +619,11 @@ static int BLEZL(MIPS_instr mips){
 
 static int BGTZL(MIPS_instr mips){
 	PowerPC_instr  ppc;
+	
+	if(CANT_COMPILE_DELAY()){
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
 	
 	// cmpi ra, 0
 	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 4);
@@ -1529,6 +1576,11 @@ static int SRAV(MIPS_instr mips){
 static int JR(MIPS_instr mips){
 	PowerPC_instr ppc;
 	
+	if(CANT_COMPILE_DELAY()){
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
+	
 	flushRegisters();
 	reset_code_addr();
 	
@@ -1559,6 +1611,11 @@ static int JR(MIPS_instr mips){
 static int JALR(MIPS_instr mips){
 	PowerPC_instr  ppc;
 	
+	if(CANT_COMPILE_DELAY()){
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
+	
 	flushRegisters();
 	reset_code_addr();
 	
@@ -1569,8 +1626,6 @@ static int JALR(MIPS_instr mips){
 	
 	genUpdateCount();
 	
-	// TODO: If I can figure out using the LR,
-	//         this might only be necessary for interp
 	// Set LR to next instruction
 	int rd = mapRegisterNew(MIPS_GET_RD(mips));
 	// lis	lr, pc@ha(0)
@@ -2415,8 +2470,8 @@ static int REGIMM(MIPS_instr mips){
 	int likely = which & 2;
 	int link   = which & 16;
 	
-	if(MIPS_GET_IMMED(mips) == 0xffff){
-		// REGIMM_IDLE
+	if(MIPS_GET_IMMED(mips) == 0xffff || CANT_COMPILE_DELAY()){
+		// REGIMM_IDLE || virtual delay
 		genCallInterp(mips);
 		return INTERPRETED;
 	}
@@ -2612,6 +2667,11 @@ static int BC(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_BC
+	
+	if(CANT_COMPILE_DELAY()){
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
 	
 	genCheckFP();
 	
@@ -3755,13 +3815,6 @@ static void genCallInterp(MIPS_instr mips){
 	set_next_dst(ppc);
 	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
 	set_next_dst(ppc);
-#if 0
-	// Load the address of decodeNInterpret
-	GEN_LIS(ppc, 3, ((unsigned int)decodeNInterpret)>>16);
-	set_next_dst(ppc);
-	GEN_ORI(ppc, 3, 3, (unsigned int)decodeNInterpret);
-	set_next_dst(ppc);
-#endif
 	// Move the address of decodeNInterpret to ctr for a bctr
 	GEN_MTCTR(ppc, DYNAREG_INTERP);
 	set_next_dst(ppc);
