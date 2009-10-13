@@ -2578,9 +2578,9 @@ static int DMTC1(MIPS_instr mips){
 	
 	GEN_LWZ(ppc, addr, fs*4, DYNAREG_FPR_64);
 	set_next_dst(ppc);
-	GEN_STW(ppc, rt.lo, 0, addr);
+	GEN_STW(ppc, rt.hi, 0, addr);
 	set_next_dst(ppc);
-	GEN_STW(ppc, rt.hi, 4, addr);
+	GEN_STW(ppc, rt.lo, 4, addr);
 	set_next_dst(ppc);
 	
 	unmapRegisterTemp(addr);
