@@ -205,7 +205,7 @@ static int branch(int offset, condition cond, int link, int likely){
 	// Let's still recompile the delay slot in place in case its branched to
 	// Unless the delay slot is in the next block, in which case there's nothing to skip
 	//   Testing is_j_out with an offset of 0 checks whether the delay slot is out
-	if(delaySlot && !is_j_out(0, 0)){
+	if(delaySlot && is_j_dst() && !is_j_out(0, 0)){
 		// Step over the already executed delay slot if the branch isn't taken
 		// b delaySlot+1
 		GEN_B(ppc, delaySlot+1, 0, 0);
@@ -286,7 +286,7 @@ static int J(MIPS_instr mips){
 #endif
 	
 	// Let's still recompile the delay slot in place in case its branched to
-	if(delaySlot){ unget_last_src(); delaySlotNext = 1; }
+	if(delaySlot && is_j_dst()){ unget_last_src(); delaySlotNext = 2; }
 	else nop_ignored();
 	
 #ifdef INTERPRET_J
@@ -348,7 +348,7 @@ static int JAL(MIPS_instr mips){
 #endif
 	
 	// Let's still recompile the delay slot in place in case its branched to
-	if(delaySlot){
+	if(delaySlot && is_j_dst()){
 		unget_last_src();
 		delaySlotNext = 1;
 		// TODO
@@ -1551,7 +1551,7 @@ static int JR(MIPS_instr mips){
 #endif
 	
 	// Let's still recompile the delay slot in place in case its branched to
-	if(delaySlot){ unget_last_src(); delaySlotNext = 1; }
+	if(delaySlot && is_j_dst()){ unget_last_src(); delaySlotNext = 2; }
 	else nop_ignored();
 	
 #ifdef INTERPRET_JR
@@ -1594,7 +1594,7 @@ static int JALR(MIPS_instr mips){
 #endif
 	
 	// Let's still recompile the delay slot in place in case its branched to
-	if(delaySlot){
+	if(delaySlot && is_j_dst()){
 		unget_last_src();
 		delaySlotNext = 1;
 		// TODO
