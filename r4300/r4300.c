@@ -1625,6 +1625,7 @@ void go()
 	dynacore = 1;
 	//printf("dynamic recompiler\n");
 	if(cpu_inited){
+		RecompCache_Init();
 		init_blocks();
 		cpu_inited = 0;
 	}
