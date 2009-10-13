@@ -488,7 +488,7 @@ inline void TransformVertex( float vtx[4], float mtx[4][4] )//, float perspNorm 
 	: /* no output */
 	: "S"(vtx), "b"(mtx)
 	: "memory" );
-#elif defined(GEKKO)
+#elif defined(GEKKO) // X86_ASM
 	
 	__asm__ volatile(
 		"psq_l      2, 0(%0), 1, 0 \n" // fr2 = Vj,  1.0f
@@ -528,7 +528,7 @@ inline void TransformVertex( float vtx[4], float mtx[4][4] )//, float perspNorm 
 		:  "fr2", "fr3", "fr4", "fr5", "fr6",
 		   "r0", "memory");
 	
-# else // X86_ASM
+# else // GEKKO
 	float x, y, z, w;
 	x = vtx[0];
 	y = vtx[1];
@@ -555,7 +555,7 @@ inline void TransformVertex( float vtx[4], float mtx[4][4] )//, float perspNorm 
 	vtx[1] += mtx[3][1];
 	vtx[2] += mtx[3][2];
 	vtx[3] += mtx[3][3];
-# endif // X86_ASM
+# endif // !( X86_ASM || GEKKO )
 #endif // __LINUX__
 }
 
@@ -642,7 +642,7 @@ inline void TransformVector( float vec[3], float mtx[4][4] )
 	: "S"(vec), "b"(mtx)
 	: "memory" );
 
-#elif defined(GEKKO)
+#elif defined(GEKKO) // X86_ASM
 	
 	__asm__ volatile(
 		"psq_l      2, 0(%0), 1, 0 \n" // fr2 = Vj,  1.0f
@@ -676,7 +676,7 @@ inline void TransformVector( float vec[3], float mtx[4][4] )
 		:  "fr2", "fr3", "fr4", "fr5", "fr6",
 		   "r0", "memory");
 
-# else // X86_ASM
+# else // GEKKO
 	vec[0] = mtx[0][0] * vec[0]
 		   + mtx[1][0] * vec[1]
 		   + mtx[2][0] * vec[2];
@@ -686,7 +686,7 @@ inline void TransformVector( float vec[3], float mtx[4][4] )
 	vec[2] = mtx[0][2] * vec[0]
 		   + mtx[1][2] * vec[1]
 		   + mtx[2][2] * vec[2];
-# endif // !X86_ASM
+# endif // !( X86_ASM || GEKKO )
 #endif // __LINUX__
 }
 
