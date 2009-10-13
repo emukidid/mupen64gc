@@ -15,6 +15,7 @@ extern unsigned long instructionCount;
 extern void (*interp_ops[64])(void);
 inline unsigned long update_invalid_addr(unsigned long addr);
 unsigned int dyna_check_cop1_unusable(unsigned int, int);
+unsigned int dyna_mem(unsigned int, unsigned int, memType);
 
 int noCheckInterrupt = 0;
 
@@ -43,7 +44,7 @@ inline unsigned int dyna_run(unsigned int (*code)(void)){
 		"mr	24, %9    \n"
 		:: "r" (reg), "r" (decodeNInterpret),
 		   "r" (dyna_update_count), "r" (&last_addr),
-		   "r" (rdram), "r" (SP_DMEM),
+		   "r" (rdram), "r" (dyna_mem),
 		   "r" (reg_cop1_simple), "r" (reg_cop1_double),
 		   "r" (&FCR31), "r" (dyna_check_cop1_unusable)
 		: "14", "15", "16", "17", "18", "19", "20", "21",
@@ -149,5 +150,41 @@ unsigned int dyna_check_cop1_unusable(unsigned int pc, int isDelaySlot){
 		return interp_addr;
 	} else
 		return 0;
+}
+
+unsigned int dyna_mem(unsigned int value, unsigned int addr, memType type){
+	static unsigned long long dyna_rdword;
+	
+	dyna_rdword = value;
+	address = addr;
+	rdword = &dyna_rdword;
+	
+	switch(type){
+		case MEM_LW:
+			read_word_in_memory();
+			break;
+		case MEM_LH:
+		case MEM_LHU:
+			read_hword_in_memory();
+			break;
+		case MEM_LB:
+		case MEM_LBU:
+			read_byte_in_memory();
+			break;
+		case MEM_SW:
+			write_word_in_memory();
+			break;
+		case MEM_SH:
+			write_hword_in_memory();
+			break;
+		case MEM_SB:
+			write_byte_in_memory();
+			break;
+		default:
+			stop = 1;
+			break;
+	}
+	
+	return (unsigned int)dyna_rdword;
 }
 

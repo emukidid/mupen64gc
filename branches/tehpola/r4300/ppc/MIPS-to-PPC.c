@@ -642,59 +642,73 @@ static int LB(MIPS_instr mips){
 	return INTERPRETED;
 #else // INTERPRET_LB
 	
-	// Recompile accesses to stack pointer
-	if(MIPS_GET_RS(mips) == MIPS_REG_SP){
-		int base = mapRegister( MIPS_GET_RS(mips) );
-		int rd   = mapRegisterNew( MIPS_GET_RT(mips) );
-		int addr = mapRegisterTemp();
-		
-		// If base >> 16 != 0xa400
-		GEN_SRAWI(ppc, 0, base, 16);
-		set_next_dst(ppc);
-		GEN_CMPI(ppc, 0, 0xa400, 1);
-		set_next_dst(ppc);
-		GEN_BEQ(ppc, 1, 4, 0, 0);
-		set_next_dst(ppc);
-		
-		// Use rdram
+	flushRegisters();
+	reset_code_addr();
+	
+	int base = mapRegister( MIPS_GET_RS(mips) ); // r3 = addr
+	
+	invalidateRegisters();
+	
+	// If (base >> 16) & 0xDF80 == 0x8000
+	GEN_SRWI(ppc, 0, base, 16);
+	set_next_dst(ppc);
+	GEN_ANDI(ppc, 0, 0, 0xDF80);
+	set_next_dst(ppc);
+	GEN_CMPLI(ppc, 0, 0x8000, 1);
+	set_next_dst(ppc);
+	GEN_BNE(ppc, 1, 5, 0, 0);
+	set_next_dst(ppc);
+	
+	// Use rdram
 #ifdef USE_EXPANSION
-		// Mask sp with 0x007FFFFF
-		GEN_RLWINM(ppc, addr, base, 0, 9, 31);
-		set_next_dst(ppc);
+	// Mask sp with 0x007FFFFF
+	GEN_RLWINM(ppc, base, base, 0, 9, 31);
+	set_next_dst(ppc);
 #else
-		// Mask sp with 0x003FFFFF
-		GEN_RLWINM(ppc, addr, base, 0, 10, 31);
-		set_next_dst(ppc);
+	// Mask sp with 0x003FFFFF
+	GEN_RLWINM(ppc, base, base, 0, 10, 31);
+	set_next_dst(ppc);
 #endif
-		// Add rdram pointer
-		GEN_ADD(ppc, addr, DYNAREG_RDRAM, addr);
-		set_next_dst(ppc);
-		// Skip over else
-		GEN_B(ppc, 3, 0, 0);
-		set_next_dst(ppc);
-		
-		// else use SP_DMEM
-		// Mask sp with 0x00001FFF
-		GEN_RLWINM(ppc, addr, base, 0, 19, 31);
-		set_next_dst(ppc);
-		// Add SP_DMEM pointer
-		GEN_ADD(ppc, addr, DYNAREG_SPDMEM, addr);
-		set_next_dst(ppc);
-		
-		// Perform the actual load
-		GEN_LBZ(ppc, rd, MIPS_GET_IMMED(mips), addr);
-		set_next_dst(ppc);
-		// Sign extend the byte
-		GEN_EXTSB(ppc, rd, rd);
-		set_next_dst(ppc);
-		
-		unmapRegisterTemp(addr);
-		
-		return CONVERT_SUCCESS;
-	} else {
-		genCallInterp(mips);
-		return INTERPRETED;
-	}
+	// Add rdram pointer
+	GEN_ADD(ppc, base, DYNAREG_RDRAM, base);
+	set_next_dst(ppc);
+	// Perform the actual load
+	GEN_LBZ(ppc, 3, MIPS_GET_IMMED(mips), base);
+	set_next_dst(ppc);
+	// Skip over else
+	GEN_B(ppc, 9, 0, 0);
+	set_next_dst(ppc);
+	
+	// mtctr DYNAREG_RWMEM
+	GEN_MTCTR(ppc, DYNAREG_RWMEM);
+	set_next_dst(ppc);
+	// save lr
+	GEN_MFLR(ppc, 0);
+	set_next_dst(ppc);
+	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	// addr = base + immed
+	GEN_ADDI(ppc, 4, base, MIPS_GET_IMMED(mips));
+	set_next_dst(ppc);
+	// type = MEM_LB
+	GEN_LI(ppc, 5, 0, MEM_LB);
+	set_next_dst(ppc);
+	// call dyna_mem
+	GEN_BCTRL(ppc);
+	set_next_dst(ppc);
+	// restore lr
+	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	GEN_MTLR(ppc, 0);
+	set_next_dst(ppc);
+	
+	mapRegisterNew( MIPS_GET_RT(mips) ); // rt = r3
+	
+	// extsb rt
+	GEN_EXTSB(ppc, 3, 3);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -705,56 +719,72 @@ static int LH(MIPS_instr mips){
 	return INTERPRETED;
 #else // INTERPRET_LH
 	
-	// Recompile accesses to stack pointer
-	if(MIPS_GET_RS(mips) == MIPS_REG_SP){
-		int base = mapRegister( MIPS_GET_RS(mips) );
-		int rd   = mapRegisterNew( MIPS_GET_RT(mips) );
-		int addr = mapRegisterTemp();
-		
-		// If base >> 16 != 0xa400
-		GEN_SRAWI(ppc, 0, base, 16);
-		set_next_dst(ppc);
-		GEN_CMPI(ppc, 0, 0xa400, 1);
-		set_next_dst(ppc);
-		GEN_BEQ(ppc, 1, 4, 0, 0);
-		set_next_dst(ppc);
-		
-		// Use rdram
+	flushRegisters();
+	reset_code_addr();
+	
+	int base = mapRegister( MIPS_GET_RS(mips) ); // r3 = addr
+	
+	invalidateRegisters();
+	
+	// If (base >> 16) & 0xDF80 == 0x8000
+	GEN_SRWI(ppc, 0, base, 16);
+	set_next_dst(ppc);
+	GEN_ANDI(ppc, 0, 0, 0xDF80);
+	set_next_dst(ppc);
+	GEN_CMPLI(ppc, 0, 0x8000, 1);
+	set_next_dst(ppc);
+	GEN_BNE(ppc, 1, 5, 0, 0);
+	set_next_dst(ppc);
+	
+	// Use rdram
 #ifdef USE_EXPANSION
-		// Mask sp with 0x007FFFFF
-		GEN_RLWINM(ppc, addr, base, 0, 9, 31);
-		set_next_dst(ppc);
+	// Mask sp with 0x007FFFFF
+	GEN_RLWINM(ppc, base, base, 0, 9, 31);
+	set_next_dst(ppc);
 #else
-		// Mask sp with 0x003FFFFF
-		GEN_RLWINM(ppc, addr, base, 0, 10, 31);
-		set_next_dst(ppc);
+	// Mask sp with 0x003FFFFF
+	GEN_RLWINM(ppc, base, base, 0, 10, 31);
+	set_next_dst(ppc);
 #endif
-		// Add rdram pointer
-		GEN_ADD(ppc, addr, DYNAREG_RDRAM, addr);
-		set_next_dst(ppc);
-		// Skip over else
-		GEN_B(ppc, 3, 0, 0);
-		set_next_dst(ppc);
-		
-		// else use SP_DMEM
-		// Mask sp with 0x00001FFF
-		GEN_RLWINM(ppc, addr, base, 0, 19, 31);
-		set_next_dst(ppc);
-		// Add SP_DMEM pointer
-		GEN_ADD(ppc, addr, DYNAREG_SPDMEM, addr);
-		set_next_dst(ppc);
-		
-		// Perform the actual load
-		GEN_LHA(ppc, rd, MIPS_GET_IMMED(mips), addr);
-		set_next_dst(ppc);
-		
-		unmapRegisterTemp(addr);
-		
-		return CONVERT_SUCCESS;
-	} else {
-		genCallInterp(mips);
-		return INTERPRETED;
-	}
+	// Add rdram pointer
+	GEN_ADD(ppc, base, DYNAREG_RDRAM, base);
+	set_next_dst(ppc);
+	// Perform the actual load
+	GEN_LHA(ppc, 3, MIPS_GET_IMMED(mips), base);
+	set_next_dst(ppc);
+	// Skip over else
+	GEN_B(ppc, 10, 0, 0);
+	set_next_dst(ppc);
+	
+	// mtctr DYNAREG_RWMEM
+	GEN_MTCTR(ppc, DYNAREG_RWMEM);
+	set_next_dst(ppc);
+	// save lr
+	GEN_MFLR(ppc, 0);
+	set_next_dst(ppc);
+	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	// addr = base + immed
+	GEN_ADDI(ppc, 4, base, MIPS_GET_IMMED(mips));
+	set_next_dst(ppc);
+	// type = MEM_LH
+	GEN_LI(ppc, 5, 0, MEM_LH);
+	set_next_dst(ppc);
+	// call dyna_mem
+	GEN_BCTRL(ppc);
+	set_next_dst(ppc);
+	// restore lr
+	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	GEN_MTLR(ppc, 0);
+	set_next_dst(ppc);
+	// extsh r3
+	GEN_EXTSH(ppc, 3, 3);
+	set_next_dst(ppc);
+	
+	mapRegisterNew( MIPS_GET_RT(mips) ); // rt = r3
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -776,56 +806,69 @@ static int LW(MIPS_instr mips){
 	return INTERPRETED;
 #else // INTERPRET_LW
 	
-	// Recompile accesses to stack pointer
-	if(MIPS_GET_RS(mips) == MIPS_REG_SP){
-		int base = mapRegister( MIPS_GET_RS(mips) );
-		int rd   = mapRegisterNew( MIPS_GET_RT(mips) );
-		int addr = mapRegisterTemp();
-		
-		// If base >> 16 != 0xa400
-		GEN_SRAWI(ppc, 0, base, 16);
-		set_next_dst(ppc);
-		GEN_CMPI(ppc, 0, 0xa400, 1);
-		set_next_dst(ppc);
-		GEN_BEQ(ppc, 1, 4, 0, 0);
-		set_next_dst(ppc);
-		
-		// Use rdram
+	flushRegisters();
+	reset_code_addr();
+	
+	int base = mapRegister( MIPS_GET_RS(mips) ); // r3 = addr
+	
+	invalidateRegisters();
+	
+	// If (base >> 16) & 0xDF80 == 0x8000
+	GEN_SRWI(ppc, 0, base, 16);
+	set_next_dst(ppc);
+	GEN_ANDI(ppc, 0, 0, 0xDF80);
+	set_next_dst(ppc);
+	GEN_CMPLI(ppc, 0, 0x8000, 1);
+	set_next_dst(ppc);
+	GEN_BNE(ppc, 1, 5, 0, 0);
+	set_next_dst(ppc);
+	
+	// Use rdram
 #ifdef USE_EXPANSION
-		// Mask sp with 0x007FFFFF
-		GEN_RLWINM(ppc, addr, base, 0, 9, 31);
-		set_next_dst(ppc);
+	// Mask sp with 0x007FFFFF
+	GEN_RLWINM(ppc, base, base, 0, 9, 31);
+	set_next_dst(ppc);
 #else
-		// Mask sp with 0x003FFFFF
-		GEN_RLWINM(ppc, addr, base, 0, 10, 31);
-		set_next_dst(ppc);
+	// Mask sp with 0x003FFFFF
+	GEN_RLWINM(ppc, base, base, 0, 10, 31);
+	set_next_dst(ppc);
 #endif
-		// Add rdram pointer
-		GEN_ADD(ppc, addr, DYNAREG_RDRAM, addr);
-		set_next_dst(ppc);
-		// Skip over else
-		GEN_B(ppc, 3, 0, 0);
-		set_next_dst(ppc);
-		
-		// else use SP_DMEM
-		// Mask sp with 0x00001FFF
-		GEN_RLWINM(ppc, addr, base, 0, 19, 31);
-		set_next_dst(ppc);
-		// Add SP_DMEM pointer
-		GEN_ADD(ppc, addr, DYNAREG_SPDMEM, addr);
-		set_next_dst(ppc);
-		
-		// Perform the actual load
-		GEN_LWZ(ppc, rd, MIPS_GET_IMMED(mips), addr);
-		set_next_dst(ppc);
-		
-		unmapRegisterTemp(addr);
-		
-		return CONVERT_SUCCESS;
-	} else {
-		genCallInterp(mips);
-		return INTERPRETED;
-	}
+	// Add rdram pointer
+	GEN_ADD(ppc, base, DYNAREG_RDRAM, base);
+	set_next_dst(ppc);
+	// Perform the actual load
+	GEN_LWZ(ppc, 3, MIPS_GET_IMMED(mips), base);
+	set_next_dst(ppc);
+	// Skip over else
+	GEN_B(ppc, 9, 0, 0);
+	set_next_dst(ppc);
+	
+	// mtctr DYNAREG_RWMEM
+	GEN_MTCTR(ppc, DYNAREG_RWMEM);
+	set_next_dst(ppc);
+	// save lr
+	GEN_MFLR(ppc, 0);
+	set_next_dst(ppc);
+	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	// addr = base + immed
+	GEN_ADDI(ppc, 4, base, MIPS_GET_IMMED(mips));
+	set_next_dst(ppc);
+	// type = MEM_LW
+	GEN_LI(ppc, 5, 0, MEM_LW);
+	set_next_dst(ppc);
+	// call dyna_mem
+	GEN_BCTRL(ppc);
+	set_next_dst(ppc);
+	// restore lr
+	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	GEN_MTLR(ppc, 0);
+	set_next_dst(ppc);
+	
+	mapRegisterNew( MIPS_GET_RT(mips) ); // rt = r3
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -835,56 +878,70 @@ static int LBU(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_LBU
-	// Recompile accesses to stack pointer
-	if(MIPS_GET_RS(mips) == MIPS_REG_SP){
-		int base = mapRegister( MIPS_GET_RS(mips) );
-		int rd   = mapRegisterNew( MIPS_GET_RT(mips) );
-		int addr = mapRegisterTemp();
-		
-		// If base >> 16 != 0xa400
-		GEN_SRAWI(ppc, 0, base, 16);
-		set_next_dst(ppc);
-		GEN_CMPI(ppc, 0, 0xa400, 1);
-		set_next_dst(ppc);
-		GEN_BEQ(ppc, 1, 4, 0, 0);
-		set_next_dst(ppc);
-		
-		// Use rdram
+	
+	flushRegisters();
+	reset_code_addr();
+	
+	int base = mapRegister( MIPS_GET_RS(mips) ); // r3 = addr
+	
+	invalidateRegisters();
+	
+	// If (base >> 16) & 0xDF80 == 0x8000
+	GEN_SRWI(ppc, 0, base, 16);
+	set_next_dst(ppc);
+	GEN_ANDI(ppc, 0, 0, 0xDF80);
+	set_next_dst(ppc);
+	GEN_CMPLI(ppc, 0, 0x8000, 1);
+	set_next_dst(ppc);
+	GEN_BNE(ppc, 1, 5, 0, 0);
+	set_next_dst(ppc);
+	
+	// Use rdram
 #ifdef USE_EXPANSION
-		// Mask sp with 0x007FFFFF
-		GEN_RLWINM(ppc, addr, base, 0, 9, 31);
-		set_next_dst(ppc);
+	// Mask sp with 0x007FFFFF
+	GEN_RLWINM(ppc, base, base, 0, 9, 31);
+	set_next_dst(ppc);
 #else
-		// Mask sp with 0x003FFFFF
-		GEN_RLWINM(ppc, addr, base, 0, 10, 31);
-		set_next_dst(ppc);
+	// Mask sp with 0x003FFFFF
+	GEN_RLWINM(ppc, base, base, 0, 10, 31);
+	set_next_dst(ppc);
 #endif
-		// Add rdram pointer
-		GEN_ADD(ppc, addr, DYNAREG_RDRAM, addr);
-		set_next_dst(ppc);
-		// Skip over else
-		GEN_B(ppc, 3, 0, 0);
-		set_next_dst(ppc);
-		
-		// else use SP_DMEM
-		// Mask sp with 0x00001FFF
-		GEN_RLWINM(ppc, addr, base, 0, 19, 31);
-		set_next_dst(ppc);
-		// Add SP_DMEM pointer
-		GEN_ADD(ppc, addr, DYNAREG_SPDMEM, addr);
-		set_next_dst(ppc);
-		
-		// Perform the actual load
-		GEN_LBZ(ppc, rd, MIPS_GET_IMMED(mips), addr);
-		set_next_dst(ppc);
-		
-		unmapRegisterTemp(addr);
-		
-		return CONVERT_SUCCESS;
-	} else {
-		genCallInterp(mips);
-		return INTERPRETED;
-	}
+	// Add rdram pointer
+	GEN_ADD(ppc, base, DYNAREG_RDRAM, base);
+	set_next_dst(ppc);
+	// Perform the actual load
+	GEN_LBZ(ppc, 3, MIPS_GET_IMMED(mips), base);
+	set_next_dst(ppc);
+	// Skip over else
+	GEN_B(ppc, 9, 0, 0);
+	set_next_dst(ppc);
+	
+	// mtctr DYNAREG_RWMEM
+	GEN_MTCTR(ppc, DYNAREG_RWMEM);
+	set_next_dst(ppc);
+	// save lr
+	GEN_MFLR(ppc, 0);
+	set_next_dst(ppc);
+	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	// addr = base + immed
+	GEN_ADDI(ppc, 4, base, MIPS_GET_IMMED(mips));
+	set_next_dst(ppc);
+	// type = MEM_LBU
+	GEN_LI(ppc, 5, 0, MEM_LBU);
+	set_next_dst(ppc);
+	// call dyna_mem
+	GEN_BCTRL(ppc);
+	set_next_dst(ppc);
+	// restore lr
+	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	GEN_MTLR(ppc, 0);
+	set_next_dst(ppc);
+	
+	mapRegisterNew( MIPS_GET_RT(mips) ); // rt = r3
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -894,56 +951,70 @@ static int LHU(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_LHU
-	// Recompile accesses to stack pointer
-	if(MIPS_GET_RS(mips) == MIPS_REG_SP){
-		int base = mapRegister( MIPS_GET_RS(mips) );
-		int rd   = mapRegisterNew( MIPS_GET_RT(mips) );
-		int addr = mapRegisterTemp();
-		
-		// If base >> 16 != 0xa400
-		GEN_SRAWI(ppc, 0, base, 16);
-		set_next_dst(ppc);
-		GEN_CMPI(ppc, 0, 0xa400, 1);
-		set_next_dst(ppc);
-		GEN_BEQ(ppc, 1, 4, 0, 0);
-		set_next_dst(ppc);
-		
-		// Use rdram
+	
+	flushRegisters();
+	reset_code_addr();
+	
+	int base = mapRegister( MIPS_GET_RS(mips) ); // r3 = addr
+	
+	invalidateRegisters();
+	
+	// If (base >> 16) & 0xDF80 == 0x8000
+	GEN_SRWI(ppc, 0, base, 16);
+	set_next_dst(ppc);
+	GEN_ANDI(ppc, 0, 0, 0xDF80);
+	set_next_dst(ppc);
+	GEN_CMPLI(ppc, 0, 0x8000, 1);
+	set_next_dst(ppc);
+	GEN_BNE(ppc, 1, 5, 0, 0);
+	set_next_dst(ppc);
+	
+	// Use rdram
 #ifdef USE_EXPANSION
-		// Mask sp with 0x007FFFFF
-		GEN_RLWINM(ppc, addr, base, 0, 9, 31);
-		set_next_dst(ppc);
+	// Mask sp with 0x007FFFFF
+	GEN_RLWINM(ppc, base, base, 0, 9, 31);
+	set_next_dst(ppc);
 #else
-		// Mask sp with 0x003FFFFF
-		GEN_RLWINM(ppc, addr, base, 0, 10, 31);
-		set_next_dst(ppc);
+	// Mask sp with 0x003FFFFF
+	GEN_RLWINM(ppc, base, base, 0, 10, 31);
+	set_next_dst(ppc);
 #endif
-		// Add rdram pointer
-		GEN_ADD(ppc, addr, DYNAREG_RDRAM, addr);
-		set_next_dst(ppc);
-		// Skip over else
-		GEN_B(ppc, 3, 0, 0);
-		set_next_dst(ppc);
-		
-		// else use SP_DMEM
-		// Mask sp with 0x00001FFF
-		GEN_RLWINM(ppc, addr, base, 0, 19, 31);
-		set_next_dst(ppc);
-		// Add SP_DMEM pointer
-		GEN_ADD(ppc, addr, DYNAREG_SPDMEM, addr);
-		set_next_dst(ppc);
-		
-		// Perform the actual load
-		GEN_LHZ(ppc, rd, MIPS_GET_IMMED(mips), addr);
-		set_next_dst(ppc);
-		
-		unmapRegisterTemp(addr);
-		
-		return CONVERT_SUCCESS;
-	} else {
-		genCallInterp(mips);
-		return INTERPRETED;
-	}
+	// Add rdram pointer
+	GEN_ADD(ppc, base, DYNAREG_RDRAM, base);
+	set_next_dst(ppc);
+	// Perform the actual load
+	GEN_LHZ(ppc, 3, MIPS_GET_IMMED(mips), base);
+	set_next_dst(ppc);
+	// Skip over else
+	GEN_B(ppc, 9, 0, 0);
+	set_next_dst(ppc);
+	
+	// mtctr DYNAREG_RWMEM
+	GEN_MTCTR(ppc, DYNAREG_RWMEM);
+	set_next_dst(ppc);
+	// save lr
+	GEN_MFLR(ppc, 0);
+	set_next_dst(ppc);
+	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	// addr = base + immed
+	GEN_ADDI(ppc, 4, base, MIPS_GET_IMMED(mips));
+	set_next_dst(ppc);
+	// type = MEM_LHU
+	GEN_LI(ppc, 5, 0, MEM_LHU);
+	set_next_dst(ppc);
+	// call dyna_mem
+	GEN_BCTRL(ppc);
+	set_next_dst(ppc);
+	// restore lr
+	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	GEN_MTLR(ppc, 0);
+	set_next_dst(ppc);
+	
+	mapRegisterNew( MIPS_GET_RT(mips) ); // rt = r3
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -976,56 +1047,68 @@ static int SB(MIPS_instr mips){
 	return INTERPRETED;
 #else // INTERPRET_SB
 	
-	// Recompile accesses to stack pointer
-	if(MIPS_GET_RS(mips) == MIPS_REG_SP){
-		int base = mapRegister( MIPS_GET_RS(mips) );
-		int rd   = mapRegister( MIPS_GET_RT(mips) );
-		int addr = mapRegisterTemp();
-		
-		// If base >> 16 != 0xa400
-		GEN_SRAWI(ppc, 0, base, 16);
-		set_next_dst(ppc);
-		GEN_CMPI(ppc, 0, 0xa400, 1);
-		set_next_dst(ppc);
-		GEN_BEQ(ppc, 1, 4, 0, 0);
-		set_next_dst(ppc);
-		
-		// Use rdram
+	flushRegisters();
+	reset_code_addr();
+	
+	int rd   = mapRegister( MIPS_GET_RT(mips) ); // r3 = value
+	int base = mapRegister( MIPS_GET_RS(mips) ); // r4 = addr
+	
+	invalidateRegisters();
+	
+	// If (base >> 16) & 0xDF80 == 0x8000
+	GEN_SRWI(ppc, 0, base, 16);
+	set_next_dst(ppc);
+	GEN_ANDI(ppc, 0, 0, 0xDF80);
+	set_next_dst(ppc);
+	GEN_CMPLI(ppc, 0, 0x8000, 1);
+	set_next_dst(ppc);
+	GEN_BNE(ppc, 1, 5, 0, 0);
+	set_next_dst(ppc);
+	
+	// Use rdram
 #ifdef USE_EXPANSION
-		// Mask sp with 0x007FFFFF
-		GEN_RLWINM(ppc, addr, base, 0, 9, 31);
-		set_next_dst(ppc);
+	// Mask sp with 0x007FFFFF
+	GEN_RLWINM(ppc, base, base, 0, 9, 31);
+	set_next_dst(ppc);
 #else
-		// Mask sp with 0x003FFFFF
-		GEN_RLWINM(ppc, addr, base, 0, 10, 31);
-		set_next_dst(ppc);
+	// Mask sp with 0x003FFFFF
+	GEN_RLWINM(ppc, base, base, 0, 10, 31);
+	set_next_dst(ppc);
 #endif
-		// Add rdram pointer
-		GEN_ADD(ppc, addr, DYNAREG_RDRAM, addr);
-		set_next_dst(ppc);
-		// Skip over else
-		GEN_B(ppc, 3, 0, 0);
-		set_next_dst(ppc);
-		
-		// else use SP_DMEM
-		// Mask sp with 0x00001FFF
-		GEN_RLWINM(ppc, addr, base, 0, 19, 31);
-		set_next_dst(ppc);
-		// Add SP_DMEM pointer
-		GEN_ADD(ppc, addr, DYNAREG_SPDMEM, addr);
-		set_next_dst(ppc);
-		
-		// Perform the actual save
-		GEN_STB(ppc, rd, MIPS_GET_IMMED(mips), addr);
-		set_next_dst(ppc);
-		
-		unmapRegisterTemp(addr);
-		
-		return CONVERT_SUCCESS;
-	} else {
-		genCallInterp(mips);
-		return INTERPRETED;
-	}
+	// Add rdram pointer
+	GEN_ADD(ppc, base, DYNAREG_RDRAM, base);
+	set_next_dst(ppc);
+	// Perform the actual save
+	GEN_STB(ppc, rd, MIPS_GET_IMMED(mips), base);
+	set_next_dst(ppc);
+	// Skip over else
+	GEN_B(ppc, 9, 0, 0);
+	set_next_dst(ppc);
+	
+	// mtctr DYNAREG_RWMEM
+	GEN_MTCTR(ppc, DYNAREG_RWMEM);
+	set_next_dst(ppc);
+	// save lr
+	GEN_MFLR(ppc, 0);
+	set_next_dst(ppc);
+	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	// addr = base + immed
+	GEN_ADDI(ppc, base, base, MIPS_GET_IMMED(mips));
+	set_next_dst(ppc);
+	// type = MEM_SB
+	GEN_LI(ppc, 5, 0, MEM_SB);
+	set_next_dst(ppc);
+	// call dyna_mem
+	GEN_BCTRL(ppc);
+	set_next_dst(ppc);
+	// restore lr
+	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	GEN_MTLR(ppc, 0);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -1036,56 +1119,68 @@ static int SH(MIPS_instr mips){
 	return INTERPRETED;
 #else // INTERPRET_SH
 	
-	// Recompile accesses to stack pointer
-	if(MIPS_GET_RS(mips) == MIPS_REG_SP){
-		int base = mapRegister( MIPS_GET_RS(mips) );
-		int rd   = mapRegister( MIPS_GET_RT(mips) );
-		int addr = mapRegisterTemp();
-		
-		// If base >> 16 != 0xa400
-		GEN_SRAWI(ppc, 0, base, 16);
-		set_next_dst(ppc);
-		GEN_CMPI(ppc, 0, 0xa400, 1);
-		set_next_dst(ppc);
-		GEN_BEQ(ppc, 1, 4, 0, 0);
-		set_next_dst(ppc);
-		
-		// Use rdram
+	flushRegisters();
+	reset_code_addr();
+	
+	int rd   = mapRegister( MIPS_GET_RT(mips) ); // r3 = value
+	int base = mapRegister( MIPS_GET_RS(mips) ); // r4 = addr
+	
+	invalidateRegisters();
+	
+	// If (base >> 16) & 0xDF80 == 0x8000
+	GEN_SRWI(ppc, 0, base, 16);
+	set_next_dst(ppc);
+	GEN_ANDI(ppc, 0, 0, 0xDF80);
+	set_next_dst(ppc);
+	GEN_CMPLI(ppc, 0, 0x8000, 1);
+	set_next_dst(ppc);
+	GEN_BNE(ppc, 1, 5, 0, 0);
+	set_next_dst(ppc);
+	
+	// Use rdram
 #ifdef USE_EXPANSION
-		// Mask sp with 0x007FFFFF
-		GEN_RLWINM(ppc, addr, base, 0, 9, 31);
-		set_next_dst(ppc);
+	// Mask sp with 0x007FFFFF
+	GEN_RLWINM(ppc, base, base, 0, 9, 31);
+	set_next_dst(ppc);
 #else
-		// Mask sp with 0x003FFFFF
-		GEN_RLWINM(ppc, addr, base, 0, 10, 31);
-		set_next_dst(ppc);
+	// Mask sp with 0x003FFFFF
+	GEN_RLWINM(ppc, base, base, 0, 10, 31);
+	set_next_dst(ppc);
 #endif
-		// Add rdram pointer
-		GEN_ADD(ppc, addr, DYNAREG_RDRAM, addr);
-		set_next_dst(ppc);
-		// Skip over else
-		GEN_B(ppc, 3, 0, 0);
-		set_next_dst(ppc);
-		
-		// else use SP_DMEM
-		// Mask sp with 0x00001FFF
-		GEN_RLWINM(ppc, addr, base, 0, 19, 31);
-		set_next_dst(ppc);
-		// Add SP_DMEM pointer
-		GEN_ADD(ppc, addr, DYNAREG_SPDMEM, addr);
-		set_next_dst(ppc);
-		
-		// Perform the actual save
-		GEN_STH(ppc, rd, MIPS_GET_IMMED(mips), addr);
-		set_next_dst(ppc);
-		
-		unmapRegisterTemp(addr);
-		
-		return CONVERT_SUCCESS;
-	} else {
-		genCallInterp(mips);
-		return INTERPRETED;
-	}
+	// Add rdram pointer
+	GEN_ADD(ppc, base, DYNAREG_RDRAM, base);
+	set_next_dst(ppc);
+	// Perform the actual save
+	GEN_STH(ppc, rd, MIPS_GET_IMMED(mips), base);
+	set_next_dst(ppc);
+	// Skip over else
+	GEN_B(ppc, 9, 0, 0);
+	set_next_dst(ppc);
+	
+	// mtctr DYNAREG_RWMEM
+	GEN_MTCTR(ppc, DYNAREG_RWMEM);
+	set_next_dst(ppc);
+	// save lr
+	GEN_MFLR(ppc, 0);
+	set_next_dst(ppc);
+	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	// addr = base + immed
+	GEN_ADDI(ppc, base, base, MIPS_GET_IMMED(mips));
+	set_next_dst(ppc);
+	// type = MEM_SH
+	GEN_LI(ppc, 5, 0, MEM_SH);
+	set_next_dst(ppc);
+	// call dyna_mem
+	GEN_BCTRL(ppc);
+	set_next_dst(ppc);
+	// restore lr
+	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	GEN_MTLR(ppc, 0);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -1107,56 +1202,68 @@ static int SW(MIPS_instr mips){
 	return INTERPRETED;
 #else // INTERPRET_SW
 	
-	// Recompile accesses to stack pointer
-	if(MIPS_GET_RS(mips) == MIPS_REG_SP){
-		int base = mapRegister( MIPS_GET_RS(mips) );
-		int rd   = mapRegister( MIPS_GET_RT(mips) );
-		int addr = mapRegisterTemp();
-		
-		// If base >> 16 != 0xa400
-		GEN_SRAWI(ppc, 0, base, 16);
-		set_next_dst(ppc);
-		GEN_CMPI(ppc, 0, 0xa400, 1);
-		set_next_dst(ppc);
-		GEN_BEQ(ppc, 1, 4, 0, 0);
-		set_next_dst(ppc);
-		
-		// Use rdram
+	flushRegisters();
+	reset_code_addr();
+	
+	int rd   = mapRegister( MIPS_GET_RT(mips) ); // r3 = value
+	int base = mapRegister( MIPS_GET_RS(mips) ); // r4 = addr
+	
+	invalidateRegisters();
+	
+	// If (base >> 16) & 0xDF80 == 0x8000
+	GEN_SRWI(ppc, 0, base, 16);
+	set_next_dst(ppc);
+	GEN_ANDI(ppc, 0, 0, 0xDF80);
+	set_next_dst(ppc);
+	GEN_CMPLI(ppc, 0, 0x8000, 1);
+	set_next_dst(ppc);
+	GEN_BNE(ppc, 1, 5, 0, 0);
+	set_next_dst(ppc);
+	
+	// Use rdram
 #ifdef USE_EXPANSION
-		// Mask sp with 0x007FFFFF
-		GEN_RLWINM(ppc, addr, base, 0, 9, 31);
-		set_next_dst(ppc);
+	// Mask sp with 0x007FFFFF
+	GEN_RLWINM(ppc, base, base, 0, 9, 31);
+	set_next_dst(ppc);
 #else
-		// Mask sp with 0x003FFFFF
-		GEN_RLWINM(ppc, addr, base, 0, 10, 31);
-		set_next_dst(ppc);
+	// Mask sp with 0x003FFFFF
+	GEN_RLWINM(ppc, base, base, 0, 10, 31);
+	set_next_dst(ppc);
 #endif
-		// Add rdram pointer
-		GEN_ADD(ppc, addr, DYNAREG_RDRAM, addr);
-		set_next_dst(ppc);
-		// Skip over else
-		GEN_B(ppc, 3, 0, 0);
-		set_next_dst(ppc);
-		
-		// else use SP_DMEM
-		// Mask sp with 0x00001FFF
-		GEN_RLWINM(ppc, addr, base, 0, 19, 31);
-		set_next_dst(ppc);
-		// Add SP_DMEM pointer
-		GEN_ADD(ppc, addr, DYNAREG_SPDMEM, addr);
-		set_next_dst(ppc);
-		
-		// Perform the actual save
-		GEN_STW(ppc, rd, MIPS_GET_IMMED(mips), addr);
-		set_next_dst(ppc);
-		
-		unmapRegisterTemp(addr);
-		
-		return CONVERT_SUCCESS;
-	} else {
-		genCallInterp(mips);
-		return INTERPRETED;
-	}
+	// Add rdram pointer
+	GEN_ADD(ppc, base, DYNAREG_RDRAM, base);
+	set_next_dst(ppc);
+	// Perform the actual save
+	GEN_STW(ppc, rd, MIPS_GET_IMMED(mips), base);
+	set_next_dst(ppc);
+	// Skip over else
+	GEN_B(ppc, 9, 0, 0);
+	set_next_dst(ppc);
+	
+	// mtctr DYNAREG_RWMEM
+	GEN_MTCTR(ppc, DYNAREG_RWMEM);
+	set_next_dst(ppc);
+	// save lr
+	GEN_MFLR(ppc, 0);
+	set_next_dst(ppc);
+	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	// addr = base + immed
+	GEN_ADDI(ppc, base, base, MIPS_GET_IMMED(mips));
+	set_next_dst(ppc);
+	// type = MEM_SW
+	GEN_LI(ppc, 5, 0, MEM_SW);
+	set_next_dst(ppc);
+	// call dyna_mem
+	GEN_BCTRL(ppc);
+	set_next_dst(ppc);
+	// restore lr
+	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	GEN_MTLR(ppc, 0);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
