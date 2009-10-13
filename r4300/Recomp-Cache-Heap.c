@@ -163,9 +163,16 @@ void RecompCache_Alloc(unsigned int size, unsigned int address, PowerPC_func* fu
 		// Free up at least enough space for it to fit
 		release(cacheSize + size - RECOMP_CACHE_SIZE);
 	
+	// In case we've released enough, but its not contiguous
+	void* code = malloc(size);
+	while(!code){
+		release(size);
+		code = malloc(size);
+	}
+	
 	// We have the necessary space for this alloc, so just call malloc
 	cacheSize += size;
-	newBlock->func->code = malloc(size);
+	newBlock->func->code = code;
 	// Add it to the heap
 	heapPush(newBlock);
 	// Make this function the LRU
@@ -188,9 +195,16 @@ void RecompCache_Realloc(PowerPC_func* func, unsigned int size){
 		// Free up at least enough space for it to fit
 		release(cacheSize + neededSpace - RECOMP_CACHE_SIZE);
 	
-	// We have the necessary space for this alloc, so just call malloc
+	// In case we've released enough, but its not contiguous
+	void* code = realloc(n->func->code, size);
+	while(!code){
+		release(size);
+		code = realloc(n->func->code, size);
+	}
+	
+	// Adjust everything for this code
 	cacheSize += neededSpace;
-	n->func->code = realloc(n->func->code, size);
+	n->func->code = code;
 	n->size = size;
 }
 
