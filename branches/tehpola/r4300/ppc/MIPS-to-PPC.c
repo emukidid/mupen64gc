@@ -440,7 +440,7 @@ static int SLTI(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else
-	
+	// FIXME: Do I need to worry about 64-bit values?
 	int rs = mapRegister( MIPS_GET_RS(mips) );
 	int rt = mapRegisterNew( MIPS_GET_RT(mips) );
 	int tmp = (rs == rt) ? mapRegisterTemp() : rt;
@@ -476,7 +476,7 @@ static int SLTIU(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else
-	
+	// FIXME: Do I need to worry about 64-bit values?
 	int rs = mapRegister( MIPS_GET_RS(mips) );
 	int rt = mapRegisterNew( MIPS_GET_RT(mips) );
 	
@@ -500,10 +500,9 @@ static int SLTIU(MIPS_instr mips){
 static int ANDI(MIPS_instr mips){
 	PowerPC_instr ppc;
 	int rs = mapRegister( MIPS_GET_RS(mips) );
-	GEN_ANDI(ppc,
-	         mapRegisterNew( MIPS_GET_RT(mips) ),
-	         rs,
-	         MIPS_GET_IMMED(mips));
+	int rt = mapRegisterNew( MIPS_GET_RT(mips) );
+	
+	GEN_ANDI(ppc, rt, rs, MIPS_GET_IMMED(mips));
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -511,11 +510,12 @@ static int ANDI(MIPS_instr mips){
 
 static int ORI(MIPS_instr mips){
 	PowerPC_instr ppc;
-	int rs = mapRegister( MIPS_GET_RS(mips) );
-	GEN_ORI(ppc,
-	        mapRegisterNew( MIPS_GET_RT(mips) ),
-	        rs,
-	        MIPS_GET_IMMED(mips));
+	RegMapping rs = mapRegister64( MIPS_GET_RS(mips) );
+	RegMapping rt = mapRegister64New( MIPS_GET_RT(mips) );
+	
+	GEN_OR(ppc, rt.hi, rs.hi, rs.hi);
+	set_next_dst(ppc);
+	GEN_ORI(ppc, rt.lo, rs.lo, MIPS_GET_IMMED(mips));
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -523,11 +523,12 @@ static int ORI(MIPS_instr mips){
 
 static int XORI(MIPS_instr mips){
 	PowerPC_instr ppc;
-	int rs = mapRegister( MIPS_GET_RS(mips) );
-	GEN_XORI(ppc,
-	         mapRegisterNew( MIPS_GET_RT(mips) ),
-	         rs,
-	         MIPS_GET_IMMED(mips));
+	RegMapping rs = mapRegister64( MIPS_GET_RS(mips) );
+	RegMapping rt = mapRegister64New( MIPS_GET_RT(mips) );
+	
+	GEN_OR(ppc, rt.hi, rs.hi, rs.hi);
+	set_next_dst(ppc);
+	GEN_XORI(ppc, rt.lo, rs.lo, MIPS_GET_IMMED(mips));
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -2126,12 +2127,13 @@ static int SUB(MIPS_instr mips){
 
 static int AND(MIPS_instr mips){
 	PowerPC_instr ppc;
-	int rt = mapRegister( MIPS_GET_RT(mips) );
-	int rs = mapRegister( MIPS_GET_RS(mips) );
-	GEN_AND(ppc,
-	        mapRegisterNew( MIPS_GET_RD(mips) ),
-	        rs,
-	        rt);
+	RegMapping rt = mapRegister64( MIPS_GET_RT(mips) );
+	RegMapping rs = mapRegister64( MIPS_GET_RS(mips) );
+	RegMapping rd = mapRegister64New( MIPS_GET_RD(mips) );
+	
+	GEN_AND(ppc, rd.hi, rs.hi, rt.hi);
+	set_next_dst(ppc);
+	GEN_AND(ppc, rd.lo, rs.lo, rt.lo);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -2139,12 +2141,13 @@ static int AND(MIPS_instr mips){
 
 static int OR(MIPS_instr mips){
 	PowerPC_instr ppc;
-	int rt = mapRegister( MIPS_GET_RT(mips) );
-	int rs = mapRegister( MIPS_GET_RS(mips) );
-	GEN_OR(ppc,
-	        mapRegisterNew( MIPS_GET_RD(mips) ),
-	        rs,
-	        rt);
+	RegMapping rt = mapRegister64( MIPS_GET_RT(mips) );
+	RegMapping rs = mapRegister64( MIPS_GET_RS(mips) );
+	RegMapping rd = mapRegister64New( MIPS_GET_RD(mips) );
+	
+	GEN_OR(ppc, rd.hi, rs.hi, rt.hi);
+	set_next_dst(ppc);
+	GEN_OR(ppc, rd.lo, rs.lo, rt.lo);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -2152,12 +2155,13 @@ static int OR(MIPS_instr mips){
 
 static int XOR(MIPS_instr mips){
 	PowerPC_instr ppc;
-	int rt = mapRegister( MIPS_GET_RT(mips) );
-	int rs = mapRegister( MIPS_GET_RS(mips) );
-	GEN_XOR(ppc,
-	        mapRegisterNew( MIPS_GET_RD(mips) ),
-	        rs,
-	        rt);
+	RegMapping rt = mapRegister64( MIPS_GET_RT(mips) );
+	RegMapping rs = mapRegister64( MIPS_GET_RS(mips) );
+	RegMapping rd = mapRegister64New( MIPS_GET_RD(mips) );
+	
+	GEN_XOR(ppc, rd.hi, rs.hi, rt.hi);
+	set_next_dst(ppc);
+	GEN_XOR(ppc, rd.lo, rs.lo, rt.lo);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -2165,12 +2169,13 @@ static int XOR(MIPS_instr mips){
 
 static int NOR(MIPS_instr mips){
 	PowerPC_instr ppc;
-	int rt = mapRegister( MIPS_GET_RT(mips) );
-	int rs = mapRegister( MIPS_GET_RS(mips) );
-	GEN_NOR(ppc,
-	        mapRegisterNew( MIPS_GET_RD(mips) ),
-	        rs,
-	        rt);
+	RegMapping rt = mapRegister64( MIPS_GET_RT(mips) );
+	RegMapping rs = mapRegister64( MIPS_GET_RS(mips) );
+	RegMapping rd = mapRegister64New( MIPS_GET_RD(mips) );
+	
+	GEN_NOR(ppc, rd.hi, rs.hi, rt.hi);
+	set_next_dst(ppc);
+	GEN_NOR(ppc, rd.lo, rs.lo, rt.lo);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -2182,6 +2187,7 @@ static int SLT(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else
+	// FIXME: Do I need to worry about 64-bit values?
 	int rt = mapRegister( MIPS_GET_RT(mips) );
 	int rs = mapRegister( MIPS_GET_RS(mips) );
 	int rd = mapRegisterNew( MIPS_GET_RD(mips) );
@@ -2212,6 +2218,7 @@ static int SLTU(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else
+	// FIXME: Do I need to worry about 64-bit values?
 	int rt = mapRegister( MIPS_GET_RT(mips) );
 	int rs = mapRegister( MIPS_GET_RS(mips) );
 	int rd = mapRegisterNew( MIPS_GET_RD(mips) );
