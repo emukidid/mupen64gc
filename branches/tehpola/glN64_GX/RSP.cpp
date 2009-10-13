@@ -121,7 +121,7 @@ LoadLoop:
 	: /* no output */
 	: "f"(recip), "S"((int)RDRAM+address), "D"(mtx), "c"(4)
 	: "memory" );
-#elif defined(GEKKO)
+#elif defined(GEKKO) // X86_ASM
 	
 	struct _N64Matrix
 	{
@@ -150,7 +150,7 @@ LoadLoop:
 			   "r0", "memory");
 	}
 	
-# else // X86_ASM
+# else // GEKKO
 	struct _N64Matrix
 	{
 		SHORT integer[4][4];
@@ -165,7 +165,7 @@ LoadLoop:
 #  else // !_BIG_ENDIAN -> This should fix a Big Endian issue.
 			mtx[i][j] = (GLfloat)(n64Mat->integer[i][j^0]) + (GLfloat)(n64Mat->fraction[i][j^0]) * recip;
 #  endif // _BIG_ENDIAN
-# endif // !X86_ASM
+# endif // !( X86_ASM || GEKKO )
 #endif // __LINUX__
 }
 
