@@ -1293,13 +1293,8 @@ static int SLL(MIPS_instr mips){
 	int rt = mapRegister( MIPS_GET_RT(mips) );
 	int rd = mapRegisterNew( MIPS_GET_RD(mips) );
 	
-	if(MIPS_GET_SA(mips)){
-		GEN_SLWI(ppc, rd, rt, MIPS_GET_SA(mips));
-		set_next_dst(ppc);
-	} else {
-		GEN_OR(ppc, rd, rt, rt);
-		set_next_dst(ppc);
-	}
+	GEN_SLWI(ppc, rd, rt, MIPS_GET_SA(mips));
+	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
 }
@@ -1310,13 +1305,8 @@ static int SRL(MIPS_instr mips){
 	int rt = mapRegister( MIPS_GET_RT(mips) );
 	int rd = mapRegisterNew( MIPS_GET_RD(mips) );
 	
-	if(MIPS_GET_SA(mips)){
-		GEN_SRWI(ppc, rd, rt, MIPS_GET_SA(mips));
-		set_next_dst(ppc);
-	} else {
-		GEN_OR(ppc, rd, rt, rt);
-		set_next_dst(ppc);
-	}
+	GEN_SRWI(ppc, rd, rt, MIPS_GET_SA(mips));
+	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
 }
@@ -1327,13 +1317,8 @@ static int SRA(MIPS_instr mips){
 	int rt = mapRegister( MIPS_GET_RT(mips) );
 	int rd = mapRegisterNew( MIPS_GET_RD(mips) );
 	
-	if(MIPS_GET_SA(mips)){
-		GEN_SRAWI(ppc, rd, rt, MIPS_GET_SA(mips));
-		set_next_dst(ppc);
-	} else {
-		GEN_OR(ppc, rd, rt, rt);
-		set_next_dst(ppc);
-	}
+	GEN_SRAWI(ppc, rd, rt, MIPS_GET_SA(mips));
+	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
 }
