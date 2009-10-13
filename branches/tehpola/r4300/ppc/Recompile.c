@@ -52,6 +52,8 @@ int has_next_src(void){ return (src_last-src) > 0; }
  // This should be called ONLY after get_next_src returns a
  //   NOP in a delay slot
  void nop_ignored(void){ if(src<src_last) code_addr[src-1-src_first] = dst; }
+ // Returns whether the current src instruction is branched to
+ int is_j_dst(void){ return isJmpDst[(get_src_pc()&0xfff)>>2]; }
 // Returns the MIPS PC
 unsigned int get_src_pc(void){ return addr_first + ((src-1-src_first)<<2); }
 void set_next_dst(PowerPC_instr i){ *(dst++) = i; ++code_length; }
