@@ -394,7 +394,8 @@ static int pass0(PowerPC_block* ppc_block){
 			}
 			--src;
 		} else if(opcode == MIPS_OPCODE_R &&
-		          MIPS_GET_FUNC(*src) == MIPS_FUNC_JR){
+		          (MIPS_GET_FUNC(*src) == MIPS_FUNC_JR ||
+		           MIPS_GET_FUNC(*src) == MIPS_FUNC_JALR)){
 			++src, ++pc;
 			break;
 		} else if(opcode == MIPS_OPCODE_COP0 &&
