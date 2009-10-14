@@ -119,13 +119,15 @@ static void inline play_buffer(void){
 	// Make sure the buffer is in RAM, not the cache
 	DCFlushRange(buffer[thread_buffer], buffer_size);
 	
+	// Actually send the buffer out to be played next
+	AUDIO_InitDMA((unsigned int)&buffer[thread_buffer], buffer_size);
+	
 #ifdef THREADED_AUDIO
 	// Wait for the audio interface to be free before playing
 	LWP_SemWait(audio_free);
 #endif
 	
-	// Actually send the buffer out to be played
-	AUDIO_InitDMA((unsigned int)&buffer[thread_buffer], buffer_size);
+	// Start playing the buffer
 	AUDIO_StartDMA();
 	
 #ifdef THREADED_AUDIO
