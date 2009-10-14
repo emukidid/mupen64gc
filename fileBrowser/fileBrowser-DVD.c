@@ -11,58 +11,47 @@
 /* DVD Globals */
 extern unsigned int isWii;
 extern int previously_initd;
-int dvdInitialized;
-
-extern struct
-{
-	char name[128];
-	int flags;
-	int sector, size;
-} file[MAXIMUM_ENTRIES_PER_DIR]; //150 files per dir, MAXIMUM.
+int dvdInitialized = 0;
 
 /* Worked out manually from my original Disc */
-#define OOT_OFFSET 0x54FBEEF4
-#define MQ_OFFSET  0x52CCC5FC
+#define OOT_OFFSET 0x54FBEEF4ULL
+#define MQ_OFFSET  0x52CCC5FCULL
 #define ZELDA_SIZE 0x2000000
 
 fileBrowser_file topLevel_DVD =
 	{ "\\", // file name
-	  0,         // discoffset
+	  0ULL,      // discoffset (u64)
 	  0,         // offset
 	  0,         // size
 	  FILE_BROWSER_ATTR_DIR
 	};
 
-int DVD_check_state() {
-
-    if(dvd_get_error() == 0){
-            dvdInitialized = 1;
-            return 0;
-    }
-    else {
-        while(dvd_get_error()) {
-            if(!isWii){
-                DVD_Mount ();   
-                if(dvd_get_error())
-                    DVD_Reset(DVD_RESETHARD);
-            }
-            if(isWii) {
-                DVD_Reset(DVD_RESETHARD);
-                dvd_read_id();
-            }
-        }
-    }
-    dvdInitialized = 1;
-    return 0;
-
+void init_dvd()
+{
+#ifdef HW_DOL
+  if(isWii) //GC mode on Wii
+  {
+    DVD_Reset(DVD_RESETHARD);
+    dvd_read_id();
+    dvdInitialized=1;
+  }
+  else      //GC, no modchip even required :)
+  {
+    DVD_Reset(DVD_RESETHARD);
+    DVD_Mount ();  
+    dvdInitialized=1;
+  }
+#else
+  dvdInitialized=1; //Wiimode stuff is handled by DVDx
+#endif
 }
-		 
+ 
 	 
 int fileBrowser_DVD_readDir(fileBrowser_file* ffile, fileBrowser_file** dir){	
 	
-	dvd_read_id();
-	DVD_check_state();
-	
+  if(!dvdInitialized)
+    init_dvd();
+    
 	int num_entries = 0;
 	
 	if (!memcmp((void*)0x80000000, "D43U01", 6)) { //OoT bonus disc support.
@@ -91,14 +80,20 @@ int fileBrowser_DVD_readDir(fileBrowser_file* ffile, fileBrowser_file** dir){
 	*dir = malloc( num_entries * sizeof(fileBrowser_file) );
 	int i;
 	for(i=0; i<num_entries; ++i){
-		strcpy( (*dir)[i].name, file[i].name );
-		(*dir)[i].discoffset = ((file[i].sector)*2048);
+		strcpy( (*dir)[i].name, DVDToc->file[i].name );
+		(*dir)[i].discoffset = (uint64_t)(((uint64_t)DVDToc->file[i].sector)*2048);
 		(*dir)[i].offset = 0;
-		(*dir)[i].size   = file[i].size;
+		(*dir)[i].size   = DVDToc->file[i].size;
 		(*dir)[i].attr	 = 0;
-		if(file[i].flags == 2)//on DVD, 2 is a dir
+		if(DVDToc->file[i].flags == 2)//on DVD, 2 is a dir
 			(*dir)[i].attr   = FILE_BROWSER_ATTR_DIR; 
+		if((*dir)[i].name[strlen((*dir)[i].name)-1] == '/' )
+			(*dir)[i].name[strlen((*dir)[i].name)-1] = 0;	//get rid of trailing '/'
 	}
+	//kill the large TOC so we can have a lot more memory ingame (256k more)
+	free(DVDToc);
+  DVDToc = NULL;
+		
 	if(strlen((*dir)[0].name) == 0)
 		strcpy( (*dir)[0].name, ".." );
 	
@@ -113,26 +108,14 @@ int fileBrowser_DVD_seekFile(fileBrowser_file* file, unsigned int where, unsigne
 }
 
 int fileBrowser_DVD_readFile(fileBrowser_file* file, void* buffer, unsigned int length){
-	DVD_check_state();
 	int bytesread = read_safe(buffer,file->discoffset+file->offset,length);
-	file->offset += bytesread;
+	if(bytesread > 0)
+		file->offset += bytesread;
 	return bytesread;
 }
 
-int fileBrowser_DVD_init(fileBrowser_file* file) {
-
-	dvd_read_id();
-	if(dvd_get_error() == 0)
-		return 0;
-	if(!isWii)
-		DVD_Mount ();
-	if(isWii) {
-		DVD_Reset(DVD_RESETHARD);
-		dvd_read_id();
-	}
-	if(dvd_get_error() == 0)
-		return 0;
-	return dvd_get_error();
+int fileBrowser_DVD_init(fileBrowser_file* file){
+	return 0;
 }
 
 int fileBrowser_DVD_deinit(fileBrowser_file* file) {

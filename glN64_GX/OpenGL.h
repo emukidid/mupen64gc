@@ -23,6 +23,10 @@
 #include "glATI.h"
 #include "gSP.h"
 
+#define GXprojZScale		 0.5 //0.25 //0.5
+#define GXprojZOffset		-0.5
+#define GXpolyOffsetFactor	 5.0e-4 //Tweaked for co-planar polygons. Interestingly, Z resolution should be 5.96e-8.
+
 struct GLVertex
 {
 	float x, y, z, w;
@@ -92,6 +96,37 @@ struct GLInfo
 	BYTE	lastStipple;
 
 	BYTE	combiner;
+
+#ifdef __GX__	//Variables specific to GX
+	Mtx44	GXproj;
+	Mtx44	GXprojW;
+	Mtx44	GXprojIdent;
+	Mtx44	GXprojTemp;
+	Mtx		GXmodelView;
+	Mtx		GXmodelViewIdent;
+	BOOL	GXuseProj;
+	BOOL	GXuseProjW;
+	BOOL	GXupdateMtx;
+	int		GXnumVtxMP;
+	int		GXnumVtx;
+	bool	GXuseAlphaCompare;
+	float	GXfogStartZ;
+	float	GXfogEndZ;
+	GXColor	GXfogColor;
+	GXColor GXclearColor;
+	u8		GXfogType;
+	u8*		GXclearBufferTex;
+	bool	GXupdateFog;
+	bool	GXpolyOffset;
+	bool	GXrenderTexRect;
+	bool	GXforceClampS0;
+	bool	GXforceClampT0;
+	bool	GXforceClampS1;
+	bool	GXforceClampT1;
+	bool	GXuseMinMagNearest;
+	bool	GXclearColorBuffer;
+	bool	GXclearDepthBuffer;
+#endif
 };
 
 extern GLInfo OGL;
@@ -174,6 +209,7 @@ void OGL_SwapBuffers();
 void OGL_ReadScreen( void **dest, long *width, long *height );
 #ifdef __GX__
 void OGL_GXinitDlist();
+void OGL_GXclearEFB();
 #endif // __GX__
 
 #endif

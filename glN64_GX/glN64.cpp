@@ -289,7 +289,7 @@ EXPORT void CALL MoveScreen (int xpos, int ypos)
 EXPORT void CALL ProcessDList(void)
 {
 #ifdef DEBUGON
-	_break();
+//	_break();
 #endif
 
 #ifdef RSPTHREAD
@@ -304,20 +304,22 @@ EXPORT void CALL ProcessDList(void)
 	sprintf(txtbuffer,"\nPROCESS D LIST!!\n\n");
 	DEBUG_print(txtbuffer,DBG_SDGECKOPRINT);
 #endif // GLN64_SDLOG
+	float color[4] = {0.0f,0.0f,0.0f,0.0f};
+	OGL_ClearColorBuffer( color );
+	OGL_ClearDepthBuffer();
+//	OGL_GXclearEFB();
+//	VI_GX_clearEFB();
 #endif // __GX__
 	RSP_ProcessDList();
 #endif
 
 #ifdef DEBUGON
-	_break();
+//	_break();
 #endif
 
 #ifdef __GX__
-	//TODO: Remove this:
-//	TextureCache_Destroy();
-//	TextureCache_Init();
-//	OGL_Stop();
-//	OGL_Start();
+	sprintf(txtbuffer,"RSP: Vtx = %d; VtxMP = %d; pDcnt = %d; Zprim = %d; noZprim = %d", OGL.GXnumVtx, OGL.GXnumVtxMP, cache.GXprimDepthCnt, cache.GXZTexPrimCnt, cache.GXnoZTexPrimCnt);
+	DEBUG_print(txtbuffer,DBG_RSPINFO);
 	VI_GX_updateDEBUG();
 #endif // __GX__
 }

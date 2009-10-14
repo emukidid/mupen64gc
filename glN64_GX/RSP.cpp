@@ -121,7 +121,36 @@ LoadLoop:
 	: /* no output */
 	: "f"(recip), "S"((int)RDRAM+address), "D"(mtx), "c"(4)
 	: "memory" );
-# else // X86_ASM
+#elif defined(GEKKO) // X86_ASM
+	
+	struct _N64Matrix
+	{
+		SHORT integer[4][4];
+		WORD fraction[4][4];
+	} *n64Mat = (struct _N64Matrix *)&RDRAM[address];
+	
+	for(int i=0; i<4; ++i){
+		/*for(int j=0; j<4; ++j)
+			mtx[i][j] = (float)n64Mat->integer[i][j] + (float)n64Mat->fraction[i][j] * recip;*/
+		
+		__asm__ volatile(
+			"psq_l    3,   (%3*8)(%0), 0, 5 \n"
+			"psq_l    4,   (%3*8)(%1), 0, 4 \n"
+			"psq_l    5, (%3*8+4)(%0), 0, 5 \n"
+			"psq_l    6, (%3*8+4)(%1), 0, 4 \n"
+			
+			"ps_add  4, 3, 4     \n"
+			"ps_add  6, 5, 6     \n"
+			
+			"psq_st   4,   (%3*16)(%2), 0, 0 \n"
+			"psq_st   6, (%3*16+8)(%2), 0, 0 \n"
+			:: "r" (n64Mat->fraction), "r" (n64Mat->integer),
+			   "r" (mtx), "n" (i)
+			 : "fr2", "fr3", "fr4", "fr5", "fr6",
+			   "r0", "memory");
+	}
+	
+# else // GEKKO
 	struct _N64Matrix
 	{
 		SHORT integer[4][4];
@@ -131,12 +160,12 @@ LoadLoop:
 
 	for (i = 0; i < 4; i++)
 		for (j = 0; j < 4; j++)
-#  ifndef __GX__
+#  ifndef _BIG_ENDIAN
 			mtx[i][j] = (GLfloat)(n64Mat->integer[i][j^1]) + (GLfloat)(n64Mat->fraction[i][j^1]) * recip;
-#  else // !__GX__ -> This should fix a Big Endian issue.
+#  else // !_BIG_ENDIAN -> This should fix a Big Endian issue.
 			mtx[i][j] = (GLfloat)(n64Mat->integer[i][j^0]) + (GLfloat)(n64Mat->fraction[i][j^0]) * recip;
-#  endif // __GX__
-# endif // !X86_ASM
+#  endif // _BIG_ENDIAN
+# endif // !( X86_ASM || GEKKO )
 #endif // __LINUX__
 }
 
@@ -331,9 +360,9 @@ void RSP_Init()
 #else // !__LINUX__
 # ifdef __GX__
 #  ifdef USE_EXPANSION
-	RDRAMSize = 1024 * 1024 * 8;	//TODO: Check on this, may need Wii/GC flag here
+	RDRAMSize = 1024 * 1024 * 8;
 #  else
-	RDRAMSize = 1024 * 1024 * 4;	
+	RDRAMSize = 1024 * 1024 * 4;
 #  endif
 # else // __GX__
 	RDRAMSize = 1024 * 1024 * 8;

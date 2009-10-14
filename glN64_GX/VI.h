@@ -6,6 +6,13 @@ struct VIInfo
 {
 	u32 width, height;
 	u32 lastOrigin;
+#ifdef __GX__
+	unsigned int* xfb[2];
+	int which_fb;
+	bool updateOSD;
+	bool EFBcleared;
+	bool copy_fb;
+#endif // __GX__
 };
 
 extern VIInfo VI;
@@ -18,6 +25,7 @@ void VI_UpdateScreen();
 void VI_GX_init();
 void VI_GX_setFB(unsigned int* fb1, unsigned int* fb2);
 unsigned int* VI_GX_getScreenPointer();
+void VI_GX_clearEFB();
 void VI_GX_showFPS();
 void VI_GX_showLoadProg(float percent);
 void VI_GX_updateDEBUG();

@@ -3,6 +3,7 @@
 #include <gccore.h>
 #include "../gui/font.h"
 #include "../gui/DEBUG.h"
+#include "../main/timers.h"
 //#include "Textures.h"
 #endif // __GX__
 
@@ -25,13 +26,13 @@ VIInfo VI;
 extern GXRModeObj *vmode;
 
 #ifdef __GX__
-bool updateDEBUGflag;
-bool new_fb;
 char printToScreen;
 char showFPSonScreen;
 
+/*bool updateDEBUGflag;
+bool new_fb;
 unsigned int* xfb[2];
-int which_fb;
+int which_fb;*/
 #endif // __GX__
 
 void VI_UpdateSize()
@@ -101,43 +102,60 @@ void VI_UpdateScreen()
 	}
 	glFinish();
 #else // !__GX__
-	//TODO: Finish rendering in GX
-	//		Render loadprog & DEBUG
-	//		Copy efb to xfb
-	//		swap xfb
-	//TODO: update flags and later implement framebuffer textures
 
 	if (OGL.frameBufferTextures)
 	{
-		// Implement fb texture copy here
+		FrameBuffer *current = FrameBuffer_FindBuffer( *REG.VI_ORIGIN );
+
+		if ((*REG.VI_ORIGIN != VI.lastOrigin) || ((current) && current->changed))
+		{
+			FrameBuffer_IncrementVIcount();
+			if (gDP.colorImage.changed)
+			{
+				FrameBuffer_SaveBuffer( gDP.colorImage.address, gDP.colorImage.size, gDP.colorImage.width, gDP.colorImage.height );
+				gDP.colorImage.changed = FALSE;
+			}
+
+			FrameBuffer_RenderBuffer( *REG.VI_ORIGIN );
+
+			//Draw DEBUG to screen
+			VI_GX_cleanUp();
+			VI_GX_showStats();
+			VI_GX_showFPS();
+			VI_GX_showDEBUG();
+			GX_SetCopyClear ((GXColor){0,0,0,255}, 0xFFFFFF);
+			//Copy EFB->XFB
+			GX_CopyDisp (VI.xfb[VI.which_fb], GX_FALSE);
+			GX_DrawDone(); //Wait until EFB->XFB copy is complete
+			VI.updateOSD = false;
+			VI.copy_fb = true;
+
+			//Restore current EFB
+			FrameBuffer_RestoreBuffer( gDP.colorImage.address, gDP.colorImage.size, gDP.colorImage.width );
+
+			gDP.colorImage.changed = FALSE;
+			VI.lastOrigin = *REG.VI_ORIGIN;
+		}
 	}
 	else
 	{
 		if (gSP.changed & CHANGED_COLORBUFFER)
-		{
 			OGL_SwapBuffers();
-//			VI_GX_updateDEBUG();
-		}
+
 		VI_GX_cleanUp();
-		VI_GX_showStats();
-		VI_GX_showFPS();
-		VI_GX_showDEBUG();
-		if(updateDEBUGflag)
+		if(VI.updateOSD && gDP.colorImage.changed)
 		{
-			if(new_fb)
-				VIDEO_WaitVSync();
-			GX_DrawDone(); //needed?
-			GX_CopyDisp (xfb[which_fb], GX_FALSE); //TODO: Figure out where the UpdateScreen interrupts are coming from!
-			GX_DrawDone(); //Shagkur's recommendation
-//			doCaptureScreen();
-			updateDEBUGflag = false;
-			new_fb = true;
+			VI_GX_showStats();
+			VI_GX_showFPS();
+			VI_GX_showDEBUG();
+			GX_SetCopyClear ((GXColor){0,0,0,255}, 0xFFFFFF);
+			GX_CopyDisp (VI.xfb[VI.which_fb], GX_FALSE);
+			GX_DrawDone(); //Wait until EFB->XFB copy is complete
+			VI.updateOSD = false;
+			gDP.colorImage.changed = FALSE;
+			VI.EFBcleared = false;
+			VI.copy_fb = true;
 		}
-		//The following has been moved to the Pre-Retrace callback
-/*		VIDEO_SetNextFramebuffer(xfb[which_fb]);
-		VIDEO_Flush();
-		which_fb ^= 1;
-		VIDEO_WaitVSync();*/
 	}
 #endif // __GX__
 
@@ -151,47 +169,44 @@ extern unsigned int diff_sec(long long start,long long end);
 
 void VI_GX_init() {
 	init_font();
-	updateDEBUGflag = true;
+/*	updateDEBUGflag = true;
 	new_fb = false;
-	which_fb = 1;
+	which_fb = 1;*/
+	VI.updateOSD = true;
+	VI.EFBcleared = true;
+	VI.copy_fb = false;
+	VI.which_fb = 1;
 }
 
 void VI_GX_setFB(unsigned int* fb1, unsigned int* fb2){
-	xfb[0] = fb1;
-	xfb[1] = fb2;
+	VI.xfb[0] = fb1;
+	VI.xfb[1] = fb2;
 }
 
-unsigned int* VI_GX_getScreenPointer(){ return xfb[which_fb]; }
+unsigned int* VI_GX_getScreenPointer(){ return VI.xfb[VI.which_fb]; }
+
+void VI_GX_clearEFB(){
+	GX_SetZMode(GX_ENABLE,GX_ALWAYS,GX_TRUE);
+	GX_SetCopyClear ((GXColor){0,0,0,255}, 0xFFFFFF);
+	GX_CopyDisp (VI.xfb[VI.which_fb], GX_TRUE);	//clear the EFB before executing new Dlist
+	GX_DrawDone(); //Wait until EFB->XFB copy is complete
+}
+
+extern timers Timers;
 
 void VI_GX_showFPS(){
-	static long long lastTick=0;
-	static int frames=0;
-	static int VIs=0;
-	static char caption[20];
-	
-	long long nowTick = gettime();
-	VIs++;
-	if (updateDEBUGflag)
-		frames++;
-	if (diff_sec(lastTick,nowTick)>=1) {
-		sprintf(caption, "%02d VI/s, %02d FPS",VIs,frames);
-		frames = 0;
-		VIs = 0;
-		lastTick = nowTick;
-	}
-	
-	if (updateDEBUGflag)
-	{
-		GXColor fontColor = {150,255,150,255};
-		write_font_init_GX(fontColor);
-		if(showFPSonScreen)
-			write_font(10,35,caption, 1.0);
-		//write_font(10,10,caption,xfb,which_fb);
+	static char caption[25];
 
-		//reset swap table from GUI/DEBUG
-		GX_SetTevSwapModeTable(GX_TEV_SWAP0, GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA);
-		GX_SetTevSwapMode(GX_TEVSTAGE0, GX_TEV_SWAP0, GX_TEV_SWAP0);
-	}
+	sprintf(caption, "%.1f VI/s, %.1f FPS",Timers.vis,Timers.fps);
+	
+	GXColor fontColor = {150,255,150,255};
+	write_font_init_GX(fontColor);
+	if(showFPSonScreen)
+		write_font(10,35,caption, 1.0);
+
+	//reset swap table from GUI/DEBUG
+//	GX_SetTevSwapModeTable(GX_TEV_SWAP0, GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA);
+	GX_SetTevSwapMode(GX_TEVSTAGE0, GX_TEV_SWAP0, GX_TEV_SWAP0);
 }
 
 void VI_GX_showLoadProg(float percent)
@@ -228,6 +243,9 @@ void VI_GX_showLoadProg(float percent)
 	GX_SetColorUpdate(GX_ENABLE);
 	GX_SetAlphaUpdate(GX_ENABLE);
 	GX_SetDstAlpha(GX_DISABLE, 0xFF);
+	GX_SetZMode(GX_DISABLE,GX_ALWAYS,GX_FALSE);
+	GX_SetZTexture(GX_ZT_DISABLE,GX_TF_Z16,0);	//GX_ZT_DISABLE or GX_ZT_REPLACE; set in gDP.cpp
+	GX_SetZCompLoc(GX_TRUE);	// Do Z-compare before texturing.
 	//set cull mode
 	GX_SetCullMode (GX_CULL_NONE);
 
@@ -252,66 +270,62 @@ void VI_GX_showLoadProg(float percent)
 	GX_Color4u8(GXcol1.r, GXcol1.g, GXcol1.b, GXcol1.a);
 	GX_End();
 
-//    GX_DrawDone ();
-	GX_CopyDisp (xfb[which_fb], GX_FALSE);
-    GX_Flush ();
-	VIDEO_SetNextFramebuffer(xfb[which_fb]);
-	VIDEO_Flush();
-	which_fb ^= 1;
-	VIDEO_WaitVSync();
+	if (VI.copy_fb)	GX_CopyDisp (VI.xfb[VI.which_fb], GX_FALSE);
+	else			GX_CopyDisp (VI.xfb[VI.which_fb^1], GX_FALSE);
+    GX_DrawDone();
+//	VI.copy_fb = true;
 }
 
 void VI_GX_updateDEBUG()
 {
-	updateDEBUGflag = true;
+	VI.updateOSD = true;
 }
 
 extern char text[DEBUG_TEXT_HEIGHT][DEBUG_TEXT_WIDTH];
 
 void VI_GX_showDEBUG()
 {
-	if (updateDEBUGflag)
-	{
-		int i = 0;
-		GXColor fontColor = {150, 255, 150, 255};
-		DEBUG_update();
-		write_font_init_GX(fontColor);
-		if(printToScreen)
-			for (i=0;i<DEBUG_TEXT_HEIGHT;i++)
-				write_font(10,(10*i+60),text[i], 0.5); 
-		
-	   //reset swap table from GUI/DEBUG
-		GX_SetTevSwapModeTable(GX_TEV_SWAP0, GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA);
-		GX_SetTevSwapMode(GX_TEVSTAGE0, GX_TEV_SWAP0, GX_TEV_SWAP0);
-	}
+	int i = 0;
+	GXColor fontColor = {150, 255, 150, 255};
+	DEBUG_update();
+	write_font_init_GX(fontColor);
+	if(printToScreen)
+		for (i=0;i<DEBUG_TEXT_HEIGHT;i++)
+			write_font(10,(10*i+60),text[i], 0.5); 
+
+	//Reset any stats in DEBUG_stats
+//	DEBUG_stats(8, "RecompCache Blocks Freed", STAT_TYPE_CLEAR, 1);
+
+   //reset swap table from GUI/DEBUG
+//	GX_SetTevSwapModeTable(GX_TEV_SWAP0, GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA);
+	GX_SetTevSwapMode(GX_TEVSTAGE0, GX_TEV_SWAP0, GX_TEV_SWAP0);
 }
 
 void VI_GX_showStats()
 {
-	if (updateDEBUGflag)
-	{
-//		sprintf(txtbuffer,"texCache: %d bytes in %d cached textures",cache.cachedBytes,cache.numCached);
-//		DEBUG_print(txtbuffer,DBG_CACHEINFO); 
-	}
+	sprintf(txtbuffer,"texCache: %d bytes in %d cached textures; %d FB textures",cache.cachedBytes,cache.numCached,frameBuffer.numBuffers);
+	DEBUG_print(txtbuffer,DBG_CACHEINFO); 
 }
 
 void VI_GX_cleanUp()
 {
+	GX_SetFog(GX_FOG_NONE,0,1,0,1,(GXColor){0,0,0,255});
 	GX_SetViewport(0,0,vmode->fbWidth,vmode->efbHeight,0,1);
 	GX_SetCoPlanar(GX_DISABLE);
 	GX_SetClipMode(GX_CLIP_DISABLE);
 	GX_SetScissor(0,0,vmode->fbWidth,vmode->efbHeight);
 	GX_SetAlphaCompare(GX_ALWAYS,0,GX_AOP_AND,GX_ALWAYS,0);
+	GX_SetZCompLoc(GX_TRUE);	// Do Z-compare before texturing.
 }
 
 void VI_GX_PreRetraceCallback(u32 retraceCnt)
 {
-	if(new_fb)
+	if(VI.copy_fb)
 	{
-		VIDEO_SetNextFramebuffer(xfb[which_fb]);
+		VIDEO_SetNextFramebuffer(VI.xfb[VI.which_fb]);
 		VIDEO_Flush();
-		which_fb ^= 1;
-		new_fb = false;
+		VI.which_fb ^= 1;
+		VI.copy_fb = false;
 	}
 }
 #endif // __GX__

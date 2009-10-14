@@ -1,6 +1,8 @@
 #ifdef __GX__
 #include <gccore.h>
 #include <string.h>
+#include <stdio.h>
+#include "../gui/DEBUG.h"
 #endif // __GX__
 
 #include "glN64.h"
@@ -17,6 +19,9 @@
 #include "FrameBuffer.h"
 #include "DepthBuffer.h"
 #include "VI.h"
+#ifdef __GX__
+#include "Textures.h"
+#endif // __GX__
 
 #ifdef __LINUX__
 # ifndef min
@@ -68,6 +73,12 @@ void gDPSetPrimDepth( u16 z, u16 dz )
 {
 	gDP.primDepth.z = min( 1.0f, max( 0.0f, (_FIXED2FLOAT( z, 15 ) - gSP.viewport.vtrans[2]) / gSP.viewport.vscale[2] ) );
 	gDP.primDepth.deltaZ = dz;
+
+#ifdef __GX__
+	sprintf(txtbuffer,"gDP: Setting PrimDepth to %f", gDP.primDepth.z);
+	DEBUG_print(txtbuffer,DBG_RSPINFO1);
+	TextureCache_UpdatePrimDepthZtex(gDP.primDepth.z);
+#endif //__GX__
 
 #ifdef DEBUG
 	DebugMsg( DEBUG_HIGH | DEBUG_HANDLED, "gDPSetPrimDepth( %f, %f );\n",
@@ -203,6 +214,15 @@ void gDPSetAlphaCompare( u32 mode )
 void gDPSetDepthSource( u32 source )
 {
 	gDP.otherMode.depthSource = source;
+
+#ifdef __GX__
+	gDP.changed |= CHANGED_RENDERMODE;
+
+/*	if (gDP.otherMode.depthSource == G_ZS_PRIM)
+		GX_SetZTexture(GX_ZT_REPLACE,GX_TF_Z16,0);
+	else
+		GX_SetZTexture(GX_ZT_DISABLE,GX_TF_Z16,0);*/
+#endif // __GX__
 
 #ifdef DEBUG
 	DebugMsg( DEBUG_HIGH | DEBUG_HANDLED, "gDPSetDepthSource( %s );\n",
@@ -605,6 +625,9 @@ void gDPLoadTile( u32 tile, u32 uls, u32 ult, u32 lrs, u32 lrt )
 			((*(u32*)&RDRAM[buffer->startAddress] & 0xFFFEFFFE) == (buffer->startAddress & 0xFFFEFFFE)))
 		{
 			gDP.loadTile->frameBuffer = buffer;
+#ifdef __GX__
+			FrameBuffer_MoveToTop(gDP.loadTile->frameBuffer);
+#endif //__GX__
 			gDP.textureMode = TEXTUREMODE_FRAMEBUFFER;
 			gDP.loadType = LOADTYPE_TILE;
 			gDP.changed |= CHANGED_TMEM;
@@ -614,7 +637,6 @@ void gDPLoadTile( u32 tile, u32 uls, u32 ult, u32 lrs, u32 lrt )
 
 	// Line given for 32-bit is half what it seems it should since they split the
 	// high and low words. I'm cheating by putting them together.
-#ifndef __GX__
 	void (*Interleave)( void *mem, u32 numDWords );
 
 	if (gDP.loadTile->size == G_IM_SIZ_32b)
@@ -630,34 +652,16 @@ void gDPLoadTile( u32 tile, u32 uls, u32 ult, u32 lrs, u32 lrt )
 
 	for (y = 0; y < height; y++)
 	{
+#ifndef _BIG_ENDIAN
 		UnswapCopy( src, dest, bpl );
+#else // !_BIG_ENDIAN
+		memcpy( dest, src, bpl );
+#endif // _BIG_ENDIAN
 		if (y & 1) Interleave( dest, line );
 
 		src += gDP.textureImage.bpl;
  		dest += line;
 	}
-#else // !__GX__
-	if (gDP.loadTile->size == G_IM_SIZ_32b)
-	{
-		line = gDP.loadTile->line << 1;
-//		Interleave = QWordInterleave;
-	}
-	else
-	{
-		line = gDP.loadTile->line;
-//		Interleave = DWordInterleave;
-	}
-
-	for (y = 0; y < height; y++)
-	{
-//		UnswapCopy( src, dest, bpl );
-//		if (y & 1) Interleave( dest, line );
-		memcpy( dest, src, bpl );
-
-		src += gDP.textureImage.bpl;
- 		dest += line;
-	}
-#endif // __GX__
 
 	gDP.textureMode = TEXTUREMODE_NORMAL;
 	gDP.loadType = LOADTYPE_TILE;
@@ -697,6 +701,9 @@ void gDPLoadBlock( u32 tile, u32 uls, u32 ult, u32 lrs, u32 dxt )
 			((*(u32*)&RDRAM[buffer->startAddress] & 0xFFFEFFFE) == (buffer->startAddress & 0xFFFEFFFE)))
 		{
 			gDP.loadTile->frameBuffer = buffer;
+#ifdef __GX__
+			FrameBuffer_MoveToTop(gDP.loadTile->frameBuffer);
+#endif //__GX__
 			gDP.textureMode = TEXTUREMODE_FRAMEBUFFER;
 			gDP.loadType = LOADTYPE_BLOCK;
 			gDP.changed |= CHANGED_TMEM;
@@ -707,7 +714,6 @@ void gDPLoadBlock( u32 tile, u32 uls, u32 ult, u32 lrs, u32 dxt )
 	u64* src = (u64*)&RDRAM[address];
 	u64* dest = &TMEM[gDP.loadTile->tmem];
 
-#ifndef __GX__
 	if (dxt > 0)
 	{
 		void (*Interleave)( void *mem, u32 numDWords );
@@ -723,7 +729,11 @@ void gDPLoadBlock( u32 tile, u32 uls, u32 ult, u32 lrs, u32 dxt )
 
 		for (u32 y = 0; y < height; y++)
 		{
+#ifndef _BIG_ENDIAN
 			UnswapCopy( src, dest, bpl );
+#else // !_BIG_ENDIAN
+			memcpy( dest, src, bpl );
+#endif // _BIG_ENDIAN
 			if (y & 1) Interleave( dest, line );
 
 			src += line;
@@ -731,36 +741,11 @@ void gDPLoadBlock( u32 tile, u32 uls, u32 ult, u32 lrs, u32 dxt )
 		}
 	}
 	else
+#ifndef _BIG_ENDIAN
 		UnswapCopy( src, dest, bytes );
-#else // !__GX__
-	if (dxt > 0)
-	{
-//		void (*Interleave)( void *mem, u32 numDWords );
-
-		u32 line = (2047 + dxt) / dxt;
-		u32 bpl = line << 3;
-		u32 height = bytes / bpl;
-
-//		if (gDP.loadTile->size == G_IM_SIZ_32b)
-//			Interleave = QWordInterleave;
-//		else
-//			Interleave = DWordInterleave;
-
-		for (u32 y = 0; y < height; y++)
-		{
-//			UnswapCopy( src, dest, bpl );
-//			if (y & 1) Interleave( dest, line );
-			memcpy( dest, src, bpl );
-
-			src += line;
-			dest += line;
-		}
-	}
-	else
-//		UnswapCopy( src, dest, bytes );
+#else // !_BIG_ENDIAN
 		memcpy( dest, src, bytes );
-
-#endif // __GX__
+#endif // _BIG_ENDIAN
 
 	gDP.textureMode = TEXTUREMODE_NORMAL;
 	gDP.loadType = LOADTYPE_BLOCK;
@@ -789,16 +774,17 @@ void gDPLoadTLUT( u32 tile, u32 uls, u32 ult, u32 lrs, u32 lrt )
 	{
 		for (u16 j = 0; (j < 16) && (i < count); j++, i++)
 		{
-#ifndef __GX__ //TODO: Make this more compact.
+#ifndef _BIG_ENDIAN
 			u16 color = swapword( src[i^1] );
-#else // !__GX__
-			u16 color = src[i^0];
-#endif // __GX__
 
 			*dest = color;
 			//dest[1] = color;
 			//dest[2] = color;
 			//dest[3] = color;
+
+#else // !_BIG_ENDIAN
+			*dest = src[i];
+#endif // _BIG_ENDIAN
 
 			dest += 4;
 		}

@@ -23,7 +23,7 @@ extern unsigned int diff_sec(long long start,long long end);
 static void check_heap_space(void){
 	int space = 16 * 1024 * 1024, *ptr=NULL;
 	while(space > 0)
-		if(ptr = malloc(space)) break;
+		if((ptr = malloc(space))) break;
 		else space -= 4096;
 	if(ptr) free(ptr);
 	sprintf(txtbuffer,"At least %dKB or %dMB space available", space/1024, space/1024/1024);
@@ -57,12 +57,12 @@ void DEBUG_print(char* string,int pos){
 		if(pos == DBG_USBGECKO) {
 			#ifdef PRINTGECKO
 			if(!flushed){
-				gecko_init(1);
+				usb_flush(1);
 				flushed = 1;
 			}
 			int size = strlen(string);
-			//usb_sendbuffer(1, &size,4);
-			gecko_sendbuffer_safe(1, string,size);
+			//usb_sendbuffer_safe(1, &size,4);
+			usb_sendbuffer_safe(1, string,size);
 			#endif
 		}
 		else if(pos == DBG_SDGECKOOPEN) {

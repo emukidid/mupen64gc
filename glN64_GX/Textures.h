@@ -8,6 +8,9 @@
 #include "gl.h" 
 #include "glext.h"
 #undef __WIN32__
+#ifdef HW_RVL
+#include "../gc_memory/MEM2.h"
+#endif //HW_RVL
 #endif // __GX__
 #include "convert.h"
 
@@ -18,6 +21,7 @@ struct CachedTexture
 	u16			*GXtexture;
 	u8			GXtexfmt;
 	u32			GXrealWidth, GXrealHeight;	// Actual dimensions of GX texture
+	u32			VIcount;
 #endif // __GX__
 
 	GLuint	glName;
@@ -61,9 +65,22 @@ struct TextureCache
 	//GLuint			glDummyName;
 	CachedTexture	*dummy;
 	u32				enable2xSaI, bitDepth;
+#ifdef __GX__
+	int				VIcount;
+	CachedTexture	*(GXprimDepthZ[2]);
+	u32				GXprimDepthCnt,GXZTexPrimCnt,GXnoZTexPrimCnt;
+#endif // __GX__
 };
 
 extern TextureCache cache;
+
+#ifdef __GX__
+# ifdef HW_RVL
+# define GX_TEXTURE_CACHE_SIZE TEXCACHE_SIZE //8MB for Wii
+# else //HW_RVL
+# define GX_TEXTURE_CACHE_SIZE (1.5*1024*1024)
+# endif //!HW_RVL
+#endif //__GX__
 
 inline u32 pow2( u32 dim )
 {
@@ -99,5 +116,9 @@ void TextureCache_ActivateTexture( u32 t, CachedTexture *texture );
 void TextureCache_ActivateNoise( u32 t );
 void TextureCache_ActivateDummy( u32 t );
 BOOL TextureCache_Verify();
+#ifdef __GX__
+void TextureCache_FreeNextTexture();
+void TextureCache_UpdatePrimDepthZtex( f32 z );
+#endif // __GX__
 
 #endif

@@ -46,8 +46,6 @@
 #include "../main/plugin.h"
 #include "../main/guifuncs.h"
 #include "../main/savestates.h"
-#include "../main/vcr.h"
-
 
 unsigned long next_vi;
 int vi_field=0;
@@ -346,7 +344,7 @@ void gen_interupt()
 	  next_interupt = q->count;
 	else
 	  next_interupt = 0;
-	if (interpcore)
+	if(dynacore || interpcore)
 	  {
 	     /*if ((Cause & (2 << 2)) && (Cause & 0x80000000))
 	       interp_addr = skip_jump+4;
