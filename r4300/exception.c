@@ -205,16 +205,15 @@ void exception_general()
      {
 	dyna_jump();
 	if (!dyna_interp) delay_slot = 0;
-     }
-   if (!dynacore || dyna_interp)
+     }*/
+   //if (!dynacore || dyna_interp)
      {
-	dyna_interp = 0;
+	//dyna_interp = 0;
 	if (delay_slot)
 	  {
-	     if (interpcore) skip_jump = interp_addr;
+	     if (dynacore || interpcore) skip_jump = interp_addr;
 	     else skip_jump = PC->addr;
 	     next_interupt = 0;
 	  }
      }
-     */
 }
