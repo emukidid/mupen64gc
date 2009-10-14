@@ -83,7 +83,7 @@ int add_jump_special(int is_j){
 
 void set_jump_special(int which, int new_jump){
 	jump_node* jump = &jump_table[which];
-	if(jump->type != JUMP_TYPE_SPEC) return;
+	if(!(jump->type & JUMP_TYPE_SPEC)) return;
 	jump->new_jump = new_jump;
 }
 
