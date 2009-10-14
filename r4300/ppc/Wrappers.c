@@ -146,6 +146,7 @@ unsigned int dyna_check_cop1_unusable(unsigned int pc, int isDelaySlot){
 		// Take a FP unavailable exception
 		Cause = (11 << 2) | 0x10000000;
 		exception_general();
+		delay_slot = 0;
 		// Return the address to trampoline to
 		return interp_addr;
 	} else
@@ -231,6 +232,7 @@ unsigned int dyna_mem(unsigned int value, unsigned int addr,
 			stop = 1;
 			break;
 	}
+	delay_slot = 0;
 	
 	if(interp_addr != pc) noCheckInterrupt = 1;
 	
