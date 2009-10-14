@@ -174,7 +174,7 @@ void coprocessor_unusable_exception()
 
 void exception_general()
 {
-	DEBUG_print("exception_general()\n", DBG_USBGECKO);
+//	DEBUG_print("exception_general()\n", DBG_USBGECKO);
    update_count();
    Status |= 2;
    

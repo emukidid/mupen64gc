@@ -203,11 +203,11 @@ void dma_pi_write()
 	return;
      }
    
-   sprintf(txtbuffer, "PIF DMA transfer from %08x to %08x of %dB\n",
+/*   sprintf(txtbuffer, "PIF DMA transfer from %08x to %08x of %dB\n",
            ((pi_register.pi_cart_addr_reg-0x10000000)&0x3FFFFFF)^S8,
            ((unsigned int)(pi_register.pi_dram_addr_reg)^S8),
            longueur);
-   DEBUG_print(txtbuffer, DBG_USBGECKO);
+   DEBUG_print(txtbuffer, DBG_USBGECKO);*/
    
    if(!interpcore)
      {
