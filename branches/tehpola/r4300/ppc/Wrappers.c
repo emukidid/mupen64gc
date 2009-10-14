@@ -214,7 +214,7 @@ unsigned int dyna_mem(unsigned int value, unsigned int addr,
 			*((long*)reg_cop1_simple[value]) = (long)dyna_rdword;
 			break;
 		case MEM_LDC1:
-			read_word_in_memory();
+			read_dword_in_memory();
 			*((long long*)reg_cop1_double[value]) = dyna_rdword;
 			break;
 		case MEM_SW:
@@ -230,6 +230,21 @@ unsigned int dyna_mem(unsigned int value, unsigned int addr,
 		case MEM_SB:
 			byte = value;
 			write_byte_in_memory();
+			check_memory();
+			break;
+		case MEM_SD:
+			dword = reg[value];
+			write_dword_in_memory();
+			check_memory();
+			break;
+		case MEM_SWC1:
+			word = *((long*)reg_cop1_simple[value]);
+			write_word_in_memory();
+			check_memory();
+			break;
+		case MEM_SDC1:
+			dword = *((unsigned long long*)reg_cop1_double[value]);
+			write_dword_in_memory();
 			check_memory();
 			break;
 		default:

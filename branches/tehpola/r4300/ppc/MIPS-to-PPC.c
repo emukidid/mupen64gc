@@ -1279,8 +1279,22 @@ static int SD(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_SD
-	// TODO: sd
-	return CONVERT_ERROR;
+	
+	flushRegisters();
+	reset_code_addr();
+	
+	int rd = mapRegisterTemp(); // r3 = rd
+	int base = mapRegister( MIPS_GET_RS(mips) ); // r4 = addr
+	
+	invalidateRegisters();
+	
+	// store from rt
+	GEN_LI(ppc, 3, 0, MIPS_GET_RT(mips));
+	set_next_dst(ppc);
+	
+	genCallDynaMem(MEM_SD, base, MIPS_GET_IMMED(mips));
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -1344,8 +1358,24 @@ static int SWC1(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_SWC1
-	// TODO: swc1
-	return CONVERT_ERROR;
+	
+	flushRegisters();
+	reset_code_addr();
+	
+	genCheckFP();
+	
+	int rd = mapRegisterTemp(); // r3 = rd
+	int base = mapRegister( MIPS_GET_RS(mips) ); // r4 = addr
+	
+	invalidateRegisters();
+	
+	// store from rt
+	GEN_LI(ppc, 3, 0, MIPS_GET_RT(mips));
+	set_next_dst(ppc);
+	
+	genCallDynaMem(MEM_SWC1, base, MIPS_GET_IMMED(mips));
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -1355,8 +1385,24 @@ static int SDC1(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_SDC1
-	// TODO: sdc1
-	return CONVERT_ERROR;
+	
+	flushRegisters();
+	reset_code_addr();
+	
+	genCheckFP();
+	
+	int rd = mapRegisterTemp(); // r3 = rd
+	int base = mapRegister( MIPS_GET_RS(mips) ); // r4 = addr
+	
+	invalidateRegisters();
+	
+	// store from rt
+	GEN_LI(ppc, 3, 0, MIPS_GET_RT(mips));
+	set_next_dst(ppc);
+	
+	genCallDynaMem(MEM_SDC1, base, MIPS_GET_IMMED(mips));
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 

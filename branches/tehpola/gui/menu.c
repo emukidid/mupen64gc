@@ -697,7 +697,7 @@ static inline void menuStack_push(menu_item*);
 		  "glN64 FB Textures: enabled" };
 	static char* toggleGlN64useFbTex_func(void);
 
-#define NUM_DEV_STD 4
+#define NUM_DEV_STD 3
 #ifdef SDPRINT
 	#define NUM_DEV_SDPRINT 1
 #else

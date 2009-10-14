@@ -30,7 +30,8 @@ extern int noCheckInterrupt;
 typedef enum { MEM_LW,   MEM_LH,   MEM_LB,   MEM_LD,
                MEM_LWU,  MEM_LHU,  MEM_LBU,
                MEM_LWC1, MEM_LDC1, 
-               MEM_SW,   MEM_SH,   MEM_SB,   MEM_SD } memType;
+               MEM_SW,   MEM_SH,   MEM_SB,   MEM_SD,
+               MEM_SWC1, MEM_SDC1                    } memType;
 
 unsigned int decodeNInterpret(MIPS_instr, unsigned int, int);
 int dyna_update_count(unsigned int pc);
