@@ -213,6 +213,10 @@ unsigned int dyna_mem(unsigned int value, unsigned int addr,
 			read_word_in_memory();
 			*((long*)reg_cop1_simple[value]) = (long)dyna_rdword;
 			break;
+		case MEM_LDC1:
+			read_word_in_memory();
+			*((long long*)reg_cop1_double[value]) = dyna_rdword;
+			break;
 		case MEM_SW:
 			word = value;
 			write_word_in_memory();
