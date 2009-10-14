@@ -685,7 +685,8 @@ static int LB(MIPS_instr mips){
 	flushRegisters();
 	reset_code_addr();
 	
-	int base = mapRegister( MIPS_GET_RS(mips) ); // r3 = addr
+	int rd = mapRegisterTemp(); // r3 = rd
+	int base = mapRegister( MIPS_GET_RS(mips) ); // r4 = addr
 	
 	invalidateRegisters();
 	
@@ -722,48 +723,19 @@ static int LB(MIPS_instr mips){
 	mapRegisterNew( MIPS_GET_RT(mips) );
 	flushRegisters();
 	// Skip over else
-	GEN_B(ppc, 15, 0, 0);
+	int not_fastmem_id = add_jump_special(1);
+	GEN_B(ppc, not_fastmem_id, 0, 0);
 	set_next_dst(ppc);
+	PowerPC_instr* preCall = get_curr_dst();
 	
-	// mtctr DYNAREG_RWMEM
-	GEN_MTCTR(ppc, DYNAREG_RWMEM);
-	set_next_dst(ppc);
-	// save lr
-	GEN_MFLR(ppc, 0);
-	set_next_dst(ppc);
-	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
-	set_next_dst(ppc);
-	// addr = base + immed
-	GEN_ADDI(ppc, 4, base, MIPS_GET_IMMED(mips));
-	set_next_dst(ppc);
-	// type = MEM_LB
-	GEN_LI(ppc, 5, 0, MEM_LB);
-	set_next_dst(ppc);
-	// value = reg[rt]
+	// load into rt
 	GEN_LI(ppc, 3, 0, MIPS_GET_RT(mips));
 	set_next_dst(ppc);
-	// Pass PC as argument
-	GEN_LIS(ppc, 6, (get_src_pc()+4)>>16);
-	set_next_dst(ppc);
-	GEN_ORI(ppc, 6, 6, get_src_pc()+4);
-	set_next_dst(ppc);
-	// isDelaySlot
-	GEN_LI(ppc, 7, 0, isDelaySlot);
-	set_next_dst(ppc);
-	// call dyna_mem
-	GEN_BCTRL(ppc);
-	set_next_dst(ppc);
-	// restore lr
-	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
-	set_next_dst(ppc);
-	GEN_MTLR(ppc, 0);
-	set_next_dst(ppc);
-	// Check whether we need to take an interrupt
-	GEN_CMPI(ppc, 3, 0, 6);
-	set_next_dst(ppc);
-	// If so, return to trampoline
-	GEN_BNELR(ppc, 6, 0);
-	set_next_dst(ppc);
+	
+	genCallDynaMem(MEM_LB, base, MIPS_GET_IMMED(mips));
+	
+	int callSize = get_curr_dst() - preCall;
+	set_jump_special(not_fastmem_id, callSize+1);
 	
 	return CONVERT_SUCCESS;
 #endif
@@ -779,7 +751,8 @@ static int LH(MIPS_instr mips){
 	flushRegisters();
 	reset_code_addr();
 	
-	int base = mapRegister( MIPS_GET_RS(mips) ); // r3 = addr
+	int rd = mapRegisterTemp(); // r3 = rd
+	int base = mapRegister( MIPS_GET_RS(mips) ); // r4 = addr
 	
 	invalidateRegisters();
 	
@@ -813,48 +786,19 @@ static int LH(MIPS_instr mips){
 	mapRegisterNew( MIPS_GET_RT(mips) );
 	flushRegisters();
 	// Skip over else
-	GEN_B(ppc, 15, 0, 0);
+	int not_fastmem_id = add_jump_special(1);
+	GEN_B(ppc, not_fastmem_id, 0, 0);
 	set_next_dst(ppc);
+	PowerPC_instr* preCall = get_curr_dst();
 	
-	// mtctr DYNAREG_RWMEM
-	GEN_MTCTR(ppc, DYNAREG_RWMEM);
-	set_next_dst(ppc);
-	// save lr
-	GEN_MFLR(ppc, 0);
-	set_next_dst(ppc);
-	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
-	set_next_dst(ppc);
-	// addr = base + immed
-	GEN_ADDI(ppc, 4, base, MIPS_GET_IMMED(mips));
-	set_next_dst(ppc);
-	// type = MEM_LH
-	GEN_LI(ppc, 5, 0, MEM_LH);
-	set_next_dst(ppc);
-	// value = reg[rt]
+	// load into rt
 	GEN_LI(ppc, 3, 0, MIPS_GET_RT(mips));
 	set_next_dst(ppc);
-	// Pass PC as argument
-	GEN_LIS(ppc, 6, (get_src_pc()+4)>>16);
-	set_next_dst(ppc);
-	GEN_ORI(ppc, 6, 6, get_src_pc()+4);
-	set_next_dst(ppc);
-	// isDelaySlot
-	GEN_LI(ppc, 7, 0, isDelaySlot);
-	set_next_dst(ppc);
-	// call dyna_mem
-	GEN_BCTRL(ppc);
-	set_next_dst(ppc);
-	// restore lr
-	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
-	set_next_dst(ppc);
-	GEN_MTLR(ppc, 0);
-	set_next_dst(ppc);
-	// Check whether we need to take an interrupt
-	GEN_CMPI(ppc, 3, 0, 6);
-	set_next_dst(ppc);
-	// If so, return to trampoline
-	GEN_BNELR(ppc, 6, 0);
-	set_next_dst(ppc);
+	
+	genCallDynaMem(MEM_LH, base, MIPS_GET_IMMED(mips));
+	
+	int callSize = get_curr_dst() - preCall;
+	set_jump_special(not_fastmem_id, callSize+1);
 	
 	return CONVERT_SUCCESS;
 #endif
@@ -881,7 +825,8 @@ static int LW(MIPS_instr mips){
 	flushRegisters();
 	reset_code_addr();
 	
-	int base = mapRegister( MIPS_GET_RS(mips) ); // r3 = addr
+	int rd = mapRegisterTemp(); // r3 = rd
+	int base = mapRegister( MIPS_GET_RS(mips) ); // r4 = addr
 	
 	invalidateRegisters();
 	
@@ -915,48 +860,19 @@ static int LW(MIPS_instr mips){
 	mapRegisterNew( MIPS_GET_RT(mips) );
 	flushRegisters();
 	// Skip over else
-	GEN_B(ppc, 15, 0, 0);
+	int not_fastmem_id = add_jump_special(1);
+	GEN_B(ppc, not_fastmem_id, 0, 0);
 	set_next_dst(ppc);
+	PowerPC_instr* preCall = get_curr_dst();
 	
-	// mtctr DYNAREG_RWMEM
-	GEN_MTCTR(ppc, DYNAREG_RWMEM);
-	set_next_dst(ppc);
-	// save lr
-	GEN_MFLR(ppc, 0);
-	set_next_dst(ppc);
-	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
-	set_next_dst(ppc);
-	// addr = base + immed
-	GEN_ADDI(ppc, 4, base, MIPS_GET_IMMED(mips));
-	set_next_dst(ppc);
-	// type = MEM_LW
-	GEN_LI(ppc, 5, 0, MEM_LW);
-	set_next_dst(ppc);
-	// value = reg[rt]
+	// load into rt
 	GEN_LI(ppc, 3, 0, MIPS_GET_RT(mips));
 	set_next_dst(ppc);
-	// Pass PC as argument
-	GEN_LIS(ppc, 6, (get_src_pc()+4)>>16);
-	set_next_dst(ppc);
-	GEN_ORI(ppc, 6, 6, get_src_pc()+4);
-	set_next_dst(ppc);
-	// isDelaySlot
-	GEN_LI(ppc, 7, 0, isDelaySlot);
-	set_next_dst(ppc);
-	// call dyna_mem
-	GEN_BCTRL(ppc);
-	set_next_dst(ppc);
-	// restore lr
-	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
-	set_next_dst(ppc);
-	GEN_MTLR(ppc, 0);
-	set_next_dst(ppc);
-	// Check whether we need to take an interrupt
-	GEN_CMPI(ppc, 3, 0, 6);
-	set_next_dst(ppc);
-	// If so, return to trampoline
-	GEN_BNELR(ppc, 6, 0);
-	set_next_dst(ppc);
+	
+	genCallDynaMem(MEM_LW, base, MIPS_GET_IMMED(mips));
+	
+	int callSize = get_curr_dst() - preCall;
+	set_jump_special(not_fastmem_id, callSize+1);
 	
 	return CONVERT_SUCCESS;
 #endif
@@ -972,7 +888,8 @@ static int LBU(MIPS_instr mips){
 	flushRegisters();
 	reset_code_addr();
 	
-	int base = mapRegister( MIPS_GET_RS(mips) ); // r3 = addr
+	int rd = mapRegisterTemp(); // r3 = rd
+	int base = mapRegister( MIPS_GET_RS(mips) ); // r4 = addr
 	
 	invalidateRegisters();
 	
@@ -1006,48 +923,19 @@ static int LBU(MIPS_instr mips){
 	mapRegisterNew( MIPS_GET_RT(mips) );
 	flushRegisters();
 	// Skip over else
-	GEN_B(ppc, 15, 0, 0);
+	int not_fastmem_id = add_jump_special(1);
+	GEN_B(ppc, not_fastmem_id, 0, 0);
 	set_next_dst(ppc);
+	PowerPC_instr* preCall = get_curr_dst();
 	
-	// mtctr DYNAREG_RWMEM
-	GEN_MTCTR(ppc, DYNAREG_RWMEM);
-	set_next_dst(ppc);
-	// save lr
-	GEN_MFLR(ppc, 0);
-	set_next_dst(ppc);
-	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
-	set_next_dst(ppc);
-	// addr = base + immed
-	GEN_ADDI(ppc, 4, base, MIPS_GET_IMMED(mips));
-	set_next_dst(ppc);
-	// type = MEM_LBU
-	GEN_LI(ppc, 5, 0, MEM_LBU);
-	set_next_dst(ppc);
-	// value = reg[rt]
+	// load into rt
 	GEN_LI(ppc, 3, 0, MIPS_GET_RT(mips));
 	set_next_dst(ppc);
-	// Pass PC as argument
-	GEN_LIS(ppc, 6, (get_src_pc()+4)>>16);
-	set_next_dst(ppc);
-	GEN_ORI(ppc, 6, 6, get_src_pc()+4);
-	set_next_dst(ppc);
-	// isDelaySlot
-	GEN_LI(ppc, 7, 0, isDelaySlot);
-	set_next_dst(ppc);
-	// call dyna_mem
-	GEN_BCTRL(ppc);
-	set_next_dst(ppc);
-	// restore lr
-	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
-	set_next_dst(ppc);
-	GEN_MTLR(ppc, 0);
-	set_next_dst(ppc);
-	// Check whether we need to take an interrupt
-	GEN_CMPI(ppc, 3, 0, 6);
-	set_next_dst(ppc);
-	// If so, return to trampoline
-	GEN_BNELR(ppc, 6, 0);
-	set_next_dst(ppc);
+	
+	genCallDynaMem(MEM_LBU, base, MIPS_GET_IMMED(mips));
+	
+	int callSize = get_curr_dst() - preCall;
+	set_jump_special(not_fastmem_id, callSize+1);
 	
 	return CONVERT_SUCCESS;
 #endif
@@ -1063,7 +951,8 @@ static int LHU(MIPS_instr mips){
 	flushRegisters();
 	reset_code_addr();
 	
-	int base = mapRegister( MIPS_GET_RS(mips) ); // r3 = addr
+	int rd = mapRegisterTemp(); // r3 = rd
+	int base = mapRegister( MIPS_GET_RS(mips) ); // r4 = addr
 	
 	invalidateRegisters();
 	
@@ -1097,48 +986,19 @@ static int LHU(MIPS_instr mips){
 	mapRegisterNew( MIPS_GET_RT(mips) );
 	flushRegisters();
 	// Skip over else
-	GEN_B(ppc, 15, 0, 0);
+	int not_fastmem_id = add_jump_special(1);
+	GEN_B(ppc, not_fastmem_id, 0, 0);
 	set_next_dst(ppc);
+	PowerPC_instr* preCall = get_curr_dst();
 	
-	// mtctr DYNAREG_RWMEM
-	GEN_MTCTR(ppc, DYNAREG_RWMEM);
-	set_next_dst(ppc);
-	// save lr
-	GEN_MFLR(ppc, 0);
-	set_next_dst(ppc);
-	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
-	set_next_dst(ppc);
-	// addr = base + immed
-	GEN_ADDI(ppc, 4, base, MIPS_GET_IMMED(mips));
-	set_next_dst(ppc);
-	// type = MEM_LHU
-	GEN_LI(ppc, 5, 0, MEM_LHU);
-	set_next_dst(ppc);
-	// value = reg[rt]
+	// load into rt
 	GEN_LI(ppc, 3, 0, MIPS_GET_RT(mips));
 	set_next_dst(ppc);
-	// Pass PC as argument
-	GEN_LIS(ppc, 6, (get_src_pc()+4)>>16);
-	set_next_dst(ppc);
-	GEN_ORI(ppc, 6, 6, get_src_pc()+4);
-	set_next_dst(ppc);
-	// isDelaySlot
-	GEN_LI(ppc, 7, 0, isDelaySlot);
-	set_next_dst(ppc);
-	// call dyna_mem
-	GEN_BCTRL(ppc);
-	set_next_dst(ppc);
-	// restore lr
-	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
-	set_next_dst(ppc);
-	GEN_MTLR(ppc, 0);
-	set_next_dst(ppc);
-	// Check whether we need to take an interrupt
-	GEN_CMPI(ppc, 3, 0, 6);
-	set_next_dst(ppc);
-	// If so, return to trampoline
-	GEN_BNELR(ppc, 6, 0);
-	set_next_dst(ppc);
+	
+	genCallDynaMem(MEM_LHU, base, MIPS_GET_IMMED(mips));
+	
+	int callSize = get_curr_dst() - preCall;
+	set_jump_special(not_fastmem_id, callSize+1);
 	
 	return CONVERT_SUCCESS;
 #endif
@@ -1165,7 +1025,8 @@ static int LWU(MIPS_instr mips){
 	flushRegisters();
 	reset_code_addr();
 	
-	int base = mapRegister( MIPS_GET_RS(mips) ); // r3 = addr
+	int rd = mapRegisterTemp(); // r3 = rd
+	int base = mapRegister( MIPS_GET_RS(mips) ); // r4 = addr
 	
 	invalidateRegisters();
 	
@@ -1203,48 +1064,19 @@ static int LWU(MIPS_instr mips){
 	// Write the value out to reg
 	flushRegisters();
 	// Skip over else
-	GEN_B(ppc, 15, 0, 0);
+	int not_fastmem_id = add_jump_special(1);
+	GEN_B(ppc, not_fastmem_id, 0, 0);
 	set_next_dst(ppc);
+	PowerPC_instr* preCall = get_curr_dst();
 	
-	// mtctr DYNAREG_RWMEM
-	GEN_MTCTR(ppc, DYNAREG_RWMEM);
-	set_next_dst(ppc);
-	// save lr
-	GEN_MFLR(ppc, 0);
-	set_next_dst(ppc);
-	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
-	set_next_dst(ppc);
-	// addr = base + immed
-	GEN_ADDI(ppc, 4, base, MIPS_GET_IMMED(mips));
-	set_next_dst(ppc);
-	// type = MEM_LWU
-	GEN_LI(ppc, 5, 0, MEM_LWU);
-	set_next_dst(ppc);
-	// value = reg[rt]
+	// load into rt
 	GEN_LI(ppc, 3, 0, MIPS_GET_RT(mips));
 	set_next_dst(ppc);
-	// Pass PC as argument
-	GEN_LIS(ppc, 6, (get_src_pc()+4)>>16);
-	set_next_dst(ppc);
-	GEN_ORI(ppc, 6, 6, get_src_pc()+4);
-	set_next_dst(ppc);
-	// isDelaySlot
-	GEN_LI(ppc, 7, 0, isDelaySlot);
-	set_next_dst(ppc);
-	// call dyna_mem
-	GEN_BCTRL(ppc);
-	set_next_dst(ppc);
-	// restore lr
-	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
-	set_next_dst(ppc);
-	GEN_MTLR(ppc, 0);
-	set_next_dst(ppc);
-	// Check whether we need to take an interrupt
-	GEN_CMPI(ppc, 3, 0, 6);
-	set_next_dst(ppc);
-	// If so, return to trampoline
-	GEN_BNELR(ppc, 6, 0);
-	set_next_dst(ppc);
+	
+	genCallDynaMem(MEM_LWU, base, MIPS_GET_IMMED(mips));
+	
+	int callSize = get_curr_dst() - preCall;
+	set_jump_special(not_fastmem_id, callSize+1);
 	
 	return CONVERT_SUCCESS;
 #endif
@@ -1271,42 +1103,7 @@ static int SB(MIPS_instr mips){
 	
 	invalidateRegisters();
 	
-	// mtctr DYNAREG_RWMEM
-	GEN_MTCTR(ppc, DYNAREG_RWMEM);
-	set_next_dst(ppc);
-	// save lr
-	GEN_MFLR(ppc, 0);
-	set_next_dst(ppc);
-	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
-	set_next_dst(ppc);
-	// addr = base + immed
-	GEN_ADDI(ppc, 4, base, MIPS_GET_IMMED(mips));
-	set_next_dst(ppc);
-	// type = MEM_SB
-	GEN_LI(ppc, 5, 0, MEM_SB);
-	set_next_dst(ppc);
-	// Pass PC as argument
-	GEN_LIS(ppc, 6, (get_src_pc()+4)>>16);
-	set_next_dst(ppc);
-	GEN_ORI(ppc, 6, 6, get_src_pc()+4);
-	set_next_dst(ppc);
-	// isDelaySlot
-	GEN_LI(ppc, 7, 0, isDelaySlot);
-	set_next_dst(ppc);
-	// call dyna_mem
-	GEN_BCTRL(ppc);
-	set_next_dst(ppc);
-	// restore lr
-	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
-	set_next_dst(ppc);
-	GEN_MTLR(ppc, 0);
-	set_next_dst(ppc);
-	// Check whether we need to take an interrupt
-	GEN_CMPI(ppc, 3, 0, 6);
-	set_next_dst(ppc);
-	// If so, return to trampoline
-	GEN_BNELR(ppc, 6, 0);
-	set_next_dst(ppc);
+	genCallDynaMem(MEM_SB, base, MIPS_GET_IMMED(mips));
 	
 	return CONVERT_SUCCESS;
 #endif
@@ -1333,42 +1130,7 @@ static int SH(MIPS_instr mips){
 	
 	invalidateRegisters();
 	
-	// mtctr DYNAREG_RWMEM
-	GEN_MTCTR(ppc, DYNAREG_RWMEM);
-	set_next_dst(ppc);
-	// save lr
-	GEN_MFLR(ppc, 0);
-	set_next_dst(ppc);
-	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
-	set_next_dst(ppc);
-	// addr = base + immed
-	GEN_ADDI(ppc, 4, base, MIPS_GET_IMMED(mips));
-	set_next_dst(ppc);
-	// type = MEM_SH
-	GEN_LI(ppc, 5, 0, MEM_SH);
-	set_next_dst(ppc);
-	// Pass PC as argument
-	GEN_LIS(ppc, 6, (get_src_pc()+4)>>16);
-	set_next_dst(ppc);
-	GEN_ORI(ppc, 6, 6, get_src_pc()+4);
-	set_next_dst(ppc);
-	// isDelaySlot
-	GEN_LI(ppc, 7, 0, isDelaySlot);
-	set_next_dst(ppc);
-	// call dyna_mem
-	GEN_BCTRL(ppc);
-	set_next_dst(ppc);
-	// restore lr
-	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
-	set_next_dst(ppc);
-	GEN_MTLR(ppc, 0);
-	set_next_dst(ppc);
-	// Check whether we need to take an interrupt
-	GEN_CMPI(ppc, 3, 0, 6);
-	set_next_dst(ppc);
-	// If so, return to trampoline
-	GEN_BNELR(ppc, 6, 0);
-	set_next_dst(ppc);
+	genCallDynaMem(MEM_SH, base, MIPS_GET_IMMED(mips));
 	
 	return CONVERT_SUCCESS;
 #endif
@@ -1406,42 +1168,7 @@ static int SW(MIPS_instr mips){
 	
 	invalidateRegisters();
 	
-	// mtctr DYNAREG_RWMEM
-	GEN_MTCTR(ppc, DYNAREG_RWMEM);
-	set_next_dst(ppc);
-	// save lr
-	GEN_MFLR(ppc, 0);
-	set_next_dst(ppc);
-	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
-	set_next_dst(ppc);
-	// addr = base + immed
-	GEN_ADDI(ppc, 4, base, MIPS_GET_IMMED(mips));
-	set_next_dst(ppc);
-	// type = MEM_SW
-	GEN_LI(ppc, 5, 0, MEM_SW);
-	set_next_dst(ppc);
-	// Pass PC as argument
-	GEN_LIS(ppc, 6, (get_src_pc()+4)>>16);
-	set_next_dst(ppc);
-	GEN_ORI(ppc, 6, 6, get_src_pc()+4);
-	set_next_dst(ppc);
-	// isDelaySlot
-	GEN_LI(ppc, 7, 0, isDelaySlot);
-	set_next_dst(ppc);
-	// call dyna_mem
-	GEN_BCTRL(ppc);
-	set_next_dst(ppc);
-	// restore lr
-	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
-	set_next_dst(ppc);
-	GEN_MTLR(ppc, 0);
-	set_next_dst(ppc);
-	// Check whether we need to take an interrupt
-	GEN_CMPI(ppc, 3, 0, 6);
-	set_next_dst(ppc);
-	// If so, return to trampoline
-	GEN_BNELR(ppc, 6, 0);
-	set_next_dst(ppc);
+	genCallDynaMem(MEM_SW, base, MIPS_GET_IMMED(mips));
 	
 	return CONVERT_SUCCESS;
 #endif
@@ -1490,7 +1217,8 @@ static int LD(MIPS_instr mips){
 	flushRegisters();
 	reset_code_addr();
 	
-	int base = mapRegister( MIPS_GET_RS(mips) ); // r3 = addr
+	int rd = mapRegisterTemp(); // r3 = rd
+	int base = mapRegister( MIPS_GET_RS(mips) ); // r4 = addr
 	
 	invalidateRegisters();
 	
@@ -1520,55 +1248,26 @@ static int LD(MIPS_instr mips){
 	// Create a mapping for this value
 	RegMapping value = mapRegister64New( MIPS_GET_RT(mips) );
 	// Perform the actual load
-	GEN_LWZ(ppc, value.hi, MIPS_GET_IMMED(mips), base);
-	set_next_dst(ppc);
 	GEN_LWZ(ppc, value.lo, MIPS_GET_IMMED(mips)+4, base);
+	set_next_dst(ppc);
+	GEN_LWZ(ppc, value.hi, MIPS_GET_IMMED(mips), base);
 	set_next_dst(ppc);
 	// Write the value out to reg
 	flushRegisters();
 	// Skip over else
-	GEN_B(ppc, 15, 0, 0);
+	int not_fastmem_id = add_jump_special(1);
+	GEN_B(ppc, not_fastmem_id, 0, 0);
 	set_next_dst(ppc);
+	PowerPC_instr* preCall = get_curr_dst();
 	
-	// mtctr DYNAREG_RWMEM
-	GEN_MTCTR(ppc, DYNAREG_RWMEM);
-	set_next_dst(ppc);
-	// save lr
-	GEN_MFLR(ppc, 0);
-	set_next_dst(ppc);
-	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
-	set_next_dst(ppc);
-	// addr = base + immed
-	GEN_ADDI(ppc, 4, base, MIPS_GET_IMMED(mips));
-	set_next_dst(ppc);
-	// type = MEM_LD
-	GEN_LI(ppc, 5, 0, MEM_LD);
-	set_next_dst(ppc);
-	// value = reg[rt]
+	// load into rt
 	GEN_LI(ppc, 3, 0, MIPS_GET_RT(mips));
 	set_next_dst(ppc);
-	// Pass PC as argument
-	GEN_LIS(ppc, 6, (get_src_pc()+4)>>16);
-	set_next_dst(ppc);
-	GEN_ORI(ppc, 6, 6, get_src_pc()+4);
-	set_next_dst(ppc);
-	// isDelaySlot
-	GEN_LI(ppc, 7, 0, isDelaySlot);
-	set_next_dst(ppc);
-	// call dyna_mem
-	GEN_BCTRL(ppc);
-	set_next_dst(ppc);
-	// restore lr
-	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
-	set_next_dst(ppc);
-	GEN_MTLR(ppc, 0);
-	set_next_dst(ppc);
-	// Check whether we need to take an interrupt
-	GEN_CMPI(ppc, 3, 0, 6);
-	set_next_dst(ppc);
-	// If so, return to trampoline
-	GEN_BNELR(ppc, 6, 0);
-	set_next_dst(ppc);
+	
+	genCallDynaMem(MEM_LD, base, MIPS_GET_IMMED(mips));
+	
+	int callSize = get_curr_dst() - preCall;
+	set_jump_special(not_fastmem_id, callSize+1);
 	
 	return CONVERT_SUCCESS;
 #endif
@@ -1597,49 +1296,16 @@ static int LWC1(MIPS_instr mips){
 	
 	genCheckFP();
 	
-	int base = mapRegister( MIPS_GET_RS(mips) ); // r3 = addr
+	int rd = mapRegisterTemp(); // r3 = rd
+	int base = mapRegister( MIPS_GET_RS(mips) ); // r4 = addr
 	
 	invalidateRegisters();
 	
-	// mtctr DYNAREG_RWMEM
-	GEN_MTCTR(ppc, DYNAREG_RWMEM);
-	set_next_dst(ppc);
-	// save lr
-	GEN_MFLR(ppc, 0);
-	set_next_dst(ppc);
-	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
-	set_next_dst(ppc);
-	// addr = base + immed
-	GEN_ADDI(ppc, 4, base, MIPS_GET_IMMED(mips));
-	set_next_dst(ppc);
-	// type = MEM_LWC1
-	GEN_LI(ppc, 5, 0, MEM_LWC1);
-	set_next_dst(ppc);
-	// value = reg_cop1[rt]
+	// load into rt
 	GEN_LI(ppc, 3, 0, MIPS_GET_RT(mips));
 	set_next_dst(ppc);
-	// Pass PC as argument
-	GEN_LIS(ppc, 6, (get_src_pc()+4)>>16);
-	set_next_dst(ppc);
-	GEN_ORI(ppc, 6, 6, get_src_pc()+4);
-	set_next_dst(ppc);
-	// isDelaySlot
-	GEN_LI(ppc, 7, 0, isDelaySlot ? 1 : 0);
-	set_next_dst(ppc);
-	// call dyna_mem
-	GEN_BCTRL(ppc);
-	set_next_dst(ppc);
-	// restore lr
-	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
-	set_next_dst(ppc);
-	GEN_MTLR(ppc, 0);
-	set_next_dst(ppc);
-	// Check whether we need to take an interrupt
-	GEN_CMPI(ppc, 3, 0, 6);
-	set_next_dst(ppc);
-	// If so, return to trampoline
-	GEN_BNELR(ppc, 6, 0);
-	set_next_dst(ppc);
+	
+	genCallDynaMem(MEM_LWC1, base, MIPS_GET_IMMED(mips));
 	
 	return CONVERT_SUCCESS;
 #endif
@@ -1651,8 +1317,24 @@ static int LDC1(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_LDC1
-	// TODO: ldc1
-	return CONVERT_ERROR;
+	
+	flushRegisters();
+	reset_code_addr();
+	
+	genCheckFP();
+	
+	int rd = mapRegisterTemp(); // r3 = rd
+	int base = mapRegister( MIPS_GET_RS(mips) ); // r4 = addr
+	
+	invalidateRegisters();
+	
+	// load into rt
+	GEN_LI(ppc, 3, 0, MIPS_GET_RT(mips));
+	set_next_dst(ppc);
+	
+	genCallDynaMem(MEM_LDC1, base, MIPS_GET_IMMED(mips));
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -4139,6 +3821,47 @@ static void genCheckFP(void){
 		// Unless this instruction is in a delay slot
 		FP_need_check = isDelaySlot;
 	}
+}
+
+void genCallDynaMem(memType type, int base, short immed){
+	PowerPC_instr ppc;
+	// PRE: value to store, or register # to load into should be in r3
+	// mtctr DYNAREG_RWMEM
+	GEN_MTCTR(ppc, DYNAREG_RWMEM);
+	set_next_dst(ppc);
+	// save lr
+	GEN_MFLR(ppc, 0);
+	set_next_dst(ppc);
+	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	// addr = base + immed
+	GEN_ADDI(ppc, 4, base, immed);
+	set_next_dst(ppc);
+	// type passed as arg 3
+	GEN_LI(ppc, 5, 0, type);
+	set_next_dst(ppc);
+	// Pass PC as argument
+	GEN_LIS(ppc, 6, (get_src_pc()+4)>>16);
+	set_next_dst(ppc);
+	GEN_ORI(ppc, 6, 6, get_src_pc()+4);
+	set_next_dst(ppc);
+	// isDelaySlot
+	GEN_LI(ppc, 7, 0, isDelaySlot ? 1 : 0);
+	set_next_dst(ppc);
+	// call dyna_mem
+	GEN_BCTRL(ppc);
+	set_next_dst(ppc);
+	// restore lr
+	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	GEN_MTLR(ppc, 0);
+	set_next_dst(ppc);
+	// Check whether we need to take an interrupt
+	GEN_CMPI(ppc, 3, 0, 6);
+	set_next_dst(ppc);
+	// If so, return to trampoline
+	GEN_BNELR(ppc, 6, 0);
+	set_next_dst(ppc);
 }
 
 static int mips_is_jump(MIPS_instr instr){
