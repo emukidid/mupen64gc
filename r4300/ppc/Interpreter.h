@@ -37,14 +37,14 @@ unsigned int decodeNInterpret();
 //#define INTERPRET_LD
 #define INTERPRET_LDL
 #define INTERPRET_LDR
-#define INTERPRET_SD
+//#define INTERPRET_SD
 #define INTERPRET_SDL
 #define INTERPRET_SDR
 
 //#define INTERPRET_LWC1
-#define INTERPRET_LDC1
-#define INTERPRET_SWC1
-#define INTERPRET_SDC1
+//#define INTERPRET_LDC1
+//#define INTERPRET_SWC1
+//#define INTERPRET_SDC1
 
 //#define INTERPRET_DW
 
