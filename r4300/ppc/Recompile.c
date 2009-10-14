@@ -112,8 +112,10 @@ void recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 	PowerPC_func_node* fn, * next;
 	for(fn = node->next; fn != NULL; fn = next){
 		next = fn->next;
-		if(func->start_addr < fn->function->end_addr &&
-		   func->end_addr   > fn->function->start_addr)
+		if((!fn->function->end_addr || // Runs to end
+		    func->start_addr < fn->function->end_addr) &&
+		   (!func->end_addr || // Function runs to the end of a 0xfxxx
+		    func->end_addr   > fn->function->start_addr))
 			RecompCache_Free(ppc_block->start_address |
 			                 fn->function->start_addr);
 	}
