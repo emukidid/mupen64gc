@@ -2780,14 +2780,11 @@ static int SQRT_FP(MIPS_instr mips, int dbl){
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl );
 	
-	// frsqrte f0, fs (f0 ~ 1/sqrt(fs))
-	GEN_FRSQRTE(ppc, 0, fs);
+	// frsqrte fd, fs (fd ~ 1/sqrt(fs))
+	GEN_FRSQRTE(ppc, fd, fs);
 	set_next_dst(ppc);
-	// fsel f0, f0, f0, fs (f0 = f0 if f0 else fs)
-	GEN_FSEL(ppc, 0, 0, 0, fs);
-	set_next_dst(ppc);
-	// fmul fd, f0, fs (fd = fs * 1/sqrt(fs) = sqrt(fs))
-	GEN_FMUL(ppc, fd, 0, fs);
+	// fres fd, fd (fd ~ sqrt(fs))
+	GEN_FRES(ppc, fd, fd);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
