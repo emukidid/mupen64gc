@@ -110,8 +110,8 @@ static unsigned long trash;
 void (**rwmem[0xFFFF])();
 
 void (*rw_nothing[8])() =
-	{ read_nothing,  read_nothingh,  read_nothingb,  read_nothingd,
-	  write_nothing, write_nothingh, write_nothingb, write_nothingd };
+	{ read_nothing,  read_nothingb,  read_nothingh,  read_nothingd,
+	  write_nothing, write_nothingb, write_nothingh, write_nothingd };
 
 void (*rw_nomem[8])() =
 	{ read_nomem,  read_nomemb,  read_nomemh,  read_nomemd,
