@@ -1291,7 +1291,7 @@ static int LD(MIPS_instr mips){
 	GEN_LI(ppc, 3, 0, MIPS_GET_RT(mips));
 	set_next_dst(ppc);
 	
-	genCallDynaMem(MEM_LWU, base, MIPS_GET_IMMED(mips));
+	genCallDynaMem(MEM_LD, base, MIPS_GET_IMMED(mips));
 	
 	int callSize = get_curr_dst() - preCall;
 	set_jump_special(not_fastmem_id, callSize+1);
