@@ -10,24 +10,63 @@
 #define DYNAREG_REG    14
 #define DYNAREG_ZERO   15
 #define DYNAREG_INTERP 16
-#define DYNAREG_ICOUNT 17
+#define DYNAREG_UCOUNT 17
+#define DYNAREG_LADDR  18
+#define DYNAREG_RDRAM  19
+#define DYNAREG_RWMEM  20
+#define DYNAREG_FPR_32 21
+#define DYNAREG_FPR_64 22
+#define DYNAREG_FCR31  23
+#define DYNAREG_CHKFP  24
 
-#define DYNAOFF_LR     36 // This is weird, but it belongs in the last frame
-#define DYNAOFF_CR     8
-#define DYNAOFF_REG    12
-#define DYNAOFF_ZERO   16
-#define DYNAOFF_INTERP 20
-#define DYNAOFF_ICOUNT 24
+#define DYNAOFF_LR     20
 
 extern long long int reg[34]; // game's registers
-extern long long int reg_cop1_fgr_64[32];
+extern float*  reg_cop1_simple[32]; // 32-bit fprs
+extern double* reg_cop1_double[32]; // 64-bit fprs
 
-unsigned int decodeNInterpret(MIPS_instr, unsigned int, unsigned int, int);
+extern int noCheckInterrupt;
+
+typedef enum { MEM_LW,  MEM_LH,  MEM_LB,  MEM_LD,
+               MEM_LWU, MEM_LHU, MEM_LBU,
+               MEM_SW,  MEM_SH,  MEM_SB } memType;
+
+unsigned int decodeNInterpret(MIPS_instr, unsigned int, int);
+#ifdef COMPARE_CORE
+int dyna_update_count(unsigned int pc, int isDelaySlot);
+#else
+int dyna_update_count(unsigned int pc);
+#endif
 
 #define invalid_code_set(page,invalid) invalid_code[page] = invalid
 #define invalid_code_get(page) (invalid_code[page])
 
+//cop0 macros
+#define Index reg_cop0[0]
+#define Random reg_cop0[1]
+#define EntryLo0 reg_cop0[2]
+#define EntryLo1 reg_cop0[3]
+#define Context reg_cop0[4]
+#define PageMask reg_cop0[5]
+#define Wired reg_cop0[6]
+#define BadVAddr reg_cop0[8]
 #define Count reg_cop0[9]
+#define EntryHi reg_cop0[10]
+#define Compare reg_cop0[11]
+#define Status reg_cop0[12]
+#define Cause reg_cop0[13]
+#define EPC reg_cop0[14]
+#define PRevID reg_cop0[15]
+#define Config reg_cop0[16]
+#define LLAddr reg_cop0[17]
+#define WatchLo reg_cop0[18]
+#define WatchHi reg_cop0[19]
+#define XContext reg_cop0[20]
+#define PErr reg_cop0[26]
+#define CacheErr reg_cop0[27]
+#define TagLo reg_cop0[28]
+#define TagHi reg_cop0[29]
+#define ErrorEPC reg_cop0[30]
 
 #endif
 

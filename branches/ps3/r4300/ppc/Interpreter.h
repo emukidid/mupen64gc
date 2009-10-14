@@ -20,7 +20,7 @@ unsigned int decodeNInterpret();
 #define INTERPRET_LH
 #define INTERPRET_LHU
 #define INTERPRET_LW
-#define INTERPRET_LWU
+//#define INTERPRET_LWU
 #define INTERPRET_LWL
 #define INTERPRET_LWR
 
@@ -30,7 +30,7 @@ unsigned int decodeNInterpret();
 #define INTERPRET_SWL
 #define INTERPRET_SWR
 
-#define INTERPRET_LD
+//#define INTERPRET_LD
 #define INTERPRET_LDL
 #define INTERPRET_LDR
 #define INTERPRET_SD
