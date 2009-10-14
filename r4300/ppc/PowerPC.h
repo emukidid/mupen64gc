@@ -990,8 +990,8 @@ PowerPC_instr Instruction(int opcode, ...);
 	  PPC_SET_FUNC  (ppc, PPC_FUNC_FSEL); \
 	  PPC_SET_RD    (ppc, (fd)); \
 	  PPC_SET_RA    (ppc, (fa)); \
-	  PPC_SET_RB    (ppc, (fb)); \
-	  PPC_SET_RC    (ppc, (fc)); }
+	  PPC_SET_RB    (ppc, (fc)); \
+	  PPC_SET_RC    (ppc, (fb)); }
 
 #define GEN_BCLR(ppc,lk,bo,bi) \
 	{ ppc = NEW_PPC_INSTR(); \
