@@ -4,9 +4,7 @@
    TODO: FP conversion to/from longs and mtc1
          Optimize idle branches (generate a call to gen_interrupt)
          Optimize instruction scheduling & reduce branch instructions
-   FIXME: In check_delaySlot, I should check that I'm not reaching into the
-            next virtual block (physical blocks are ok)
-          Branch comparisons need to operate on 64-bit values when necessary
+   FIXME: Branch comparisons need to operate on 64-bit values when necessary
  */
 
 #include <string.h>
@@ -2779,27 +2777,18 @@ static int SQRT_FP(MIPS_instr mips, int dbl){
 	
 	genCheckFP();
 	
-	static double one = 1.0;
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl );
-	int addr = mapRegisterTemp();
 	
-	// li addr, &one
-	GEN_LIS(ppc, addr, ((unsigned int)&one)>>16);
+	// frsqrte f0, fs (f0 ~ 1/sqrt(fs))
+	GEN_FRSQRTE(ppc, 0, fs);
 	set_next_dst(ppc);
-	GEN_ORI(ppc, addr, addr, (unsigned int)&one);
+	// fsel f0, f0, f0, fs (f0 = f0 if f0 else fs)
+	GEN_FSEL(ppc, 0, 0, 0, fs);
 	set_next_dst(ppc);
-	// lfd f0, 0(addr)
-	GEN_LFD(ppc, 0, 0, addr);
+	// fmul fd, f0, fs (fd = fs * 1/sqrt(fs) = sqrt(fs))
+	GEN_FMUL(ppc, fd, 0, fs);
 	set_next_dst(ppc);
-	// frsqrte fd, rs
-	GEN_FRSQRTE(ppc, fd, fs);
-	set_next_dst(ppc);
-	// fdiv fd, f0, fd
-	GEN_FDIV(ppc, fd, 0, fd);
-	set_next_dst(ppc);
-	
-	unmapRegisterTemp(addr);
 	
 	return CONVERT_SUCCESS;
 #endif
