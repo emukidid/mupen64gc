@@ -184,6 +184,10 @@ unsigned int dyna_mem(unsigned int value, unsigned int addr,
 			read_word_in_memory();
 			reg[value] = (long long)((long)dyna_rdword);
 			break;
+		case MEM_LWU:
+			read_word_in_memory();
+			reg[value] = (unsigned long long)((long)dyna_rdword);
+			break;
 		case MEM_LH:
 			read_hword_in_memory();
 			reg[value] = (long long)((short)dyna_rdword);
@@ -199,6 +203,10 @@ unsigned int dyna_mem(unsigned int value, unsigned int addr,
 		case MEM_LBU:
 			read_byte_in_memory();
 			reg[value] = (unsigned long long)((unsigned char)dyna_rdword);
+			break;
+		case MEM_LD:
+			read_dword_in_memory();
+			reg[value] = rdword;
 			break;
 		case MEM_SW:
 			word = value;
