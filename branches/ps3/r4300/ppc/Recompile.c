@@ -83,7 +83,7 @@ int add_jump_special(int is_j){
 
 void set_jump_special(int which, int new_jump){
 	jump_node* jump = &jump_table[which];
-	if(jump->type != JUMP_TYPE_SPEC) return;
+	if(!(jump->type & JUMP_TYPE_SPEC)) return;
 	jump->new_jump = new_jump;
 }
 
@@ -130,6 +130,8 @@ void recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 	dst = func->code;
 	current_jump = 0;
 	start_new_block();
+	//ppc_block->code_addr[src-ppc_block->mips_code] = dst;
+	isJmpDst[src-ppc_block->mips_code] = 1;
 	
 	while(has_next_src()){
 		unsigned int offset = src - ppc_block->mips_code;
@@ -142,15 +144,16 @@ void recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 			resizeCode(ppc_block, func, max_length);
 		}
 		
-		if(isJmpDst[offset] || !useRegMaps)
-			start_new_mapping();
+		if(isJmpDst[offset] || !useRegMaps){
+			src++; start_new_mapping(); src--;
+		}
 		
 		ppc_block->code_addr[offset] = dst;
 		convert();
 	}
 	
 	// Flush any remaining mapped registers
-	start_new_mapping();
+	flushRegisters(); //start_new_mapping();
 	// In case we couldn't compile the whole function, use a pad
 	if(!useRegMaps){
 		if(code_length + 8 > max_length)
@@ -366,6 +369,7 @@ static int pass0(PowerPC_block* ppc_block){
 	// Go through each instruction and map every branch instruction's destination
 	for(src = src_first; (pc < addr_last >> 2); ++src, ++pc){
 		int opcode = MIPS_GET_OPCODE(*src);
+		int index = pc - (ppc_block->start_address >> 2);
 		if(opcode == MIPS_OPCODE_J || opcode == MIPS_OPCODE_JAL){
 			unsigned int li = MIPS_GET_LI(*src);
 			src+=2; ++pc;
@@ -374,7 +378,8 @@ static int pass0(PowerPC_block* ppc_block){
 				isJmpDst[ li & 0x3FF ] = 1;
 			}
 			--src;
-			if(opcode == MIPS_OPCODE_J) break;
+			if(opcode == MIPS_OPCODE_JAL) isJmpDst[ index + 2 ] = 1;
+			if(opcode == MIPS_OPCODE_J){ ++src, ++pc; break; }
 		} else if(opcode == MIPS_OPCODE_BEQ   ||
 		          opcode == MIPS_OPCODE_BNE   ||
 		          opcode == MIPS_OPCODE_BLEZ  ||
@@ -383,20 +388,22 @@ static int pass0(PowerPC_block* ppc_block){
 		          opcode == MIPS_OPCODE_BNEL  ||
 		          opcode == MIPS_OPCODE_BLEZL ||
 		          opcode == MIPS_OPCODE_BGTZL ||
-		          opcode == MIPS_OPCODE_B     ){
+		          opcode == MIPS_OPCODE_B     ||
+		          (opcode == MIPS_OPCODE_COP1 &&
+		           MIPS_GET_RS(*src) == MIPS_FRMT_BC)){
 			int bd = MIPS_GET_IMMED(*src);
 			src+=2; ++pc;
 			bd |= (bd & 0x8000) ? 0xFFFF0000 : 0; // sign extend
 			if(!is_j_out(bd, 0)){
-				int index = (pc + bd) - (ppc_block->start_address >> 2);
-				assert( index >= 0 && index < 1024 );
-				isJmpDst[ index ] = 1;
+				assert( index + bd >= 0 && index + bd < 1024 );
+				isJmpDst[ index + 1 + bd ] = 1;
 			}
 			--src;
+			isJmpDst[ index + 2 ] = 1; // XXX: This seems a bit hacky, but shouldn't be detrimental
 		} else if(opcode == MIPS_OPCODE_R &&
 		          (MIPS_GET_FUNC(*src) == MIPS_FUNC_JR ||
 		           MIPS_GET_FUNC(*src) == MIPS_FUNC_JALR)){
-			++src, ++pc;
+			src+=2, pc+=2;
 			break;
 		} else if(opcode == MIPS_OPCODE_COP0 &&
 		          MIPS_GET_FUNC(*src) == MIPS_FUNC_ERET){
