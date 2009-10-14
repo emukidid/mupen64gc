@@ -1,4 +1,4 @@
-/* gui_GX-menu.c - gui that uses GX graphics
+/* gui_GX.c - gui that uses GX graphics
    by sepp256 for Mupen64-GC
  */
 
@@ -165,6 +165,9 @@ void GUI_draw()
 	GUI_loadBGtex();
 
 	// Reset various parameters from gfx plugin
+	GX_SetZTexture(GX_ZT_DISABLE,GX_TF_Z16,0);	//GX_ZT_DISABLE or GX_ZT_REPLACE; set in gDP.cpp
+	GX_SetZCompLoc(GX_TRUE);	// Do Z-compare before texturing.
+	GX_SetFog(GX_FOG_NONE,0,1,0,1,(GXColor){0,0,0,255});
 	GX_SetViewport(0,0,vmode->fbWidth,vmode->efbHeight,0,1);
 	GX_SetCoPlanar(GX_DISABLE);
 	GX_SetClipMode(GX_CLIP_DISABLE);
@@ -254,7 +257,7 @@ void GUI_displayText(){
 	}
 
    //reset swap table from GUI/DEBUG
-	GX_SetTevSwapModeTable(GX_TEV_SWAP0, GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA);
+//	GX_SetTevSwapModeTable(GX_TEV_SWAP0, GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA);
 	GX_SetTevSwapMode(GX_TEVSTAGE0, GX_TEV_SWAP0, GX_TEV_SWAP0);
 }
 
@@ -333,10 +336,6 @@ void GUI_drawWiiN64(float x0, float y0, float z, float scale){
 	uly = y0 - scale*42;
 	lry = y0 + scale*42;
 
-	//This is just for gcube, which only seems to be able to use TEXMAP0. 
-	GX_InitTexObj(&LOGOtex, LOGOtexture, (u16) 216, (u16) 84, GX_TF_RGB5A3, GX_CLAMP, GX_CLAMP, GX_FALSE); 
-	DCFlushRange(LOGOtexture, 216*84*2);
-	GX_LoadTexObj(&LOGOtex, GX_TEXMAP0); 
 
 	GX_SetCurrentMtx(GUI_TEST_PNMTX);
 	GX_DrawDone ();
@@ -360,7 +359,7 @@ void GUI_drawWiiN64(float x0, float y0, float z, float scale){
 	//enable textures
 	GX_SetNumChans (1);
 	GX_SetNumTexGens (1);
-	GX_SetTevOrder (GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
+	GX_SetTevOrder (GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP2, GX_COLOR0A0);
 	GX_SetTevOp (GX_TEVSTAGE0, GX_REPLACE);
 	//set blend mode
 	GX_SetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR); //Fix src alpha
@@ -580,6 +579,7 @@ void GUI_splashScreen()
 	}
 
 	GX_DrawDone ();
+	GX_SetCopyClear ((GXColor){0,0,0,255}, 0x00000000);
 	GX_CopyDisp (GUI.xfb[GUI.which_fb], GX_TRUE);
 	GX_Flush ();
 	VIDEO_SetNextFramebuffer(GUI.xfb[GUI.which_fb]);
@@ -815,7 +815,7 @@ void GUI_creditScreen()
 	rotateby++;
 
 	//reset swap table from GUI/DEBUG
-	GX_SetTevSwapModeTable(GX_TEV_SWAP0, GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA);
+//	GX_SetTevSwapModeTable(GX_TEV_SWAP0, GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA);
 	GX_SetTevSwapMode(GX_TEVSTAGE0, GX_TEV_SWAP0, GX_TEV_SWAP0);
 
 	GX_DrawDone ();
