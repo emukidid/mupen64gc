@@ -380,7 +380,9 @@ static int pass0(PowerPC_block* ppc_block){
 		          opcode == MIPS_OPCODE_BNEL  ||
 		          opcode == MIPS_OPCODE_BLEZL ||
 		          opcode == MIPS_OPCODE_BGTZL ||
-		          opcode == MIPS_OPCODE_B     ){
+		          opcode == MIPS_OPCODE_B     ||
+		          (opcode == MIPS_OPCODE_COP1 &&
+		           MIPS_GET_RS(*src) == MIPS_FRMT_BC)){
 			int bd = MIPS_GET_IMMED(*src);
 			src+=2; ++pc;
 			bd |= (bd & 0x8000) ? 0xFFFF0000 : 0; // sign extend
