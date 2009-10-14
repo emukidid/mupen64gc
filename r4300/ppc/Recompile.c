@@ -466,9 +466,9 @@ static void genJumpPad(void){
 	
 	// Set the next address to the first address in the next block if
 	//   we've really reached the end of the block, not jumped to the pad
-	GEN_LIS(ppc, 3, addr_last>>16);
+	GEN_LIS(ppc, 3, (get_src_pc()+4)>>16);
 	set_next_dst(ppc);
-	GEN_ORI(ppc, 3, 3, addr_last);
+	GEN_ORI(ppc, 3, 3, get_src_pc()+4);
 	set_next_dst(ppc);
 	
 	// return destination
