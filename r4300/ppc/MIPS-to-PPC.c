@@ -1541,7 +1541,7 @@ static int LD(MIPS_instr mips){
 	// addr = base + immed
 	GEN_ADDI(ppc, 4, base, MIPS_GET_IMMED(mips));
 	set_next_dst(ppc);
-	// type = MEM_LWU
+	// type = MEM_LD
 	GEN_LI(ppc, 5, 0, MEM_LD);
 	set_next_dst(ppc);
 	// value = reg[rt]
@@ -1591,8 +1591,57 @@ static int LWC1(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_LWC1
-	// TODO: lwc1
-	return CONVERT_ERROR;
+	
+	flushRegisters();
+	reset_code_addr();
+	
+	genCheckFP();
+	
+	int base = mapRegister( MIPS_GET_RS(mips) ); // r3 = addr
+	
+	invalidateRegisters();
+	
+	// mtctr DYNAREG_RWMEM
+	GEN_MTCTR(ppc, DYNAREG_RWMEM);
+	set_next_dst(ppc);
+	// save lr
+	GEN_MFLR(ppc, 0);
+	set_next_dst(ppc);
+	GEN_STW(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	// addr = base + immed
+	GEN_ADDI(ppc, 4, base, MIPS_GET_IMMED(mips));
+	set_next_dst(ppc);
+	// type = MEM_LWC1
+	GEN_LI(ppc, 5, 0, MEM_LWC1);
+	set_next_dst(ppc);
+	// value = reg_cop1[rt]
+	GEN_LI(ppc, 3, 0, MIPS_GET_RT(mips));
+	set_next_dst(ppc);
+	// Pass PC as argument
+	GEN_LIS(ppc, 6, (get_src_pc()+4)>>16);
+	set_next_dst(ppc);
+	GEN_ORI(ppc, 6, 6, get_src_pc()+4);
+	set_next_dst(ppc);
+	// isDelaySlot
+	GEN_LI(ppc, 7, 0, isDelaySlot ? 1 : 0);
+	set_next_dst(ppc);
+	// call dyna_mem
+	GEN_BCTRL(ppc);
+	set_next_dst(ppc);
+	// restore lr
+	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	GEN_MTLR(ppc, 0);
+	set_next_dst(ppc);
+	// Check whether we need to take an interrupt
+	GEN_CMPI(ppc, 3, 0, 6);
+	set_next_dst(ppc);
+	// If so, return to trampoline
+	GEN_BNELR(ppc, 6, 0);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
 #endif
 }
 
