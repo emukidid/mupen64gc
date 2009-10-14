@@ -13,36 +13,27 @@
  */
 
 #include <stdlib.h>
+#include <string.h>
+#include <assert.h>
 #include "TLB-Cache.h"
 #include "../gui/DEBUG.h"
+#include <stdio.h>
+#include <zlib.h>
 
 #ifdef USE_TLB_CACHE
-
-// Num Slots must be a power of 2!
-#define TLB_NUM_SLOTS 64
-// The amount of bits required to represent a page
-//   number, don't change. Required for hash calc
-#define TLB_BITS_PER_PAGE_NUM 20
-
-typedef struct node {
-	unsigned int value;
-	unsigned int page;
-	struct node* next;
-} TLB_hash_node;
 
 static TLB_hash_node* TLB_LUT_r[TLB_NUM_SLOTS];
 static TLB_hash_node* TLB_LUT_w[TLB_NUM_SLOTS];
 
-static unsigned int TLB_hash_mask;
+static unsigned int TLB_hash_shift;
 
 void TLBCache_init(void){
-	TLB_hash_mask = 0;
-	unsigned int temp = TLB_NUM_SLOTS, temp2 = 1;
+	unsigned int temp = TLB_NUM_SLOTS;
 	while(temp){
 		temp >>= 1;
-		TLB_hash_mask |= temp2;
-		temp2 <<= 1;
+		++TLB_hash_shift;
 	}
+	TLB_hash_shift = TLB_BITS_PER_PAGE_NUM - TLB_hash_shift + 1;
 }
 
 void TLBCache_deinit(void){
@@ -66,14 +57,10 @@ void TLBCache_deinit(void){
 }
 
 static unsigned int inline TLB_hash(unsigned int page){
-	return page & TLB_hash_mask;
+	return page >> TLB_hash_shift;
 }
 
 unsigned int inline TLBCache_get_r(unsigned int page){
-#ifdef DEBUG_TLB
-	sprintf(txtbuffer, "TLB r read %05x\n", page);
-	DEBUG_print(txtbuffer, DBG_USBGECKO);
-#endif
 	TLB_hash_node* node = TLB_LUT_r[ TLB_hash(page) ];
 	
 	for(; node != NULL; node = node->next)
@@ -83,10 +70,6 @@ unsigned int inline TLBCache_get_r(unsigned int page){
 }
 
 unsigned int inline TLBCache_get_w(unsigned int page){
-#ifdef DEBUG_TLB
-	sprintf(txtbuffer, "TLB w read %05x\n", page);
-	DEBUG_print(txtbuffer, DBG_USBGECKO);
-#endif
 	TLB_hash_node* node = TLB_LUT_w[ TLB_hash(page) ];
 	
 	for(; node != NULL; node = node->next)
@@ -96,10 +79,6 @@ unsigned int inline TLBCache_get_w(unsigned int page){
 }
 
 void inline TLBCache_set_r(unsigned int page, unsigned int val){
-#ifdef DEBUG_TLB
-	sprintf(txtbuffer, "TLB r write %05x %08x\n", page, val);
-	DEBUG_print(txtbuffer, DBG_USBGECKO);
-#endif
 	TLB_hash_node* next = TLB_LUT_r[ TLB_hash(page) ];
 	
 	TLB_hash_node* node = malloc( sizeof(TLB_hash_node) );
@@ -119,10 +98,6 @@ void inline TLBCache_set_r(unsigned int page, unsigned int val){
 }
 
 void inline TLBCache_set_w(unsigned int page, unsigned int val){
-#ifdef DEBUG_TLB
-	sprintf(txtbuffer, "TLB r write %05x %08x\n", page, val);
-	DEBUG_print(txtbuffer, DBG_USBGECKO);
-#endif
 	TLB_hash_node* next = TLB_LUT_w[ TLB_hash(page) ];
 	
 	TLB_hash_node* node = malloc( sizeof(TLB_hash_node) );
@@ -168,4 +143,42 @@ char* TLBCache_dump(){
 	return "TLB Cache dumped to USB Gecko";
 }
 
+void TLBCache_dump_r(gzFile *f)
+{
+	int i = 0,total=0;
+		for(i=0; i<TLB_NUM_SLOTS; ++i){
+		TLB_hash_node* node = TLB_LUT_r[i];
+		for(; node != NULL; node = node->next){
+			total++;	
+		}
+	}
+	gzwrite(f, &total, sizeof(int));
+	for(i=0; i<TLB_NUM_SLOTS; ++i){
+		TLB_hash_node* node = TLB_LUT_r[i];
+		for(; node != NULL; node = node->next){
+			gzwrite(f, &node->page, 4);
+			gzwrite(f, &node->value, 4);		
+		}
+	}
+}
+
+void TLBCache_dump_w(gzFile *f)
+{
+	int i = 0,total=0;
+	//traverse to get total
+	for(i=0; i<TLB_NUM_SLOTS; ++i){
+		TLB_hash_node* node = TLB_LUT_w[i];
+		for(; node != NULL; node = node->next){
+			total++;
+		}
+	}
+	gzwrite(f, &total, sizeof(int));
+	for(i=0; i<TLB_NUM_SLOTS; ++i){
+		TLB_hash_node* node = TLB_LUT_w[i];
+		for(; node != NULL; node = node->next){
+			gzwrite(f, &node->page, 4);
+			gzwrite(f, &node->value, 4);		
+		}
+	}
+}
 #endif
