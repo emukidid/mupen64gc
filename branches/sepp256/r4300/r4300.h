@@ -44,7 +44,9 @@ extern PowerPC_block* blocks[0x100000], *actual;
 extern precomp_block *blocks[0x100000], *actual;
 #endif
 extern int stop, llbit;
-extern long long int reg[32], hi, lo;
+extern long long int reg[34];
+#define hi (reg[32])
+#define lo (reg[33])
 extern long long int local_rs, local_rt;
 extern unsigned long reg_cop0[32];
 extern long local_rs32, local_rt32;
@@ -66,6 +68,9 @@ extern unsigned long last_addr, interp_addr;
 extern unsigned long jump_to_address;
 extern int no_audio_delay;
 extern int no_compiled_jump;
+
+void cpu_init(void);
+void cpu_deinit(void);
 
 void go();
 void pure_interpreter();
@@ -92,9 +97,10 @@ void jump_to(unsigned int);
 #define AUDIO_SECTION 2
 #define COMPILER_SECTION 3
 #define IDLE_SECTION 4
-#define TLB_SECTION 5
-#define FP_SECTION 6
-#define NUM_SECTIONS 6
+#define ROM_SECTION 5
+#define TLB_SECTION 6
+#define FP_SECTION 7
+#define NUM_SECTIONS 7
 
 //#define PROFILE
 

@@ -39,12 +39,26 @@
 	#define MEMMASK 0x3FFFFF
 	#define TOPOFMEM 0x80400000
 #endif
-#define USE_TLB_CACHE
+
 
 #ifndef USE_TLB_CACHE
-unsigned long tlb_LUT_r[0x100000];
-unsigned long tlb_LUT_w[0x100000];
+#include "MEM2.h"
+unsigned long *tlb_LUT_r = (unsigned long*)(TLBLUT_LO);
+unsigned long *tlb_LUT_w = (unsigned long*)(TLBLUT_LO+0x400000);
 #endif
+
+#ifndef USE_TLB_CACHE
+void tlb_mem2_init()
+{
+	long i;
+	for(i = 0; i<(0x400000/4); i++)
+	{	
+		tlb_LUT_r[i] = 0;
+		tlb_LUT_w[i] = 0;
+	}
+}
+#endif
+
 extern unsigned long interp_addr;
 unsigned long virtual_to_physical_address(unsigned long addresse, int w)
 {

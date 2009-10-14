@@ -5,21 +5,35 @@
 #ifndef GC_DVD_H
 #define GC_DVD_H
 
+#include <stdint.h>
 //Used in ISO9660 Parsing
 #define NO_FILES -1
 #define NO_ISO9660_DISC -2
 #define FATAL_ERROR -3
-#define MAXIMUM_ENTRIES_PER_DIR 150
+#define MAXIMUM_ENTRIES_PER_DIR 2048
+
+typedef struct
+{
+	char name[128];
+	int flags;
+	int sector, size;
+} file_entry; 
+
+typedef struct
+{
+	file_entry file[MAXIMUM_ENTRIES_PER_DIR];
+} file_entries; 
+
+extern file_entries *DVDToc;
 
 void dvd_motor_off();
 unsigned int dvd_get_error(void);
-int dvd_read_directoryentries(unsigned int offset, int size);
+int dvd_read_directoryentries(uint64_t offset, int size);
 void read_directory(int sector, int len);
-int read_safe(void* dst, int offset, int len);
+int read_safe(void* dst, uint64_t offset, int len);
 int read_direntry(unsigned char* direntry);
-int read_sector(void* buffer, int sector);
+int read_sector(void* buffer, uint32_t sector);
 int dvd_read(void* dst,unsigned int len, unsigned int offset);
-extern unsigned char sector_buffer[2048] __attribute__((aligned(32)));
 int is_unicode;
 int files;
 int dvd_read_id();

@@ -1,8 +1,9 @@
 #ifdef __GX__
 #include <gccore.h>
 #include "../gui/DEBUG.h"
-#define GXprojZScale	 0.5
-#define GXprojZOffset	-0.5
+#include <math.h>
+#include "3DMath.h"
+#include <malloc.h>
 #endif // __GX__
 
 #ifndef __LINUX__
@@ -54,6 +55,10 @@
 #ifdef DEBUGON
 extern "C" { void _break(); }
 #endif
+
+#ifdef __GX__
+extern char glN64_useFrameBufferTextures;
+#endif // __GX__
 
 GLInfo OGL;
 
@@ -155,7 +160,7 @@ void OGL_InitExtensions()
 		glGetFinalCombinerInputParameterfvNV = (PFNGLGETFINALCOMBINERINPUTPARAMETERFVNVPROC)wglGetProcAddress( "glGetFinalCombinerInputParameterfvNV" );
 		glGetFinalCombinerInputParameterivNV = (PFNGLGETFINALCOMBINERINPUTPARAMETERIVNVPROC)wglGetProcAddress( "glGetFinalCombinerInputParameterivNV" );
 #endif // !__LINUX__
-#ifndef __GX__ //TODO: Fill this variable
+#ifndef __GX__ 
 		glGetIntegerv( GL_MAX_GENERAL_COMBINERS_NV, &OGL.maxGeneralCombiners );
 #endif // !__GX__
 	}
@@ -171,7 +176,6 @@ void OGL_InitExtensions()
 		glGetIntegerv( GL_MAX_TEXTURE_UNITS_ARB, &OGL.maxTextureUnits );
 		OGL.maxTextureUnits = min( 8, OGL.maxTextureUnits ); // The plugin only supports 8, and 4 is really enough
 #else // !__GX__
-		//TODO: Check this
 		OGL.maxTextureUnits = 8;
 		OGL.ARB_multitexture = TRUE;
 #endif // __GX__
@@ -272,19 +276,7 @@ void OGL_InitStates()
 	glClearColor( 0.0f, 0.0f, 0.0f, 0.0f );
 	glClear( GL_COLOR_BUFFER_BIT );
 #else // !__GX__
-/*	// Init GX variables here...
-	Mtx44 GXprojection;
-	Mtx GXmodelView;
-
-	guMtxIdentity(GXmodelView);
-	GX_LoadPosMtxImm(GXmodelView,GX_PNMTX0);
-	guMtxIdentity(GXprojection);
-	//N64 Z clip space is backwards, so mult z components by -1 (?)
-	//N64 Z [-1,1] whereas GC Z [-1,0], so mult by 0.5 and shift by -0.5
-	GXprojection[2][2] = 0.5;
-	GXprojection[2][3] = -0.5;
-	GX_LoadProjectionMtx(GXprojection, GX_ORTHOGRAPHIC);
-*/
+	// TODO: Init GX variables here...
 #endif // __GX__
 
 	srand( timeGetTime() );
@@ -353,6 +345,16 @@ void OGL_ResizeWindow()
 	}
 #else // !__LINUX__
 #endif // __LINUX__
+	// This is mainly initializing OGL.heightOffset because I don't think it's inited otherwise.
+	OGL.fullscreen = true;
+	OGL.fullscreenWidth = 640;
+	OGL.fullscreenHeight = 480;
+	OGL.windowedWidth = 640;
+	OGL.windowedHeight = 480;
+	OGL.heightOffset = 0;
+#ifdef __GX__
+
+#endif // __GX__
 }
 
 bool OGL_Start()
@@ -476,7 +478,11 @@ bool OGL_Start()
 
 	SDL_WM_SetCaption( pluginName, pluginName );
 #endif // __LINUX__
-#endif // !__GX__
+#else // !__GX__
+	//Set 'window height' to efb dimensions
+	OGL.width = 640;
+	OGL.height = 480;
+#endif // __GX__
 	OGL_InitExtensions();
 	OGL_InitStates();
 
@@ -533,19 +539,14 @@ void OGL_UpdateCullFace()
 	else
 		glDisable( GL_CULL_FACE );
 #else // !__GX__
-	//TODO: Update GX Culling
 	if (gSP.geometryMode & G_CULL_BOTH)
 	{
-//		glEnable( GL_CULL_FACE );
 		if (gSP.geometryMode & G_CULL_BACK)
-//			glCullFace( GL_BACK );
 			GX_SetCullMode (GX_CULL_FRONT);	// GC vertex winding is backwards.
 		else
-//			glCullFace( GL_FRONT );
 			GX_SetCullMode (GX_CULL_BACK);	// GC vertex winding is backwards.
 	}
 	else
-//		glDisable( GL_CULL_FACE );
 		GX_SetCullMode (GX_CULL_NONE);
 #endif // __GX__
 }
@@ -557,11 +558,8 @@ void OGL_UpdateViewport()
 	            (int)(gSP.viewport.width * OGL.scaleX), (int)(gSP.viewport.height * OGL.scaleY) );
 	glDepthRange( 0.0f, 1.0f );//gSP.viewport.nearz, gSP.viewport.farz );
 #else // !__GX__
-//TODO: This does not work right - blanks out rendering but not GUI
-//	GX_SetViewport((f32) (gSP.viewport.x * OGL.scaleX),(f32) ((VI.height - (gSP.viewport.y + gSP.viewport.height)) * OGL.scaleY + OGL.heightOffset),
-//		(f32) (gSP.viewport.width * OGL.scaleX),(f32) (gSP.viewport.height * OGL.scaleY), 0.0f, 1.0f);
-	//GX_SetViewport((f32) (gSP.viewport.x * OGL.scaleX),(f32) ((VI.height - (gSP.viewport.y + gSP.viewport.height)) * OGL.scaleY),
-	//	(f32) (gSP.viewport.width * OGL.scaleX),(f32) (gSP.viewport.height * OGL.scaleY), 0.0f, 1.0f);
+	GX_SetViewport((f32) (gSP.viewport.x * OGL.scaleX),(f32) (gSP.viewport.y * OGL.scaleY),
+		(f32) (gSP.viewport.width * OGL.scaleX),(f32) (gSP.viewport.height * OGL.scaleY), 0.0f, 1.0f);
 #endif // __GX__
 }
 
@@ -579,6 +577,11 @@ void OGL_UpdateDepthUpdate()
 
 void OGL_UpdateStates()
 {
+#ifdef __GX__
+	if (OGL.GXclearColorBuffer || OGL.GXclearDepthBuffer)
+		OGL_GXclearEFB();
+#endif //__GX__
+
 	if (gSP.changed & CHANGED_GEOMETRYMODE)
 	{
 		OGL_UpdateCullFace();
@@ -588,7 +591,11 @@ void OGL_UpdateStates()
 		else
 			glDisable( GL_FOG );
 #else // !__GX__
-		//TODO: GX Fog enables
+		if ((gSP.geometryMode & G_FOG) && OGL.fog)
+			OGL.GXfogType = GX_FOG_ORTHO_LIN;
+		else
+			OGL.GXfogType = GX_FOG_NONE;
+		OGL.GXupdateFog = true;
 #endif // __GX__
 
 		gSP.changed &= ~CHANGED_GEOMETRYMODE;
@@ -644,14 +651,16 @@ void OGL_UpdateStates()
 //			glDepthMask( FALSE );
 			GXZupdate = GX_FALSE;
 
-//TODO: Not sure yet how to implement this:
-/*		if (gDP.otherMode.depthMode == ZMODE_DEC)
-			glEnable( GL_POLYGON_OFFSET_FILL );
-		else
+		if ((gDP.otherMode.depthMode == ZMODE_DEC) && !OGL.GXpolyOffset)
 		{
-//			glPolygonOffset( -3.0f, -3.0f );
-			glDisable( GL_POLYGON_OFFSET_FILL );
-		}*/
+			OGL.GXpolyOffset = true;
+			OGL.GXupdateMtx = true;
+		}
+		else if (!(gDP.otherMode.depthMode == ZMODE_DEC) && OGL.GXpolyOffset)
+		{
+			OGL.GXpolyOffset = false;
+			OGL.GXupdateMtx = true;
+		}
 	}
 	GX_SetZMode(GXenableZmode,GXZfunc,GXZupdate);
 #endif // __GX__
@@ -688,7 +697,8 @@ void OGL_UpdateStates()
 	if ((gDP.changed & CHANGED_ALPHACOMPARE) || (gDP.changed & CHANGED_RENDERMODE))
 	{
 		u8 GXalphaFunc, GXalphaRef;
-		u8 GXZcompLoc = GX_FALSE; //do Z compare after texturing (GX_FALSE)
+//		u8 GXZcompLoc = GX_FALSE; //do Z compare after texturing (GX_FALSE)
+		OGL.GXuseAlphaCompare = true;
 		// Enable alpha test for threshold mode
 		if ((gDP.otherMode.alphaCompare == G_AC_THRESHOLD) && !(gDP.otherMode.alphaCvgSel))
 		{
@@ -711,9 +721,11 @@ void OGL_UpdateStates()
 //			glDisable( GL_ALPHA_TEST );
 			GXalphaFunc = GX_ALWAYS;
 			GXalphaRef = (u8) 0;
-			GXZcompLoc = GX_TRUE; //do Z compare before texturing (GX_TRUE)
+//			GXZcompLoc = GX_TRUE; //do Z compare before texturing (GX_TRUE)
+			OGL.GXuseAlphaCompare = false;
 		}
-		GX_SetZCompLoc(GXZcompLoc);
+		//TODO: Add more code to implement the following line.
+//		GX_SetZCompLoc(GXZcompLoc);
 		GX_SetAlphaCompare(GXalphaFunc,GXalphaRef,GX_AOP_AND,GX_ALWAYS,0);
 
 #ifdef GLN64_SDLOG
@@ -721,11 +733,16 @@ void OGL_UpdateStates()
 		DEBUG_print(txtbuffer,DBG_SDGECKOPRINT);
 #endif // GLN64_SDLOG
 
-//TODO: Not sure yet how to implement this:
+//TODO: Implement PolygonStipple?
 /*		if (OGL.usePolygonStipple && (gDP.otherMode.alphaCompare == G_AC_DITHER) && !(gDP.otherMode.alphaCvgSel))
 			glEnable( GL_POLYGON_STIPPLE );
 		else
 			glDisable( GL_POLYGON_STIPPLE );*/
+
+		if (gDP.otherMode.depthSource == G_ZS_PRIM)
+			GX_SetZTexture(GX_ZT_REPLACE,GX_TF_Z16,0);
+		else
+			GX_SetZTexture(GX_ZT_DISABLE,GX_TF_Z16,0);
 	}
 #endif // __GX__
 
@@ -738,11 +755,8 @@ void OGL_UpdateStates()
 #else // !__GX__
 	if (gDP.changed & CHANGED_SCISSOR)
 	{
-//TODO: This does not work - blanks out GUI.
-//		GX_SetScissor((u32) (gDP.scissor.ulx * OGL.scaleX),(u32) ((VI.height - gDP.scissor.lry) * OGL.scaleY + OGL.heightOffset),
-//			(u32) ((gDP.scissor.lrx - gDP.scissor.ulx) * OGL.scaleX),(u32) ((gDP.scissor.lry - gDP.scissor.uly) * OGL.scaleY));
-	//	GX_SetScissor((u32) (gDP.scissor.ulx * OGL.scaleX),(u32) (gDP.scissor.uly * OGL.scaleY),
-	//		(u32) ((gDP.scissor.lrx - gDP.scissor.ulx) * OGL.scaleX),(u32) ((gDP.scissor.lry - gDP.scissor.uly) * OGL.scaleY));
+		GX_SetScissor((u32) max(gDP.scissor.ulx * OGL.scaleX,0),(u32) max(gDP.scissor.uly * OGL.scaleY,0),
+			(u32) ((gDP.scissor.lrx - gDP.scissor.ulx) * OGL.scaleX),(u32) ((gDP.scissor.lry - gDP.scissor.uly) * OGL.scaleY));
 	}
 #endif // __GX__
 
@@ -800,12 +814,26 @@ void OGL_UpdateStates()
 #ifndef __GX__
 	if ((gDP.changed & CHANGED_FOGCOLOR) && OGL.fog)
 		glFogfv( GL_FOG_COLOR, &gDP.fogColor.r );
-
 #else // !__GX__
-//TODO: GX fog implementation
-	if ((gDP.changed & CHANGED_FOGCOLOR) && OGL.fog) {}
-//		glFogfv( GL_FOG_COLOR, &gDP.fogColor.r ); // -> Todo: Implement fog
+	if ((gDP.changed & CHANGED_FOGCOLOR) && OGL.fog) 
+	{
+		OGL.GXfogColor.r = (u8) (gDP.fogColor.r*255);
+		OGL.GXfogColor.g = (u8) (gDP.fogColor.g*255);
+		OGL.GXfogColor.b = (u8) (gDP.fogColor.b*255);
+		OGL.GXfogColor.a = (u8) (gDP.fogColor.a*255);
+		OGL.GXupdateFog = true;
+	}
 
+	if(OGL.GXupdateFog)
+	{
+		GX_SetFog(OGL.GXfogType,OGL.GXfogStartZ,OGL.GXfogEndZ,0.0,1.0,OGL.GXfogColor);
+		OGL.GXupdateFog = false;
+		if(OGL.GXfogType == GX_FOG_ORTHO_LIN)
+		{
+			sprintf(txtbuffer,"SetFog: StartZ %f, EndZ %f, color (%d,%d,%d,%d), fo %f, fm %f", OGL.GXfogStartZ, OGL.GXfogEndZ, OGL.GXfogColor.r, OGL.GXfogColor.g, OGL.GXfogColor.b, OGL.GXfogColor.a, (float)gSP.fog.offset, (float)gSP.fog.multiplier);
+			DEBUG_print(txtbuffer,DBG_RSPINFO1);
+		}
+	}
 #endif // __GX__
 
 #ifndef __GX__
@@ -953,7 +981,13 @@ void OGL_AddTriangle( SPVertex *vertices, int v0, int v1, int v2 )
 	{
 		OGL.vertices[OGL.numVertices].x = vertices[v[i]].x;
 		OGL.vertices[OGL.numVertices].y = vertices[v[i]].y;
+#ifndef __GX__
 		OGL.vertices[OGL.numVertices].z = gDP.otherMode.depthSource == G_ZS_PRIM ? gDP.primDepth.z * vertices[v[i]].w : vertices[v[i]].z;
+#else // !__GX__
+		//TODO: primDepthZ should now be handled with a Ztex. Verify this.
+//		OGL.vertices[OGL.numVertices].z = (gDP.otherMode.depthSource == G_ZS_PRIM) && !(OGL.GXuseProj) ? gDP.primDepth.z * vertices[v[i]].w : vertices[v[i]].z;
+		OGL.vertices[OGL.numVertices].z = vertices[v[i]].z;
+#endif // __GX__
 		OGL.vertices[OGL.numVertices].w = vertices[v[i]].w;
 
 		OGL.vertices[OGL.numVertices].color.r = vertices[v[i]].r;
@@ -972,6 +1006,7 @@ void OGL_AddTriangle( SPVertex *vertices, int v0, int v1, int v2 )
 			SetConstant( OGL.vertices[OGL.numVertices].secondaryColor, combiner.vertex.secondaryColor, ONE );
 		}
 
+#ifndef __GX__
 		if ((gSP.geometryMode & G_FOG) && OGL.EXT_fog_coord && OGL.fog)
 		{
 			if (vertices[v[i]].z < -vertices[v[i]].w)
@@ -979,6 +1014,9 @@ void OGL_AddTriangle( SPVertex *vertices, int v0, int v1, int v2 )
 			else
 				OGL.vertices[OGL.numVertices].fog = max( 0.0f, vertices[v[i]].z / vertices[v[i]].w * (float)gSP.fog.multiplier + (float)gSP.fog.offset );
 		}
+#else //!__GX__
+		//Fog is taken care of in hardware with GX.
+#endif //__GX__
 
 		if (combiner.usesT0)
 		{
@@ -992,10 +1030,17 @@ void OGL_AddTriangle( SPVertex *vertices, int v0, int v1, int v2 )
 				else
 					OGL.vertices[OGL.numVertices].s0 = (cache.current[0]->offsetS + (vertices[v[i]].s * cache.current[0]->shiftScaleS * gSP.texture.scales - gSP.textureTile[0]->fuls)) * cache.current[0]->scaleS;
 
+#ifndef __GX__
 				if (gSP.textureTile[0]->maskt)
 					OGL.vertices[OGL.numVertices].t0 = (cache.current[0]->offsetT - (vertices[v[i]].t * cache.current[0]->shiftScaleT * gSP.texture.scalet - fmod( gSP.textureTile[0]->fult, 1 << gSP.textureTile[0]->maskt ))) * cache.current[0]->scaleT;
 				else
 					OGL.vertices[OGL.numVertices].t0 = (cache.current[0]->offsetT - (vertices[v[i]].t * cache.current[0]->shiftScaleT * gSP.texture.scalet - gSP.textureTile[0]->fult)) * cache.current[0]->scaleT;
+#else //!__GX__
+				if (gSP.textureTile[0]->maskt)
+					OGL.vertices[OGL.numVertices].t0 = (cache.current[0]->offsetT + (vertices[v[i]].t * cache.current[0]->shiftScaleT * gSP.texture.scalet - fmod( gSP.textureTile[0]->fult, 1 << gSP.textureTile[0]->maskt ))) * cache.current[0]->scaleT;
+				else
+					OGL.vertices[OGL.numVertices].t0 = (cache.current[0]->offsetT + (vertices[v[i]].t * cache.current[0]->shiftScaleT * gSP.texture.scalet - gSP.textureTile[0]->fult)) * cache.current[0]->scaleT;
+#endif //__GX__
 			}
 			else
 			{
@@ -1009,7 +1054,11 @@ void OGL_AddTriangle( SPVertex *vertices, int v0, int v1, int v2 )
 			if (cache.current[0]->frameBufferTexture)
 			{
 				OGL.vertices[OGL.numVertices].s1 = (cache.current[1]->offsetS + (vertices[v[i]].s * cache.current[1]->shiftScaleS * gSP.texture.scales - gSP.textureTile[1]->fuls)) * cache.current[1]->scaleS;
+#ifndef __GX__
 				OGL.vertices[OGL.numVertices].t1 = (cache.current[1]->offsetT - (vertices[v[i]].t * cache.current[1]->shiftScaleT * gSP.texture.scalet - gSP.textureTile[1]->fult)) * cache.current[1]->scaleT;
+#else //!__GX__
+				OGL.vertices[OGL.numVertices].t1 = (cache.current[1]->offsetT + (vertices[v[i]].t * cache.current[1]->shiftScaleT * gSP.texture.scalet - gSP.textureTile[1]->fult)) * cache.current[1]->scaleT;
+#endif //__GX__
 			}
 			else
 			{
@@ -1040,43 +1089,147 @@ void OGL_DrawTriangles()
 #ifndef __GX__
 	glDrawArrays( GL_TRIANGLES, 0, OGL.numVertices );
 #else // !__GX__
-	//TODO: Implement in GX
 	GXColor GXcol;
+	float invW;
 
 #ifdef GLN64_SDLOG
 	sprintf(txtbuffer,"OGL_DrawTris: numTri %d, numVert %d, useT0 %d, useT1 %d\n", OGL.numTriangles, OGL.numVertices, combiner.usesT0, combiner.usesT1);
 	DEBUG_print(txtbuffer,DBG_SDGECKOPRINT);
 #endif // GLN64_SDLOG
 
+	//Update MV & P Matrices
+	if(OGL.GXupdateMtx)
+	{
+		if(OGL.GXpolyOffset)
+		{
+			if(OGL.GXuseProj)
+			{
+				CopyMatrix( OGL.GXprojTemp, OGL.GXproj );
+				if(OGL.GXprojTemp[3][2] == -1)
+				{
+					OGL.GXprojTemp[2][2] += GXpolyOffsetFactor;
+					GX_LoadProjectionMtx(OGL.GXprojTemp, GX_PERSPECTIVE);
+				}
+				else
+				{
+					OGL.GXprojTemp[2][3] -= GXpolyOffsetFactor;
+					GX_LoadProjectionMtx(OGL.GXprojTemp, GX_ORTHOGRAPHIC); 
+				}
+				GX_LoadPosMtxImm(OGL.GXmodelView,GX_PNMTX0);
+			}
+			else
+			{
+				if(OGL.GXuseProjW)
+				{
+					CopyMatrix( OGL.GXprojTemp, OGL.GXprojW );
+					OGL.GXprojTemp[2][2] += GXpolyOffsetFactor;
+					GX_LoadProjectionMtx(OGL.GXprojTemp, GX_PERSPECTIVE); 
+				}
+				else
+				{
+					CopyMatrix( OGL.GXprojTemp, OGL.GXprojIdent );
+					OGL.GXprojTemp[2][3] -= GXpolyOffsetFactor;
+					GX_LoadProjectionMtx(OGL.GXprojTemp, GX_ORTHOGRAPHIC); 
+				}
+				GX_LoadPosMtxImm(OGL.GXmodelViewIdent,GX_PNMTX0);
+			}
+		}
+		else
+		{
+			if(OGL.GXuseProj)
+			{
+				if(OGL.GXproj[3][2] == -1)
+					GX_LoadProjectionMtx(OGL.GXproj, GX_PERSPECTIVE);
+				else
+					GX_LoadProjectionMtx(OGL.GXproj, GX_ORTHOGRAPHIC); 
+				GX_LoadPosMtxImm(OGL.GXmodelView,GX_PNMTX0);
+			}
+			else
+			{
+				if(OGL.GXuseProjW)
+					GX_LoadProjectionMtx(OGL.GXprojW, GX_PERSPECTIVE); 
+				else
+					GX_LoadProjectionMtx(OGL.GXprojIdent, GX_ORTHOGRAPHIC); 
+				GX_LoadPosMtxImm(OGL.GXmodelViewIdent,GX_PNMTX0);
+			}
+		}
+		OGL.GXupdateMtx = false;
+	}
+
+	if ((gDP.otherMode.depthSource == G_ZS_PRIM)||OGL.GXuseAlphaCompare)
+	{
+		GX_SetZCompLoc(GX_FALSE);	// Do Z-compare after texturing. (i.e. use Ztex)
+		cache.GXZTexPrimCnt++;
+	}
+	else
+	{
+		GX_SetZCompLoc(GX_TRUE);	// Do Z-compare before texturing.
+		cache.GXnoZTexPrimCnt++;
+	}
+
 	//set vertex description here
 	GX_ClearVtxDesc();
-	GX_SetVtxDesc(GX_VA_PTNMTXIDX, GX_PNMTX0);
-	if (combiner.usesT0) GX_SetVtxDesc(GX_VA_TEX0MTXIDX, GX_IDENTITY);
-	if (combiner.usesT1) GX_SetVtxDesc(GX_VA_TEX1MTXIDX, GX_IDENTITY);
+	if (OGL.GXuseProj)	GX_SetVtxDesc(GX_VA_PTNMTXIDX, GX_PNMTX0);
+	else				GX_SetVtxDesc(GX_VA_PTNMTXIDX, GX_PNMTX0);
+//	if (combiner.usesT0) GX_SetVtxDesc(GX_VA_TEX0MTXIDX, GX_TEXMTX0);
+//	if (combiner.usesT1) GX_SetVtxDesc(GX_VA_TEX1MTXIDX, GX_TEXMTX0);
+	GX_SetVtxDesc(GX_VA_TEX0MTXIDX, GX_TEXMTX0);
+	GX_SetVtxDesc(GX_VA_TEX1MTXIDX, GX_TEXMTX0);
+	GX_SetVtxDesc(GX_VA_TEX2MTXIDX, GX_TEXMTX0);
 	GX_SetVtxDesc(GX_VA_POS, GX_DIRECT);
 //	if (lighting) GX_SetVtxDesc(GX_VA_NRM, GX_DIRECT);
 	GX_SetVtxDesc(GX_VA_CLR0, GX_DIRECT);
-	if (combiner.usesT0) GX_SetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-	if (combiner.usesT1) GX_SetVtxDesc(GX_VA_TEX1, GX_DIRECT);
+//	if (combiner.usesT0) GX_SetVtxDesc(GX_VA_TEX0, GX_DIRECT);
+//	if (combiner.usesT1) GX_SetVtxDesc(GX_VA_TEX1, GX_DIRECT);
+	GX_SetVtxDesc(GX_VA_TEX0, GX_DIRECT);
+	GX_SetVtxDesc(GX_VA_TEX1, GX_DIRECT);
+	GX_SetVtxDesc(GX_VA_TEX2, GX_DIRECT);
 
 	//set vertex attribute formats here
+	//TODO: These only need to be set once during init.
 	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
 //	if (lighting) GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_NRM, GX_NRM_XYZ, GX_F32, 0);
 	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
-	if (combiner.usesT0) GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_F32, 0);
-	if (combiner.usesT1) GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX1, GX_TEX_ST, GX_F32, 0);
+//	if (combiner.usesT0) GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_F32, 0);
+//	if (combiner.usesT1) GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX1, GX_TEX_ST, GX_F32, 0);
+	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_F32, 0);
+	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX1, GX_TEX_ST, GX_F32, 0);
+	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX2, GX_TEX_ST, GX_F32, 0);
+
+
+	if (!OGL.GXuseProj)
+	{
+		sprintf(txtbuffer,"OGL: using software MTX xforms");
+		DEBUG_print(txtbuffer,4);
+	}
 
 	GX_Begin(GX_TRIANGLES, GX_VTXFMT0, OGL.numVertices);
 	for (int i = 0; i < OGL.numVertices; i++) {
+		if(OGL.GXuseProj)
+			GX_Position3f32( OGL.vertices[i].x, OGL.vertices[i].y, OGL.vertices[i].z );
+		else
+		{
+			if(OGL.GXuseProjW)
+				GX_Position3f32( OGL.vertices[i].x, OGL.vertices[i].y, -OGL.vertices[i].w );
+			else
+			{
+				invW = (OGL.vertices[i].w != 0) ? 1/OGL.vertices[i].w : 0.0f;
+				GX_Position3f32( OGL.vertices[i].x*invW, OGL.vertices[i].y*invW, OGL.vertices[i].z*invW );
+			}
+		}
 //		GX_Position3f32(OGL.vertices[i].x/OGL.vertices[i].w, OGL.vertices[i].y/OGL.vertices[i].w, OGL.vertices[i].z/OGL.vertices[i].w);
-		GX_Position3f32(OGL.vertices[i].x/OGL.vertices[i].w, OGL.vertices[i].y/OGL.vertices[i].w, min(OGL.vertices[i].z/OGL.vertices[i].w,1.0));
 		GXcol.r = (u8) (min(OGL.vertices[i].color.r,1.0)*255);
 		GXcol.g = (u8) (min(OGL.vertices[i].color.g,1.0)*255);
 		GXcol.b = (u8) (min(OGL.vertices[i].color.b,1.0)*255);
 		GXcol.a = (u8) (min(OGL.vertices[i].color.a,1.0)*255);
 		GX_Color4u8(GXcol.r, GXcol.g, GXcol.b, GXcol.a); 
+//		if (combiner.usesT0) GX_TexCoord2f32(OGL.vertices[i].s0,OGL.vertices[i].t0);
+//		if (combiner.usesT1) GX_TexCoord2f32(OGL.vertices[i].s1,OGL.vertices[i].t1);
 		if (combiner.usesT0) GX_TexCoord2f32(OGL.vertices[i].s0,OGL.vertices[i].t0);
+		else GX_TexCoord2f32(0.0f,0.0f);
 		if (combiner.usesT1) GX_TexCoord2f32(OGL.vertices[i].s1,OGL.vertices[i].t1);
+		else GX_TexCoord2f32(0.0f,0.0f);
+		GX_TexCoord2f32(0.0f,0.0f);
 #ifdef GLN64_SDLOG
 		sprintf(txtbuffer," Vert%d: Pos x = %.2f, y = %.2f, z = %.2f, w = %.2f, RGBA = %d, %d, %d, %d, VertCol RGBA = %.2f, %.2f, %.2f, %.2f\n", i, OGL.vertices[i].x/OGL.vertices[i].w, OGL.vertices[i].y/OGL.vertices[i].w, OGL.vertices[i].z/OGL.vertices[i].w, OGL.vertices[i].w, GXcol.r, GXcol.g, GXcol.b, GXcol.a, OGL.vertices[i].color.r, OGL.vertices[i].color.g, OGL.vertices[i].color.b, OGL.vertices[i].color.a);
 		DEBUG_print(txtbuffer,DBG_SDGECKOPRINT);
@@ -1126,19 +1279,105 @@ void OGL_DrawLine( SPVertex *vertices, int v0, int v1, float width )
 	GX_SetLineWidth( width * OGL.scaleX, GX_TO_ZERO );
 
 	GXColor GXcol;
+	float invW;
+
+	//Update MV & P Matrices
+	if(OGL.GXupdateMtx)
+	{
+		if(OGL.GXpolyOffset)
+		{
+			if(OGL.GXuseProj)
+			{
+				CopyMatrix( OGL.GXprojTemp, OGL.GXproj );
+				if(OGL.GXprojTemp[3][2] == -1)
+				{
+					OGL.GXprojTemp[2][2] += GXpolyOffsetFactor;
+					GX_LoadProjectionMtx(OGL.GXprojTemp, GX_PERSPECTIVE);
+				}
+				else
+				{
+					OGL.GXprojTemp[2][3] -= GXpolyOffsetFactor;
+					GX_LoadProjectionMtx(OGL.GXprojTemp, GX_ORTHOGRAPHIC); 
+				}
+				GX_LoadPosMtxImm(OGL.GXmodelView,GX_PNMTX0);
+			}
+			else
+			{
+				if(OGL.GXuseProjW)
+				{
+					CopyMatrix( OGL.GXprojTemp, OGL.GXprojW );
+					OGL.GXprojTemp[2][2] += GXpolyOffsetFactor;
+					GX_LoadProjectionMtx(OGL.GXprojTemp, GX_PERSPECTIVE); 
+				}
+				else
+				{
+					CopyMatrix( OGL.GXprojTemp, OGL.GXprojIdent );
+					OGL.GXprojTemp[2][3] -= GXpolyOffsetFactor;
+					GX_LoadProjectionMtx(OGL.GXprojTemp, GX_ORTHOGRAPHIC); 
+				}
+				GX_LoadPosMtxImm(OGL.GXmodelViewIdent,GX_PNMTX0);
+			}
+		}
+		else
+		{
+			if(OGL.GXuseProj)
+			{
+				if(OGL.GXproj[3][2] == -1)
+					GX_LoadProjectionMtx(OGL.GXproj, GX_PERSPECTIVE);
+				else
+					GX_LoadProjectionMtx(OGL.GXproj, GX_ORTHOGRAPHIC); 
+				GX_LoadPosMtxImm(OGL.GXmodelView,GX_PNMTX0);
+			}
+			else
+			{
+				if(OGL.GXuseProjW)
+					GX_LoadProjectionMtx(OGL.GXprojW, GX_PERSPECTIVE); 
+				else
+					GX_LoadProjectionMtx(OGL.GXprojIdent, GX_ORTHOGRAPHIC); 
+				GX_LoadPosMtxImm(OGL.GXmodelViewIdent,GX_PNMTX0);
+			}
+		}
+		OGL.GXupdateMtx = false;
+	}
+
+	if ((gDP.otherMode.depthSource == G_ZS_PRIM)||OGL.GXuseAlphaCompare)
+	{
+		GX_SetZCompLoc(GX_FALSE);	// Do Z-compare after texturing. (i.e. use Ztex)
+		cache.GXZTexPrimCnt++;
+	}
+	else
+	{
+		GX_SetZCompLoc(GX_TRUE);	// Do Z-compare before texturing.
+		cache.GXnoZTexPrimCnt++;
+	}
 
 	//set vertex description here
 	GX_ClearVtxDesc();
-	GX_SetVtxDesc(GX_VA_PTNMTXIDX, GX_PNMTX0);
+	if (OGL.GXuseProj)	GX_SetVtxDesc(GX_VA_PTNMTXIDX, GX_PNMTX0);
+	else				GX_SetVtxDesc(GX_VA_PTNMTXIDX, GX_PNMTX0);
+	GX_SetVtxDesc(GX_VA_TEX2MTXIDX, GX_TEXMTX0);
 	GX_SetVtxDesc(GX_VA_POS, GX_DIRECT);
 	GX_SetVtxDesc(GX_VA_CLR0, GX_DIRECT);
+	GX_SetVtxDesc(GX_VA_TEX2, GX_DIRECT);
 	//set vertex attribute formats here
 	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
 	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
+	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX2, GX_TEX_ST, GX_F32, 0);
 	GX_Begin(GX_LINES, GX_VTXFMT0, 2);
 		for (int i = 0; i < 2; i++)
 		{
-			GX_Position3f32( vertices[v[i]].x/vertices[v[i]].w, vertices[v[i]].y/vertices[v[i]].w, vertices[v[i]].z/vertices[v[i]].w );
+			if(OGL.GXuseProj)
+				GX_Position3f32( vertices[v[i]].x, vertices[v[i]].y, vertices[v[i]].z );
+			else
+			{
+				if(OGL.GXuseProjW)
+					GX_Position3f32( OGL.vertices[i].x, OGL.vertices[i].y, -OGL.vertices[i].w );
+				else
+				{
+					invW = (OGL.vertices[i].w != 0) ? 1/OGL.vertices[i].w : 0.0f;
+					GX_Position3f32( OGL.vertices[i].x*invW, OGL.vertices[i].y*invW, OGL.vertices[i].z*invW );
+				}
+			}
 			color.r = vertices[v[i]].r;
 			color.g = vertices[v[i]].g;
 			color.b = vertices[v[i]].b;
@@ -1149,6 +1388,7 @@ void OGL_DrawLine( SPVertex *vertices, int v0, int v1, float width )
 			GXcol.b = (u8) (color.b*255);
 			GXcol.a = (u8) (color.a*255);
 			GX_Color4u8(GXcol.r, GXcol.g, GXcol.b, GXcol.a); 
+			GX_TexCoord2f32(0.0f,0.0f);
 		}
 	GX_End();
 #endif // __GX__
@@ -1181,86 +1421,87 @@ void OGL_DrawRect( int ulx, int uly, int lrx, int lry, float *color )
 	OGL_UpdateViewport();
 	glEnable( GL_SCISSOR_TEST );
 #else // !__GX__
-//	glDisable( GL_SCISSOR_TEST );
-//	GX_SetScissor((u32) 0,(u32) 0,(u32) OGL.width,(u32) OGL.height);	//Set to the same size as the viewport.
-//	glDisable( GL_CULL_FACE );
+	GX_SetScissor((u32) 0,(u32) 0,(u32) OGL.width,(u32) OGL.height);	//Set to the same size as the viewport.
 	GX_SetCullMode (GX_CULL_NONE);
-/*	glMatrixMode( GL_PROJECTION );
-    glLoadIdentity();
-	glOrtho( 0, VI.width, VI.height, 0, 1.0f, -1.0f );*/
 	Mtx44 GXprojection;
 	guMtxIdentity(GXprojection);
-//	guOrtho(GXprojection, 0, VI.width, 0, VI.height, 0.0f, 1.0f);
 	guOrtho(GXprojection, 0, VI.height, 0, VI.width, 0.0f, 1.0f);
+	if(OGL.GXpolyOffset)
+		GXprojection[2][3] -= GXpolyOffsetFactor;
 	GX_LoadProjectionMtx(GXprojection, GX_ORTHOGRAPHIC); 
-/*	glViewport( 0, OGL.heightOffset, OGL.width, OGL.height );
-	glDepthRange( 0.0f, 1.0f );*/
-//TODO: GX_SetViewport isn't working right - blanks out rendering
-//	GX_SetViewport((f32) 0,(f32) OGL.heightOffset,(f32) OGL.width,(f32) OGL.height, 0.0f, 1.0f);
-//	GX_SetViewport((f32) 0,(f32) 0,(f32) OGL.width,(f32) OGL.height, 0.0f, 1.0f);
+	GX_LoadPosMtxImm(OGL.GXmodelViewIdent,GX_PNMTX0);
 
-//	glColor4f( color[0], color[1], color[2], color[3] );
+	GX_SetViewport((f32) 0,(f32) 0,(f32) OGL.width,(f32) OGL.height, 0.0f, 1.0f);
+
 	GXColor GXcol;
 	GXcol.r = (u8) (color[0]*255);
 	GXcol.g = (u8) (color[1]*255);
 	GXcol.b = (u8) (color[2]*255);
 	GXcol.a = (u8) (color[3]*255);
 
-/*
-// Set TEV up for pass color.
-	GX_SetNumTevStages (1);
-	GX_SetTevOp (GX_TEVSTAGE0,GX_PASSCLR);
-*/
-
-/*	glBegin( GL_QUADS );
-		glVertex4f( ulx, uly, (gDP.otherMode.depthSource == G_ZS_PRIM) ? gDP.primDepth.z : gSP.viewport.nearz, 1.0f );
-		glVertex4f( lrx, uly, (gDP.otherMode.depthSource == G_ZS_PRIM) ? gDP.primDepth.z : gSP.viewport.nearz, 1.0f );
-		glVertex4f( lrx, lry, (gDP.otherMode.depthSource == G_ZS_PRIM) ? gDP.primDepth.z : gSP.viewport.nearz, 1.0f );
-		glVertex4f( ulx, lry, (gDP.otherMode.depthSource == G_ZS_PRIM) ? gDP.primDepth.z : gSP.viewport.nearz, 1.0f );
-	glEnd();*/
+	if ((gDP.otherMode.depthSource == G_ZS_PRIM)||OGL.GXuseAlphaCompare)
+	{
+		GX_SetZCompLoc(GX_FALSE);	// Do Z-compare after texturing. (i.e. use Ztex)
+		cache.GXZTexPrimCnt++;
+	}
+	else
+	{
+		GX_SetZCompLoc(GX_TRUE);	// Do Z-compare before texturing.
+		cache.GXnoZTexPrimCnt++;
+	}
 
 	//set vertex description here
 	GX_ClearVtxDesc();
 	GX_SetVtxDesc(GX_VA_PTNMTXIDX, GX_PNMTX0);
+	GX_SetVtxDesc(GX_VA_TEX2MTXIDX, GX_TEXMTX0);
 	GX_SetVtxDesc(GX_VA_POS, GX_DIRECT);
 	GX_SetVtxDesc(GX_VA_CLR0, GX_DIRECT);
+	GX_SetVtxDesc(GX_VA_TEX2, GX_DIRECT);
+
 	//set vertex attribute formats here
 	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
 	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
-	GX_Begin(GX_QUADS, GX_VTXFMT0, 4);
-		GX_Position3f32( ulx, uly, (gDP.otherMode.depthSource == G_ZS_PRIM) ? gDP.primDepth.z : gSP.viewport.nearz );
+	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX2, GX_TEX_ST, GX_F32, 0);
+	GX_Begin(GX_QUADS, GX_VTXFMT0, 4);	//TODO: This may fail for G_ZS_PRIM... log and fix, maybe with guOrtho
+//		GX_Position3f32( ulx, uly, (gDP.otherMode.depthSource == G_ZS_PRIM) ? gDP.primDepth.z : gSP.viewport.nearz );
+		GX_Position3f32( ulx, uly, gSP.viewport.nearz );
 		GX_Color4u8(GXcol.r, GXcol.g, GXcol.b, GXcol.a); 
-		GX_Position3f32( lrx, uly, (gDP.otherMode.depthSource == G_ZS_PRIM) ? gDP.primDepth.z : gSP.viewport.nearz );
+		GX_TexCoord2f32(0.0f,0.0f);
+//		GX_Position3f32( lrx, uly, (gDP.otherMode.depthSource == G_ZS_PRIM) ? gDP.primDepth.z : gSP.viewport.nearz );
+		GX_Position3f32( lrx, uly, gSP.viewport.nearz );
 		GX_Color4u8(GXcol.r, GXcol.g, GXcol.b, GXcol.a); 
-		GX_Position3f32( lrx, lry, (gDP.otherMode.depthSource == G_ZS_PRIM) ? gDP.primDepth.z : gSP.viewport.nearz );
+		GX_TexCoord2f32(0.0f,0.0f);
+//		GX_Position3f32( lrx, lry, (gDP.otherMode.depthSource == G_ZS_PRIM) ? gDP.primDepth.z : gSP.viewport.nearz );
+		GX_Position3f32( lrx, lry, gSP.viewport.nearz );
 		GX_Color4u8(GXcol.r, GXcol.g, GXcol.b, GXcol.a); 
-		GX_Position3f32( ulx, lry, (gDP.otherMode.depthSource == G_ZS_PRIM) ? gDP.primDepth.z : gSP.viewport.nearz );
+		GX_TexCoord2f32(0.0f,0.0f);
+//		GX_Position3f32( ulx, lry, (gDP.otherMode.depthSource == G_ZS_PRIM) ? gDP.primDepth.z : gSP.viewport.nearz );
+		GX_Position3f32( ulx, lry, gSP.viewport.nearz );
 		GX_Color4u8(GXcol.r, GXcol.g, GXcol.b, GXcol.a); 
+		GX_TexCoord2f32(0.0f,0.0f);
 	GX_End();
 
-//	glLoadIdentity();
-	guMtxIdentity(GXprojection);
-	GXprojection[2][2] = GXprojZScale; //0.5;
-	GXprojection[2][3] = GXprojZOffset; //-0.5;
-	GX_LoadProjectionMtx(GXprojection, GX_ORTHOGRAPHIC); 
+	OGL.GXupdateMtx = true;
+
 	OGL_UpdateCullFace();
 	OGL_UpdateViewport();
-//	glEnable( GL_SCISSOR_TEST );
-	gDP.changed &= CHANGED_SCISSOR;	//Restore scissor in OGL_UpdateStates() before drawing next geometry.
-//	GX_SetScissor((u32) (gDP.scissor.ulx * OGL.scaleX),(u32) (gDP.scissor.uly * OGL.scaleY),	//Restored to OGL_UpdateStates() value
-//			(u32) ((gDP.scissor.lrx - gDP.scissor.ulx) * OGL.scaleX),(u32) ((gDP.scissor.lry - gDP.scissor.uly) * OGL.scaleY));
+	gDP.changed |= CHANGED_SCISSOR;	//Restore scissor in OGL_UpdateStates() before drawing next geometry.
 #endif // __GX__
 }
 
 void OGL_DrawTexturedRect( float ulx, float uly, float lrx, float lry, float uls, float ult, float lrs, float lrt, bool flip )
 {
+#ifdef __GX__
+	OGL.GXrenderTexRect = true;
+#endif //__GX__
 	GLVertex rect[2] =
-	{
+	{	//TODO: This may fail for G_ZS_PRIM... log and fix, maybe with guOrtho
 		{ ulx, uly, gDP.otherMode.depthSource == G_ZS_PRIM ? gDP.primDepth.z : gSP.viewport.nearz, 1.0f, { /*gDP.blendColor.r, gDP.blendColor.g, gDP.blendColor.b, gDP.blendColor.a */1.0f, 1.0f, 1.0f, 0.0f }, { 1.0f, 1.0f, 1.0f, 1.0f }, uls, ult, uls, ult, 0.0f },
 		{ lrx, lry, gDP.otherMode.depthSource == G_ZS_PRIM ? gDP.primDepth.z : gSP.viewport.nearz, 1.0f, { /*gDP.blendColor.r, gDP.blendColor.g, gDP.blendColor.b, gDP.blendColor.a*/1.0f, 1.0f, 1.0f, 0.0f }, { 1.0f, 1.0f, 1.0f, 1.0f }, lrs, lrt, lrs, lrt, 0.0f },
 	};
 
 	OGL_UpdateStates();
+
 #ifndef __GX__
 	glDisable( GL_CULL_FACE );
 	glMatrixMode( GL_PROJECTION );
@@ -1268,20 +1509,17 @@ void OGL_DrawTexturedRect( float ulx, float uly, float lrx, float lry, float uls
 	glOrtho( 0, VI.width, VI.height, 0, 1.0f, -1.0f );
 	glViewport( 0, OGL.heightOffset, OGL.width, OGL.height );
 #else // !__GX__
-//	glDisable( GL_CULL_FACE );
 	GX_SetCullMode (GX_CULL_NONE);
-/*	glMatrixMode( GL_PROJECTION );
-    glLoadIdentity();
-	glOrtho( 0, VI.width, VI.height, 0, 1.0f, -1.0f );*/
 	Mtx44 GXprojection;
 	guMtxIdentity(GXprojection);
-//	guOrtho(GXprojection, 0, VI.width, 0, VI.height, 0.0f, 1.0f);
 	guOrtho(GXprojection, 0, VI.height, 0, VI.width, 0.0f, 1.0f);
+	if(OGL.GXpolyOffset)
+		GXprojection[2][3] -= GXpolyOffsetFactor;
 	GX_LoadProjectionMtx(GXprojection, GX_ORTHOGRAPHIC); 
-//	glViewport( 0, OGL.heightOffset, OGL.width, OGL.height );
-//TODO: GX_SetViewport isn't working right - blanks out some rendering
-//	GX_SetViewport((f32) 0,(f32) OGL.heightOffset,(f32) OGL.width,(f32) OGL.height, 0.0f, 1.0f);
-	//GX_SetViewport((f32) 0,(f32) 0,(f32) OGL.width,(f32) OGL.height, 0.0f, 1.0f);
+
+	GX_LoadPosMtxImm(OGL.GXmodelViewIdent,GX_PNMTX0);
+
+	GX_SetViewport((f32) 0,(f32) 0,(f32) OGL.width,(f32) OGL.height, 0.0f, 1.0f);
 #endif // __GX__
 
 	if (combiner.usesT0)
@@ -1290,7 +1528,6 @@ void OGL_DrawTexturedRect( float ulx, float uly, float lrx, float lry, float uls
 		rect[0].t0 = rect[0].t0 * cache.current[0]->shiftScaleT - gSP.textureTile[0]->fult;
 		rect[1].s0 = (rect[1].s0 + 1.0f) * cache.current[0]->shiftScaleS - gSP.textureTile[0]->fuls;
 		rect[1].t0 = (rect[1].t0 + 1.0f) * cache.current[0]->shiftScaleT - gSP.textureTile[0]->fult;
-
 		if ((cache.current[0]->maskS) && (fmod( rect[0].s0, cache.current[0]->width ) == 0.0f) && !(cache.current[0]->mirrorS))
 		{
 			rect[1].s0 -= rect[0].s0;
@@ -1305,13 +1542,20 @@ void OGL_DrawTexturedRect( float ulx, float uly, float lrx, float lry, float uls
 
 		if (cache.current[0]->frameBufferTexture)
 		{
+#ifndef __GX__
 			rect[0].s0 = cache.current[0]->offsetS + rect[0].s0;
 			rect[0].t0 = cache.current[0]->offsetT - rect[0].t0;
 			rect[1].s0 = cache.current[0]->offsetS + rect[1].s0;
 			rect[1].t0 = cache.current[0]->offsetT - rect[1].t0;
+#else //!__GX__
+			rect[0].s0 = cache.current[0]->offsetS + rect[0].s0;
+			rect[0].t0 = cache.current[0]->offsetT + rect[0].t0;
+			rect[1].s0 = cache.current[0]->offsetS + rect[1].s0;
+			rect[1].t0 = cache.current[0]->offsetT + rect[1].t0;
+#endif //__GX__
 		}
 
-#ifndef __GX__	//TODO: Figure out how to set wrap_s/wrap_t here.
+#ifndef __GX__	
 		if (OGL.ARB_multitexture)
 			glActiveTextureARB( GL_TEXTURE0_ARB );
 
@@ -1322,7 +1566,12 @@ void OGL_DrawTexturedRect( float ulx, float uly, float lrx, float lry, float uls
 
 		if ((rect[0].t0 >= 0.0f) && (rect[1].t0 <= cache.current[0]->height))
 			glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
-#endif // !__GX__
+#else // !__GX__
+		if ((rect[0].s0 >= 0.0f) && (rect[1].s0 <= cache.current[0]->width))
+			OGL.GXforceClampS0 = true;
+		if ((rect[0].t0 >= 0.0f) && (rect[1].t0 <= cache.current[0]->height))
+			OGL.GXforceClampT0 = true;
+#endif // __GX__
 
 //		GLint height;
 
@@ -1355,13 +1604,20 @@ void OGL_DrawTexturedRect( float ulx, float uly, float lrx, float lry, float uls
 
 		if (cache.current[1]->frameBufferTexture)
 		{
+#ifndef __GX__
 			rect[0].s1 = cache.current[1]->offsetS + rect[0].s1;
 			rect[0].t1 = cache.current[1]->offsetT - rect[0].t1;
 			rect[1].s1 = cache.current[1]->offsetS + rect[1].s1;
 			rect[1].t1 = cache.current[1]->offsetT - rect[1].t1;
+#else //!__GX__
+			rect[0].s1 = cache.current[1]->offsetS + rect[0].s1;
+			rect[0].t1 = cache.current[1]->offsetT + rect[0].t1;
+			rect[1].s1 = cache.current[1]->offsetS + rect[1].s1;
+			rect[1].t1 = cache.current[1]->offsetT + rect[1].t1;
+#endif //__GX__
 		}
 
-#ifndef __GX__	//TODO: Figure out how to set wrap_s/wrap_t here.
+#ifndef __GX__	
 		glActiveTextureARB( GL_TEXTURE1_ARB );
 
 		if ((rect[0].s1 == 0.0f) && (rect[1].s1 <= cache.current[1]->width))
@@ -1369,7 +1625,12 @@ void OGL_DrawTexturedRect( float ulx, float uly, float lrx, float lry, float uls
 
 		if ((rect[0].t1 == 0.0f) && (rect[1].t1 <= cache.current[1]->height))
 			glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
-#endif // !__GX__
+#else // !__GX__
+		if ((rect[0].s1 == 0.0f) && (rect[1].s1 <= cache.current[1]->width))
+			OGL.GXforceClampS1 = true;
+		if ((rect[0].t1 == 0.0f) && (rect[1].t1 <= cache.current[1]->height))
+			OGL.GXforceClampT1 = true;
+#endif // __GX__
 
 		rect[0].s1 *= cache.current[1]->scaleS;
 		rect[0].t1 *= cache.current[1]->scaleT;
@@ -1388,6 +1649,34 @@ void OGL_DrawTexturedRect( float ulx, float uly, float lrx, float lry, float uls
 	}
 #else // !__GX__
 	//TODO: Set LOD texture filter modes here.
+	if ((gDP.otherMode.cycleType == G_CYC_COPY) && !OGL.forceBilinear)
+		OGL.GXuseMinMagNearest = true;
+
+	if (combiner.usesT0 && cache.current[0]->GXtexture != NULL) 
+	{
+		GX_InitTexObj(&cache.current[0]->GXtex, cache.current[0]->GXtexture, (u16) cache.current[0]->realWidth, 
+			(u16) cache.current[0]->realHeight, cache.current[0]->GXtexfmt, 
+			(cache.current[0]->clampS || OGL.GXforceClampS0) ? GX_CLAMP : GX_REPEAT, 
+			(cache.current[0]->clampT || OGL.GXforceClampT0) ? GX_CLAMP : GX_REPEAT, GX_FALSE); 
+		if (OGL.GXuseMinMagNearest) GX_InitTexObjLOD(&cache.current[0]->GXtex, GX_NEAR, GX_NEAR, 0.0f, 0.0f, 0.0f, GX_FALSE, GX_FALSE, GX_ANISO_1);
+		GX_LoadTexObj(&cache.current[0]->GXtex, GX_TEXMAP0); // t = 0 is GX_TEXMAP0 and t = 1 is GX_TEXMAP1
+	}
+
+	if (combiner.usesT1 && OGL.ARB_multitexture && cache.current[1]->GXtexture != NULL)
+	{
+		GX_InitTexObj(&cache.current[1]->GXtex, cache.current[1]->GXtexture, (u16) cache.current[1]->realWidth, 
+			(u16) cache.current[1]->realHeight, cache.current[1]->GXtexfmt, 
+			(cache.current[1]->clampS || OGL.GXforceClampS1) ? GX_CLAMP : GX_REPEAT, 
+			(cache.current[1]->clampT || OGL.GXforceClampT1) ? GX_CLAMP : GX_REPEAT, GX_FALSE); 
+		if (OGL.GXuseMinMagNearest) GX_InitTexObjLOD(&cache.current[1]->GXtex, GX_NEAR, GX_NEAR, 0.0f, 0.0f, 0.0f, GX_FALSE, GX_FALSE, GX_ANISO_1);
+		GX_LoadTexObj(&cache.current[1]->GXtex, GX_TEXMAP1); // t = 0 is GX_TEXMAP0 and t = 1 is GX_TEXMAP1
+	}
+
+	OGL.GXforceClampS0 = false;
+	OGL.GXforceClampT0 = false;
+	OGL.GXforceClampS1 = false;
+	OGL.GXforceClampT1 = false;
+	OGL.GXuseMinMagNearest = false;
 #endif // __GX__
 
 	SetConstant( rect[0].color, combiner.vertex.color, combiner.vertex.alpha );
@@ -1449,33 +1738,40 @@ void OGL_DrawTexturedRect( float ulx, float uly, float lrx, float lry, float uls
 	GXcol.b = (u8) (rect[0].color.b*255);
 	GXcol.a = (u8) (rect[0].color.a*255);
 
-/*
-// Set TEV up for pass texture.
-//TODO: Figure out the correct combining modes for this function.
-	GX_SetNumTevStages (1);
-	GX_SetTevOp (GX_TEVSTAGE0,GX_REPLACE);
-*/
+	if ((gDP.otherMode.depthSource == G_ZS_PRIM)||OGL.GXuseAlphaCompare)
+	{
+		GX_SetZCompLoc(GX_FALSE);	// Do Z-compare after texturing. (i.e. use Ztex)
+		cache.GXZTexPrimCnt++;
+	}
+	else
+	{
+		GX_SetZCompLoc(GX_TRUE);	// Do Z-compare before texturing.
+		cache.GXnoZTexPrimCnt++;
+	}
 
-	//TODO: Change the following for multitexturing.
 	//set vertex description here
 	GX_ClearVtxDesc();
 	GX_SetVtxDesc(GX_VA_PTNMTXIDX, GX_PNMTX0);
-	GX_SetVtxDesc(GX_VA_TEX0MTXIDX, GX_IDENTITY);
-	GX_SetVtxDesc(GX_VA_TEX1MTXIDX, GX_IDENTITY);
+	GX_SetVtxDesc(GX_VA_TEX0MTXIDX, GX_TEXMTX0);
+	GX_SetVtxDesc(GX_VA_TEX1MTXIDX, GX_TEXMTX0);
+	GX_SetVtxDesc(GX_VA_TEX2MTXIDX, GX_TEXMTX0);
 	GX_SetVtxDesc(GX_VA_POS, GX_DIRECT);
 	GX_SetVtxDesc(GX_VA_CLR0, GX_DIRECT);
 	GX_SetVtxDesc(GX_VA_TEX0, GX_DIRECT);
 	GX_SetVtxDesc(GX_VA_TEX1, GX_DIRECT);
+	GX_SetVtxDesc(GX_VA_TEX2, GX_DIRECT);
 	//set vertex attribute formats here
 	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
 	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
 	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_F32, 0);
 	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX1, GX_TEX_ST, GX_F32, 0);
+	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX2, GX_TEX_ST, GX_F32, 0);
 	GX_Begin(GX_QUADS, GX_VTXFMT0, 4);
 		GX_Position3f32( rect[0].x, rect[0].y, rect[0].z );
 		GX_Color4u8( GXcol.r, GXcol.g, GXcol.b, GXcol.a ); 
 		GX_TexCoord2f32( rect[0].s0, rect[0].t0 );
 		GX_TexCoord2f32( rect[0].s1, rect[0].t1 );
+		GX_TexCoord2f32( 0.0, 0.0 );
 		GX_Position3f32( rect[1].x, rect[0].y, rect[0].z );
 		GX_Color4u8(GXcol.r, GXcol.g, GXcol.b, GXcol.a); 
 		if (flip)
@@ -1488,10 +1784,12 @@ void OGL_DrawTexturedRect( float ulx, float uly, float lrx, float lry, float uls
 			GX_TexCoord2f32( rect[1].s0, rect[0].t0 );
 			GX_TexCoord2f32( rect[1].s1, rect[0].t1 );
 		}
+		GX_TexCoord2f32( 0.0, 0.0 );
 		GX_Position3f32( rect[1].x, rect[1].y, rect[0].z );
 		GX_Color4u8( GXcol.r, GXcol.g, GXcol.b, GXcol.a ); 
 		GX_TexCoord2f32( rect[1].s0, rect[1].t0 );
 		GX_TexCoord2f32( rect[1].s1, rect[1].t1 );
+		GX_TexCoord2f32( 0.0, 0.0 );
 		GX_Position3f32( rect[0].x, rect[1].y, rect[0].z );
 		GX_Color4u8(GXcol.r, GXcol.g, GXcol.b, GXcol.a); 
 		if (flip)
@@ -1504,16 +1802,15 @@ void OGL_DrawTexturedRect( float ulx, float uly, float lrx, float lry, float uls
 			GX_TexCoord2f32( rect[0].s0, rect[1].t0 );
 			GX_TexCoord2f32( rect[0].s1, rect[1].t1 );
 		}
+		GX_TexCoord2f32( 0.0, 0.0 );
 	GX_End();
 #endif // __GX__
 
 #ifndef __GX__
 	glLoadIdentity();
 #else // !__GX__
-	guMtxIdentity(GXprojection);
-	GXprojection[2][2] = GXprojZScale; //0.5;
-	GXprojection[2][3] = GXprojZOffset; //-0.5;
-	GX_LoadProjectionMtx(GXprojection, GX_ORTHOGRAPHIC); 
+	OGL.GXrenderTexRect = false;
+	OGL.GXupdateMtx = true;
 #endif // __GX__
 	OGL_UpdateCullFace();
 	OGL_UpdateViewport();
@@ -1532,10 +1829,10 @@ void OGL_ClearDepthBuffer()
 
 	glEnable( GL_SCISSOR_TEST );
 #else // !__GX__
-	//TODO: Implement in GX
 	//Note: OGL_UpdateDepthUpdate() should not need to be called b/c DepthMask is set in OGL_UpdateStates()
+	OGL.GXclearDepthBuffer = true;
+	gDP.changed |= CHANGED_RENDERMODE;
 #endif // __GX__
-
 }
 
 void OGL_ClearColorBuffer( float *color )
@@ -1548,9 +1845,14 @@ void OGL_ClearColorBuffer( float *color )
 
 	glEnable( GL_SCISSOR_TEST );
 #else // !__GX__
-	//TODO: Implement in GX
-#endif // __GX__
+	OGL.GXclearColor.r = (u8) (color[0]*255);
+	OGL.GXclearColor.g = (u8) (color[1]*255);
+	OGL.GXclearColor.b = (u8) (color[2]*255);
+	OGL.GXclearColor.a = (u8) (color[3]*255);
 
+	OGL.GXclearColorBuffer = true;
+	gDP.changed |= CHANGED_RENDERMODE;
+#endif // __GX__
 }
 
 void OGL_SaveScreenshot()
@@ -1658,10 +1960,7 @@ void OGL_ReadScreen( void **dest, long *width, long *height )
 	glReadPixels( 0, 0, OGL.width, OGL.height,
 	              GL_BGR, GL_UNSIGNED_BYTE, *dest );
 	glReadBuffer( oldMode );
-#else // !__GX__
-	//TODO: Implement in GX?
-#endif // __GX__
-
+#endif // !__GX__ Note: This is a VCR function.
 }
 
 #endif // __LINUX__
@@ -1669,29 +1968,58 @@ void OGL_ReadScreen( void **dest, long *width, long *height )
 #ifdef __GX__
 void OGL_GXinitDlist()
 {
-	//Clear efb
-	GX_SetCopyClear ((GXColor){0,0,0,255}, 0xFFFFFF);
-	GX_CopyDisp (VI_GX_getScreenPointer(), GX_TRUE);	//clear the EFB before executing new Dlist
-	GX_DrawDone ();
+//	if(VI.copy_fb)
+//		VIDEO_WaitVSync();
+
+	OGL.frameBufferTextures = glN64_useFrameBufferTextures;
+
+	// init primeDepthZtex, Ztexture, AlphaCompare, and Texture Clamping
+	TextureCache_UpdatePrimDepthZtex( 1.0f );
+	GX_SetZTexture(GX_ZT_DISABLE,GX_TF_Z16,0);	//GX_ZT_DISABLE or GX_ZT_REPLACE; set in gDP.cpp
+	OGL.GXuseAlphaCompare = false;
+	GX_SetZCompLoc(GX_TRUE);	// Do Z-compare before texturing.
+	OGL.GXrenderTexRect = false;
+	OGL.GXforceClampS0 = false;
+	OGL.GXforceClampT0 = false;
+	OGL.GXforceClampS1 = false;
+	OGL.GXforceClampT1 = false;
+	OGL.GXuseMinMagNearest = false;
+
+	// init fog
+	OGL.GXfogStartZ = 0.0f;
+	OGL.GXfogEndZ = 1.0f;
+	OGL.GXfogColor = (GXColor){0,0,0,255};
+	OGL.GXfogType = GX_FOG_NONE;
+	GX_SetFog(OGL.GXfogType,OGL.GXfogStartZ,OGL.GXfogEndZ,0.0,1.0,OGL.GXfogColor);
+	OGL.GXupdateFog = false;
 
 	//Reset Modelview matrix
-	Mtx GXmodelView;
-	guMtxIdentity(GXmodelView);
-	GX_LoadPosMtxImm(GXmodelView,GX_PNMTX0);
+	guMtxIdentity(OGL.GXmodelView);
+	guMtxIdentity(OGL.GXmodelViewIdent);
+	GX_LoadPosMtxImm(OGL.GXmodelView,GX_PNMTX0);
+	GX_LoadPosMtxImm(OGL.GXmodelViewIdent,GX_PNMTX2);
+	GX_LoadTexMtxImm(OGL.GXmodelViewIdent,GX_TEXMTX0,GX_MTX2x4);
 
 	//Reset projection matrix
-	Mtx44 GXprojection;
-	guMtxIdentity(GXprojection);
+	guMtxIdentity(OGL.GXproj);
+	guMtxIdentity(OGL.GXprojW);
+	guMtxIdentity(OGL.GXprojIdent);
 	//N64 Z clip space is backwards, so mult z components by -1
 	//N64 Z [-1,1] whereas GC Z [-1,0], so mult by 0.5 and shift by -0.5
-//	GXprojection[2][2] = 0.5*GXprojection[2][2] - 0.5*GXprojection[3][2];
-//	GXprojection[2][3] = 0.5*GXprojection[2][3] - 0.5*GXprojection[3][3];
-	GXprojection[2][2] = GXprojZScale; //0.5;
-	GXprojection[2][3] = GXprojZOffset; //-0.5;
-	GX_LoadProjectionMtx(GXprojection, GX_ORTHOGRAPHIC); 
+	OGL.GXproj[2][2] = GXprojZScale; //0.5;
+	OGL.GXproj[2][3] = GXprojZOffset; //-0.5;
+	OGL.GXprojW[3][2] = -1;
+	OGL.GXprojW[3][3] = 0;
+	OGL.GXprojIdent[2][2] = GXprojZScale; //0.5;
+	OGL.GXprojIdent[2][3] = GXprojZOffset; //-0.5;
+	GX_LoadProjectionMtx(OGL.GXprojIdent, GX_ORTHOGRAPHIC);
+	OGL.GXpolyOffset = false;
+
+	OGL.GXnumVtxMP = OGL.GXnumVtx = 0;
+	cache.GXprimDepthCnt = cache.GXZTexPrimCnt = cache.GXnoZTexPrimCnt = 0;
 
 	//Not sure if this is needed.  Clipping is a slow process...
-	GX_SetClipMode(GX_CLIP_ENABLE);
+//	GX_SetClipMode(GX_CLIP_ENABLE);
 //	GX_SetClipMode(GX_CLIP_DISABLE);
 
 	//These are here temporarily until combining/blending is sorted out...
@@ -1705,5 +2033,83 @@ void OGL_GXinitDlist()
 	GX_SetColorUpdate(GX_ENABLE);
 	GX_SetAlphaUpdate(GX_ENABLE);
 	GX_SetDstAlpha(GX_DISABLE, 0xFF);
+//	OGL.GXclearColorBuffer = false;
+//	OGL.GXclearDepthBuffer = false;
+	OGL.GXclearColor = (GXColor){0,0,0,255};
+}
+
+extern GXRModeObj *vmode;
+
+void OGL_GXclearEFB()
+{
+	//Note: EFB is RGB8, so no need to clear alpha
+	if(OGL.GXclearColorBuffer)	GX_SetColorUpdate(GX_ENABLE);
+	else						GX_SetColorUpdate(GX_DISABLE);
+	if(OGL.GXclearDepthBuffer)	GX_SetZMode(GX_ENABLE,GX_GEQUAL,GX_TRUE);
+	else						GX_SetZMode(GX_ENABLE,GX_GEQUAL,GX_FALSE);
+
+	GX_SetNumChans(1);
+	GX_SetNumTexGens(0);
+	GX_SetNumTevStages(1);
+	GX_SetTevOp (GX_TEVSTAGE0, GX_PASSCLR);
+	GX_SetTevOrder (GX_TEVSTAGE0, GX_TEXMAP_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
+	GX_SetBlendMode(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_CLEAR); 
+	GX_SetZTexture(GX_ZT_DISABLE,GX_TF_Z16,0);	//GX_ZT_DISABLE or GX_ZT_REPLACE; set in gDP.cpp
+	GX_SetZCompLoc(GX_TRUE);	// Do Z-compare before texturing.
+	GX_SetAlphaCompare(GX_ALWAYS,0,GX_AOP_AND,GX_ALWAYS,0);
+	GX_SetFog(GX_FOG_NONE,0.1,1.0,0.0,1.0,(GXColor){0,0,0,255});
+	GX_SetViewport((f32) 0,(f32) 0,(f32) OGL.width,(f32) OGL.height, 0.0f, 1.0f);
+	GX_SetScissor((u32) 0,(u32) 0,(u32) OGL.width+1,(u32) OGL.height+1);	//Set to the same size as the viewport.
+//	GX_SetScissor(0,0,vmode->fbWidth,vmode->efbHeight);
+	GX_SetCullMode (GX_CULL_NONE);
+	Mtx44 GXprojection;
+	guMtxIdentity(GXprojection);
+	guOrtho(GXprojection, 0, OGL.height-1, 0, OGL.width-1, 0.0f, 1.0f);
+	GX_LoadProjectionMtx(GXprojection, GX_ORTHOGRAPHIC); 
+	GX_LoadPosMtxImm(OGL.GXmodelViewIdent,GX_PNMTX0);
+
+	//set vertex description here
+	GX_ClearVtxDesc();
+	GX_SetVtxDesc(GX_VA_PTNMTXIDX, GX_PNMTX0);
+	GX_SetVtxDesc(GX_VA_POS, GX_DIRECT);
+	GX_SetVtxDesc(GX_VA_CLR0, GX_DIRECT);
+	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
+	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
+	f32 ZmaxDepth = (f32) -0xFFFFFF/0x1000000;
+	GX_Begin(GX_QUADS, GX_VTXFMT0, 4);
+		GX_Position3f32(-1.0f, -1.0f, ZmaxDepth);
+		GX_Color4u8(OGL.GXclearColor.r, OGL.GXclearColor.g, OGL.GXclearColor.b, OGL.GXclearColor.a); 
+		GX_Position3f32((f32) OGL.width+1, -1.0f, ZmaxDepth);
+		GX_Color4u8(OGL.GXclearColor.r, OGL.GXclearColor.g, OGL.GXclearColor.b, OGL.GXclearColor.a); 
+		GX_Position3f32((f32) OGL.width+1,(f32) OGL.height+1, ZmaxDepth);
+		GX_Color4u8(OGL.GXclearColor.r, OGL.GXclearColor.g, OGL.GXclearColor.b, OGL.GXclearColor.a); 
+		GX_Position3f32(-1.0f,(f32) OGL.height+1, ZmaxDepth);
+		GX_Color4u8(OGL.GXclearColor.r, OGL.GXclearColor.g, OGL.GXclearColor.b, OGL.GXclearColor.a); 
+	GX_End();
+
+	if (OGL.GXclearColorBuffer) VI.EFBcleared = true;
+	OGL.GXclearColorBuffer = false;
+	OGL.GXclearDepthBuffer = false;
+	OGL.GXupdateMtx = true;
+	OGL.GXupdateFog = true;
+	GX_SetColorUpdate(GX_ENABLE);
+	OGL_UpdateCullFace();
+	OGL_UpdateViewport();
+	gDP.changed |= CHANGED_SCISSOR | CHANGED_COMBINE | CHANGED_RENDERMODE;	//Restore scissor in OGL_UpdateStates() before drawing next geometry.
+
+/*	OGL.GXclearBufferTex = (u8*) memalign(32,640*480/2);
+	GX_SetCopyClear (OGL.GXclearColor, 0xFFFFFF);
+	if(OGL.GXclearColorBuffer)	GX_SetColorUpdate(GX_ENABLE);
+	else						GX_SetColorUpdate(GX_DISABLE);
+	if(OGL.GXclearDepthBuffer)	GX_SetZMode(GX_ENABLE,GX_ALWAYS,GX_TRUE);
+	else						GX_SetZMode(GX_ENABLE,GX_ALWAYS,GX_FALSE);
+	GX_SetTexCopySrc(0, 0, 640, 480);
+	GX_SetTexCopyDst(640, 480, GX_TF_I4, GX_FALSE);
+	GX_CopyTex(OGL.GXclearBufferTex, GX_TRUE);
+	GX_PixModeSync();
+//	GX_DrawDone();
+	GX_SetColorUpdate(GX_ENABLE);
+	free(OGL.GXclearBufferTex);
+	gDP.changed |= CHANGED_RENDERMODE;*/
 }
 #endif // __GX__

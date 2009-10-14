@@ -115,17 +115,36 @@ void gSPProcessVertex( u32 v )
 	if (gSP.changed & CHANGED_MATRIX)
 		gSPCombineMatrices();
 
+#ifndef __GX__
 	TransformVertex( &gSP.vertices[v].x, gSP.matrix.combined );
+#else //!__GX__
+	if(!OGL.GXuseProj)
+	{
+		TransformVertex( &gSP.vertices[v].x, gSP.matrix.combined );
+		OGL.GXnumVtxMP++;
+	}
+	else
+		OGL.GXnumVtx++;
+#endif //__GX__
 
+	//TODO: Properly implement this.
 	if (gSP.matrix.billboard)
 	{
 		gSP.vertices[v].x += gSP.vertices[0].x;
 		gSP.vertices[v].y += gSP.vertices[0].y;
 		gSP.vertices[v].z += gSP.vertices[0].z;
 		gSP.vertices[v].w += gSP.vertices[0].w;
+# ifdef __GX__
+		sprintf(txtbuffer,"gSP: Using billboard");
+		DEBUG_print(txtbuffer,6); 
+# endif // __GX__
 	}
 
+#ifndef __GX__
 	if (!(gSP.geometryMode & G_ZBUFFER))
+#else
+	if (!(gSP.geometryMode & G_ZBUFFER) && !OGL.GXuseProj)
+#endif
 	{
 		gSP.vertices[v].z = -gSP.vertices[v].w;
 	}
@@ -133,7 +152,11 @@ void gSPProcessVertex( u32 v )
 	if (gSP.geometryMode & G_LIGHTING)
 	{
 		TransformVector( &gSP.vertices[v].nx, gSP.matrix.modelView[gSP.matrix.modelViewi] );
+#ifndef __GX__
 		Normalize( &gSP.vertices[v].nx );
+#else //!__GX__
+		guVecNormalize((Vector*) &gSP.vertices[v].nx );
+#endif //__GX__
 
 		r = gSP.lights[gSP.numLights].r;
 		g = gSP.lights[gSP.numLights].g;
@@ -141,7 +164,11 @@ void gSPProcessVertex( u32 v )
 
 		for (int i = 0; i < gSP.numLights; i++)
 		{
+#ifndef __GX__
 			intensity = DotProduct( &gSP.vertices[v].nx, &gSP.lights[i].x );
+#else //!__GX__
+			intensity = guVecDotProduct((Vector*) &gSP.vertices[v].nx,(Vector*) &gSP.lights[i].x );
+#endif //__GX__
 
 			if (intensity < 0.0f) intensity = 0.0f;
 
@@ -163,7 +190,11 @@ void gSPProcessVertex( u32 v )
 		{
 			TransformVector( &gSP.vertices[v].nx, gSP.matrix.projection );
 
+#ifndef __GX__
 			Normalize( &gSP.vertices[v].nx );
+#else //!__GX__
+			guVecNormalize((Vector*) &gSP.vertices[v].nx );
+#endif //__GX__
 
 			if (gSP.geometryMode & G_TEXTURE_GEN_LINEAR)
 			{   
@@ -178,6 +209,7 @@ void gSPProcessVertex( u32 v )
 		}
 	}
 
+#ifndef __GX__
 	if (gSP.vertices[v].x < -gSP.vertices[v].w)
 		gSP.vertices[v].xClip = -1.0f;
 	else if (gSP.vertices[v].x > gSP.vertices[v].w)
@@ -200,6 +232,33 @@ void gSPProcessVertex( u32 v )
 		gSP.vertices[v].zClip = 1.0f;
 	else
 		gSP.vertices[v].zClip = 0.0f;
+#else // !__GX__
+	if (!OGL.GXuseProj)
+	{
+		if (gSP.vertices[v].x < -gSP.vertices[v].w)
+			gSP.vertices[v].xClip = -1.0f;
+		else if (gSP.vertices[v].x > gSP.vertices[v].w)
+			gSP.vertices[v].xClip = 1.0f;
+		else
+			gSP.vertices[v].xClip = 0.0f;
+
+		if (gSP.vertices[v].y < -gSP.vertices[v].w)
+			gSP.vertices[v].yClip = -1.0f;
+		else if (gSP.vertices[v].y > gSP.vertices[v].w)
+			gSP.vertices[v].yClip = 1.0f;
+		else
+			gSP.vertices[v].yClip = 0.0f;
+
+		if (gSP.vertices[v].w <= 0.0f)
+			gSP.vertices[v].zClip = -1.0f;
+		else if (gSP.vertices[v].z < -gSP.vertices[v].w)
+			gSP.vertices[v].zClip = -0.1f;
+		else if (gSP.vertices[v].z > gSP.vertices[v].w)
+			gSP.vertices[v].zClip = 1.0f;
+		else
+			gSP.vertices[v].zClip = 0.0f;
+	}
+#endif // __GX__
 }
 
 void gSPNoOp()
@@ -254,6 +313,46 @@ void gSPMatrix( u32 matrix, u8 param )
 			MultMatrix( gSP.matrix.modelView[gSP.matrix.modelViewi], mtx );
 	}
 
+#ifdef __GX__
+	if (OGL.numTriangles)
+		OGL_DrawTriangles();
+	OGL.GXupdateMtx = true;
+	if (param & G_MTX_PROJECTION)
+	{
+//		if(1)
+		if(!((gSP.matrix.projection[2][3] == -1) && (gSP.matrix.projection[3][3] == 0) ||
+			 (gSP.matrix.projection[2][3] == 0) && (gSP.matrix.projection[3][3] == 1)))
+		{
+			OGL.GXuseProj = false;
+			if(gSP.matrix.projection[2][3] != 0)
+			{
+				OGL.GXprojW[2][2] = -GXprojZOffset - (GXprojZScale*gSP.matrix.projection[2][2]/gSP.matrix.projection[2][3]);
+				OGL.GXprojW[2][3] = GXprojZScale*(gSP.matrix.projection[3][2] - (gSP.matrix.projection[2][2]*gSP.matrix.projection[3][3]/gSP.matrix.projection[2][3]));
+				OGL.GXuseProjW = true;
+			}
+			else
+				OGL.GXuseProjW = false;
+		}
+		else
+		{
+			OGL.GXuseProj = true;
+			for (int j=0; j<4; j++)
+				for (int i=0; i<4; i++)
+					OGL.GXproj[j][i] = gSP.matrix.projection[i][j];
+			//N64 Z clip space is backwards, so mult z components by -1
+			//N64 Z [-1,1] whereas GC Z [-1,0], so mult by 0.5 and shift by -0.5
+			OGL.GXproj[2][2] = 0.5*OGL.GXproj[2][2] - 0.5*OGL.GXproj[3][2];
+			OGL.GXproj[2][3] = 0.5*OGL.GXproj[2][3] - 0.5*OGL.GXproj[3][3];
+		}
+	}
+	else
+	{
+		for (int j=0; j<3; j++)
+			for (int i=0; i<4; i++)
+				OGL.GXmodelView[j][i] = gSP.matrix.modelView[gSP.matrix.modelViewi][i][j];
+	}
+#endif // __GX__
+
 	gSP.changed |= CHANGED_MATRIX;
 
 #ifdef DEBUG
@@ -302,6 +401,23 @@ void gSPDMAMatrix( u32 matrix, u8 index, u8 multiply )
 
 	CopyMatrix( gSP.matrix.projection, identityMatrix );
 
+#ifdef __GX__
+	if (OGL.numTriangles)
+		OGL_DrawTriangles();
+	OGL.GXupdateMtx = true;
+	OGL.GXuseProj = true;
+	for (int j=0; j<4; j++)
+		for (int i=0; i<4; i++)
+			OGL.GXproj[j][i] = gSP.matrix.projection[i][j];
+	//N64 Z clip space is backwards, so mult z components by -1
+	//N64 Z [-1,1] whereas GC Z [-1,0], so mult by 0.5 and shift by -0.5
+	OGL.GXproj[2][2] = 0.5*OGL.GXproj[2][2] - 0.5*OGL.GXproj[3][2];
+	OGL.GXproj[2][3] = 0.5*OGL.GXproj[2][3] - 0.5*OGL.GXproj[3][3];
+
+	for (int j=0; j<3; j++)
+		for (int i=0; i<4; i++)
+			OGL.GXmodelView[j][i] = gSP.matrix.modelView[gSP.matrix.modelViewi][i][j];
+#endif // __GX__
 
 	gSP.changed |= CHANGED_MATRIX;
 #ifdef DEBUG
@@ -331,7 +447,7 @@ void gSPViewport( u32 v )
 		return;
 	}
 
-#ifndef __GX__
+#ifndef _BIG_ENDIAN
 	gSP.viewport.vscale[0] = _FIXED2FLOAT( *(s16*)&RDRAM[address +  2], 2 );
 	gSP.viewport.vscale[1] = _FIXED2FLOAT( *(s16*)&RDRAM[address     ], 2 );
 	gSP.viewport.vscale[2] = _FIXED2FLOAT( *(s16*)&RDRAM[address +  6], 10 );// * 0.00097847357f;
@@ -340,7 +456,7 @@ void gSPViewport( u32 v )
 	gSP.viewport.vtrans[1] = _FIXED2FLOAT( *(s16*)&RDRAM[address +  8], 2 );
 	gSP.viewport.vtrans[2] = _FIXED2FLOAT( *(s16*)&RDRAM[address + 14], 10 );// * 0.00097847357f;
 	gSP.viewport.vtrans[3] = *(s16*)&RDRAM[address + 12];
-#else // !__GX__ -> This is to correct for big endian
+#else // !_BIG_ENDIAN -> This is to correct for big endian
 	gSP.viewport.vscale[0] = _FIXED2FLOAT( *(s16*)&RDRAM[address     ], 2 );
 	gSP.viewport.vscale[1] = _FIXED2FLOAT( *(s16*)&RDRAM[address +  2], 2 );
 	gSP.viewport.vscale[2] = _FIXED2FLOAT( *(s16*)&RDRAM[address +  4], 10 );// * 0.00097847357f;
@@ -349,7 +465,7 @@ void gSPViewport( u32 v )
 	gSP.viewport.vtrans[1] = _FIXED2FLOAT( *(s16*)&RDRAM[address + 10], 2 );
 	gSP.viewport.vtrans[2] = _FIXED2FLOAT( *(s16*)&RDRAM[address + 12], 10 );// * 0.00097847357f;
 	gSP.viewport.vtrans[3] = *(s16*)&RDRAM[address + 14];
-#endif // __GX__
+#endif // _BIG_ENDIAN
 
 	gSP.viewport.x		= gSP.viewport.vtrans[0] - gSP.viewport.vscale[0];
 	gSP.viewport.y		= gSP.viewport.vtrans[1] - gSP.viewport.vscale[1];
@@ -379,6 +495,24 @@ void gSPForceMatrix( u32 mptr )
 	}
 
 	RSP_LoadMatrix( gSP.matrix.combined, RSP_SegmentToPhysical( mptr ) );
+
+#ifdef __GX__
+	if (OGL.GXuseProj)
+	{
+		if (OGL.numTriangles)
+			OGL_DrawTriangles();
+		OGL.GXupdateMtx = true;
+		OGL.GXuseProj = false;
+		if(gSP.matrix.projection[2][3] != 0)
+		{
+			OGL.GXprojW[2][2] = -GXprojZOffset - (GXprojZScale*gSP.matrix.projection[2][2]/gSP.matrix.projection[2][3]);
+			OGL.GXprojW[2][3] = GXprojZScale*(gSP.matrix.projection[3][2] - (gSP.matrix.projection[2][2]*gSP.matrix.projection[3][3]/gSP.matrix.projection[2][3]));
+			OGL.GXuseProjW = true;
+		}
+		else
+			OGL.GXuseProjW = false;
+	}
+#endif //__GX__
 
 	gSP.changed &= ~CHANGED_MATRIX;
 
@@ -414,7 +548,11 @@ void gSPLight( u32 l, s32 n )
 		gSP.lights[n].y = light->y;
 		gSP.lights[n].z = light->z;
 
+#ifndef __GX__
 		Normalize( &gSP.lights[n].x );
+#else //!__GX__
+		guVecNormalize((Vector*) &gSP.lights[n].x );
+#endif //__GX__
 	}
 
 #ifdef DEBUG
@@ -536,7 +674,7 @@ void gSPCIVertex( u32 v, u32 n, u32 v0 )
 
 			u8 *color = &RDRAM[gSP.vertexColorBase + (vertex->ci & 0xff)];
 
-#ifndef __GX__
+#ifndef _BIG_ENDIAN
 			if (gSP.geometryMode & G_LIGHTING)
 			{
 				gSP.vertices[i].nx = (s8)color[3];
@@ -551,7 +689,7 @@ void gSPCIVertex( u32 v, u32 n, u32 v0 )
 				gSP.vertices[i].b = color[1] * 0.0039215689f;
 				gSP.vertices[i].a = color[0] * 0.0039215689f;
 			}
-#else // !__GX__
+#else // !_BIG_ENDIAN
 			if (gSP.geometryMode & G_LIGHTING)
 			{
 				gSP.vertices[i].nx = (s8)color[0];
@@ -566,7 +704,7 @@ void gSPCIVertex( u32 v, u32 n, u32 v0 )
 				gSP.vertices[i].b = color[2] * 0.0039215689f;
 				gSP.vertices[i].a = color[3] * 0.0039215689f;
 			}
-#endif // __GX__
+#endif // _BIG_ENDIAN
 
 			gSPProcessVertex( i );
 
@@ -602,7 +740,7 @@ void gSPDMAVertex( u32 v, u32 n, u32 v0 )
 	{
 		for (unsigned int i = v0; i < n + v0; i++)
 		{
-#ifndef __GX__
+#ifndef _BIG_ENDIAN
 			gSP.vertices[i].x = *(s16*)&RDRAM[address ^ 2];
 			gSP.vertices[i].y = *(s16*)&RDRAM[(address + 2) ^ 2];
 			gSP.vertices[i].z = *(s16*)&RDRAM[(address + 4) ^ 2];
@@ -621,7 +759,7 @@ void gSPDMAVertex( u32 v, u32 n, u32 v0 )
 				gSP.vertices[i].b = *(u8*)&RDRAM[(address + 8) ^ 3] * 0.0039215689f;
 				gSP.vertices[i].a = *(u8*)&RDRAM[(address + 9) ^ 3] * 0.0039215689f;
 			}
-#else // !__GX__ -> This fixes an endian issue.
+#else // !_BIG_ENDIAN -> This fixes an endian issue.
 			gSP.vertices[i].x = *(s16*)&RDRAM[address ^ 0];
 			gSP.vertices[i].y = *(s16*)&RDRAM[(address + 2) ^ 0];
 			gSP.vertices[i].z = *(s16*)&RDRAM[(address + 4) ^ 0];
@@ -640,7 +778,7 @@ void gSPDMAVertex( u32 v, u32 n, u32 v0 )
 				gSP.vertices[i].b = *(u8*)&RDRAM[(address + 8) ^ 0] * 0.0039215689f;
 				gSP.vertices[i].a = *(u8*)&RDRAM[(address + 9) ^ 0] * 0.0039215689f;
 			}
-#endif // __GX__
+#endif // _BIG_ENDIAN
 
 			gSPProcessVertex( i );
 
@@ -853,6 +991,7 @@ void gSPTriangle( s32 v0, s32 v1, s32 v2, s32 flag )
 {
 	if ((v0 < 80) && (v1 < 80) && (v2 < 80))
 	{
+#ifndef __GX__
 		// Don't bother with triangles completely outside clipping frustrum
 		if (((gSP.vertices[v0].xClip < 0.0f) &&
 			 (gSP.vertices[v1].xClip < 0.0f) &&
@@ -927,11 +1066,7 @@ void gSPTriangle( s32 v0, s32 v1, s32 v2, s32 flag )
 			if (clippedIndex == 4)
 				OGL_AddTriangle( clippedVertices, 0, 2, 3 );
 
-#ifndef __GX__
 			glDisable( GL_POLYGON_OFFSET_FILL );
-#else // !__GX__
-	//TODO: Implement this in GX??
-#endif // __GX__
 
 //			glDepthFunc( GL_LEQUAL );
 
@@ -939,18 +1074,137 @@ void gSPTriangle( s32 v0, s32 v1, s32 v2, s32 flag )
 			if (nearIndex == 4)
 				OGL_AddTriangle( nearVertices, 0, 2, 3 );
 
-#ifndef __GX__
 			if (gDP.otherMode.depthMode == ZMODE_DEC)
 				glEnable( GL_POLYGON_OFFSET_FILL );
-#else // !__GX__
-	//TODO: Implement this in GX??
-#endif // __GX__
 
 //			if (gDP.otherMode.depthCompare)
 //				glDepthFunc( GL_LEQUAL );
 		}
 		else
 			OGL_AddTriangle( gSP.vertices, v0, v1, v2 );
+
+#else // !__GX__
+		if(!OGL.GXuseProj)
+		{
+			// Don't bother with triangles completely outside clipping frustrum
+			if (((gSP.vertices[v0].xClip < 0.0f) &&
+				 (gSP.vertices[v1].xClip < 0.0f) &&
+				 (gSP.vertices[v2].xClip < 0.0f)) ||
+			    ((gSP.vertices[v0].xClip > 0.0f) &&
+				 (gSP.vertices[v1].xClip > 0.0f) &&
+				 (gSP.vertices[v2].xClip > 0.0f)) ||
+				((gSP.vertices[v0].yClip < 0.0f) &&
+				 (gSP.vertices[v1].yClip < 0.0f) &&
+				 (gSP.vertices[v2].yClip < 0.0f)) ||
+			    ((gSP.vertices[v0].yClip > 0.0f) &&
+				 (gSP.vertices[v1].yClip > 0.0f) &&
+				 (gSP.vertices[v2].yClip > 0.0f)) ||
+				((gSP.vertices[v0].zClip > 0.1f) &&
+				 (gSP.vertices[v1].zClip > 0.1f) &&
+				 (gSP.vertices[v2].zClip > 0.1f)) ||
+				((gSP.vertices[v0].zClip < -0.1f) &&
+				 (gSP.vertices[v1].zClip < -0.1f) &&
+				 (gSP.vertices[v2].zClip < -0.1f)))
+				 return;
+		}
+
+		// TODO: Make this work with the current Mtx setup. Fix .zClip.
+
+		// NoN work-around, clips triangles, and draws the clipped-off parts with clamped z
+		if (!OGL.GXuseProj &&		//leave NoN work-around out when using matrices in GX
+			GBI.current->NoN &&
+			((gSP.vertices[v0].zClip < 0.0f) ||
+			(gSP.vertices[v1].zClip < 0.0f) ||
+			(gSP.vertices[v2].zClip < 0.0f)))
+		{
+//		if(0)
+//		{
+			SPVertex nearVertices[4];
+			SPVertex clippedVertices[4];
+			//s32 numNearTris = 0;
+			//s32 numClippedTris = 0;
+			s32 nearIndex = 0;
+			s32 clippedIndex = 0;
+
+#ifdef __GX__
+			DEBUG_print((char*)"NoN clipping triangles!!!",DBG_TXINFO1); //5
+#endif // __GX__
+
+			s32 v[3] = { v0, v1, v2 };
+
+			for (s32 i = 0; i < 3; i++)
+			{
+				s32 j = i + 1;
+				if (j == 3) j = 0;
+
+				if (((gSP.vertices[v[i]].zClip < 0.0f) && (gSP.vertices[v[j]].zClip >= 0.0f)) ||
+					((gSP.vertices[v[i]].zClip >= 0.0f) && (gSP.vertices[v[j]].zClip < 0.0f)))
+				{
+					f32 percent = (-gSP.vertices[v[i]].w - gSP.vertices[v[i]].z) / ((gSP.vertices[v[j]].z - gSP.vertices[v[i]].z) + (gSP.vertices[v[j]].w - gSP.vertices[v[i]].w));
+
+					gSPInterpolateVertex( &clippedVertices[clippedIndex], percent, &gSP.vertices[v[i]], &gSP.vertices[v[j]] );
+
+					gSPCopyVertex( &nearVertices[nearIndex], &clippedVertices[clippedIndex] );
+					nearVertices[nearIndex].z = -nearVertices[nearIndex].w;
+
+					clippedIndex++;
+					nearIndex++;
+				}
+
+				if (((gSP.vertices[v[i]].zClip < 0.0f) && (gSP.vertices[v[j]].zClip >= 0.0f)) ||
+					((gSP.vertices[v[i]].zClip >= 0.0f) && (gSP.vertices[v[j]].zClip >= 0.0f)))
+				{
+					gSPCopyVertex( &clippedVertices[clippedIndex], &gSP.vertices[v[j]] );
+					clippedIndex++;
+				}
+				else
+				{
+					gSPCopyVertex( &nearVertices[nearIndex], &gSP.vertices[v[j]] );
+					nearVertices[nearIndex].z = -nearVertices[nearIndex].w;// + 0.00001f;
+					nearIndex++;
+				}
+			}
+
+			OGL_AddTriangle( clippedVertices, 0, 1, 2 );
+
+			if (clippedIndex == 4)
+				OGL_AddTriangle( clippedVertices, 0, 2, 3 );
+
+#ifndef __GX__
+			glDisable( GL_POLYGON_OFFSET_FILL );
+#else // !__GX__
+			if (OGL.GXpolyOffset)
+			{
+				OGL.GXpolyOffset = false;
+				OGL.GXupdateMtx = true;
+			}
+#endif // __GX__
+
+//			glDepthFunc( GL_LEQUAL );
+
+/*			OGL_AddTriangle( nearVertices, 0, 1, 2 );
+			if (nearIndex == 4)
+				OGL_AddTriangle( nearVertices, 0, 2, 3 );*/
+
+#ifndef __GX__
+			if (gDP.otherMode.depthMode == ZMODE_DEC)
+				glEnable( GL_POLYGON_OFFSET_FILL );
+#else // !__GX__
+			if (gDP.otherMode.depthMode == ZMODE_DEC)
+			{
+				OGL.GXpolyOffset = true;
+				OGL.GXupdateMtx = true;
+			}
+#endif // __GX__
+
+//			if (gDP.otherMode.depthCompare)
+//				glDepthFunc( GL_LEQUAL );
+		}
+//#endif // !__GX__
+		else
+			OGL_AddTriangle( gSP.vertices, v0, v1, v2 );
+#endif // __GX__
+
 	}
 #ifdef DEBUG
 	else
@@ -1083,6 +1337,10 @@ bool gSPCullVertices( u32 v0, u32 vn )
 
 	xClip = yClip = zClip = 0.0f;
 
+#ifdef __GX__
+	if(!OGL.GXuseProj)
+	{
+#endif
 	for (unsigned int i = v0; i <= vn; i++)
 	{
 		if (gSP.vertices[i].xClip == 0.0f)
@@ -1136,6 +1394,9 @@ bool gSPCullVertices( u32 v0, u32 vn )
 				zClip = gSP.vertices[i].zClip;
 		}
 	}
+#ifdef __GX__
+	}
+#endif
 
 	return TRUE;
 }
@@ -1175,6 +1436,15 @@ void gSPPopMatrixN( u32 param, u32 num )
 	{
 		gSP.matrix.modelViewi -= num;
 
+#ifdef __GX__
+		if (OGL.numTriangles)
+			OGL_DrawTriangles();
+		OGL.GXupdateMtx = true;
+		for (int j=0; j<3; j++)
+			for (int i=0; i<4; i++)
+				OGL.GXmodelView[j][i] = gSP.matrix.modelView[gSP.matrix.modelViewi][i][j];
+#endif // __GX__
+
 		gSP.changed |= CHANGED_MATRIX;
 	}
 #ifdef DEBUG
@@ -1193,6 +1463,15 @@ void gSPPopMatrix( u32 param )
 	if (gSP.matrix.modelViewi > 0)
 	{
 		gSP.matrix.modelViewi--;
+
+#ifdef __GX__
+		if (OGL.numTriangles)
+			OGL_DrawTriangles();
+		OGL.GXupdateMtx = true;
+		for (int j=0; j<3; j++)
+			for (int i=0; i<4; i++)
+				OGL.GXmodelView[j][i] = gSP.matrix.modelView[gSP.matrix.modelViewi][i][j];
+#endif // __GX__
 
 		gSP.changed |= CHANGED_MATRIX;
 	}
@@ -1290,6 +1569,24 @@ void gSPInsertMatrix( u32 where, u32 num )
 		gSP.matrix.combined[0][((where - 0x20) >> 1) + 1] = newValue;
 	}
 
+#ifdef __GX__
+	if(OGL.GXuseProj)
+	{
+		if (OGL.numTriangles)
+			OGL_DrawTriangles();
+		OGL.GXupdateMtx = true;
+		OGL.GXuseProj = false;
+		if(gSP.matrix.projection[2][3] != 0)
+		{
+			OGL.GXprojW[2][2] = -GXprojZOffset - (GXprojZScale*gSP.matrix.projection[2][2]/gSP.matrix.projection[2][3]);
+			OGL.GXprojW[2][3] = GXprojZScale*(gSP.matrix.projection[3][2] - (gSP.matrix.projection[2][2]*gSP.matrix.projection[3][3]/gSP.matrix.projection[2][3]));
+			OGL.GXuseProjW = true;
+		}
+		else
+			OGL.GXuseProjW = false;
+	}
+#endif //__GX__
+
 #ifdef DEBUG
 	DebugMsg( DEBUG_HIGH | DEBUG_HANDLED | DEBUG_MATRIX, "gSPInsertMatrix( %s, %i );\n",
 		MWOMatrixText[where >> 2], num );
@@ -1368,6 +1665,12 @@ void gSPFogFactor( s16 fm, s16 fo )
 {
     gSP.fog.multiplier = fm;
 	gSP.fog.offset = fo;
+
+#ifdef __GX__
+	//Adjust the range from 0.0 to 1.0
+	OGL.GXfogStartZ = -(0.5f * (float)gSP.fog.offset / (float)gSP.fog.multiplier) + 0.5f;
+	OGL.GXfogEndZ = (0.5f * (255.0f - (float)gSP.fog.offset) / (float)gSP.fog.multiplier) + 0.5f;
+#endif // __GX__
 
 	gSP.changed |= CHANGED_FOGPOSITION;
 #ifdef DEBUG
@@ -1718,6 +2021,10 @@ void gSPObjSprite( u32 sp )
 	glOrtho( 0, VI.width, VI.height, 0, 0.0f, 32767.0f );
 #else // !__GX__
 	//TODO: Implement this in GX??
+
+	sprintf(txtbuffer,"gSP: Rendering a Sprite Object!");
+	DEBUG_print(txtbuffer,DBG_VIINFO); //6 
+
 #endif // __GX__
 	OGL_AddTriangle( gSP.vertices, 0, 1, 2 );
 	OGL_AddTriangle( gSP.vertices, 0, 2, 3 );

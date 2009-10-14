@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <malloc.h>
 #ifdef DEBUGON
 # include <debug.h>
 #endif
@@ -21,6 +22,8 @@
 #include "../gc_memory/memory.h"
 #include "../gc_memory/ARAM.h"
 #include "../gc_memory/TLB-Cache.h"
+#include "../gc_memory/tlb.h"
+#include "../gc_memory/pif.h"
 #include "ROM-Cache.h"
 
 #include <gccore.h>
@@ -28,9 +31,11 @@
 #include "../gui/GUI.h"
 #include "../gui/menu.h"
 #include "../gui/DEBUG.h"
+#include "timers.h"
 #ifdef WII
 #include <ogc/conf.h>
 #include <wiiuse/wpad.h>
+#include <di/di.h>
 #endif
 
 /* NECESSARY FUNCTIONS AND VARIABLES */
@@ -57,12 +62,17 @@ extern char audioEnabled;
 extern char printToScreen;
 extern char showFPSonScreen;
 extern char printToSD;
+#ifdef GLN64_GX
+extern char glN64_useFrameBufferTextures;
+#endif //GLN64_GX
+extern timers Timers;
        char saveEnabled;
        char creditsScrolling;
 unsigned int isWii = 0;
 #define WII_CPU_VERSION 0x87102
 #define mfpvr()   ({unsigned int rval; \
       asm volatile("mfpvr %0" : "=r" (rval)); rval;})
+extern void gfx_set_fb(unsigned int* fb1, unsigned int* fb2);
 // -- End plugin data --
 
 static u32* xfb[2] = { NULL, NULL };	/*** Framebuffers ***/
@@ -75,13 +85,17 @@ static void dummy_func(){ }
 void (*fBRead)(DWORD addr) = NULL;
 void (*fBWrite)(DWORD addr, DWORD size) = NULL;
 void (*fBGetFrameBufferInfo)(void *p) = NULL;
-void new_frame(){ }
-void new_vi(){ }
+//void new_frame(){ }
+//void new_vi(){ }
 // Read PAD format from Classic if available
 u16 readWPAD(void);
 
 int main(){
 	/* INITIALIZE */
+#ifdef HW_RVL
+	DI_Init();
+	DI_Mount();
+#endif
 	Initialise(); // Stock OGC initialization
 #ifndef WII
 	DVD_Init();
@@ -101,9 +115,14 @@ int main(){
 	showFPSonScreen  = 1; // Show FPS on Screen
 	printToScreen    = 1; // Show DEBUG text on screen
 	printToSD        = 0; // Disable SD logging
+	Timers.limitVIs  = 1; // Limit VI/s
 	saveEnabled      = 0; // Don't save game
 	creditsScrolling = 0; // Normal menu for now
 	dynacore         = 2; // Pure Interpreter
+#ifdef GLN64_GX
+	// glN64 specific  settings
+	glN64_useFrameBufferTextures = 0; // Disable FrameBuffer textures
+#endif //GLN64_GX
 
 	// 'Page flip' buttons so we know when it released
 	int which_pad = 0;
@@ -170,7 +189,7 @@ extern BOOL mempakWritten;
 extern BOOL sramWritten;
 extern BOOL flashramWritten;
 BOOL hasLoadedROM = FALSE;
-void loadROM(fileBrowser_file* rom){
+int loadROM(fileBrowser_file* rom){
 	
 	// First, if there's already a loaded ROM
 	if(hasLoadedROM){
@@ -193,12 +212,21 @@ void loadROM(fileBrowser_file* rom){
 		free_memory();
 		ARAM_manager_deinit();
 	}
+	format_mempacks();
 	hasLoadedROM = TRUE;
 	
 	ARAM_manager_init();
+#ifdef USE_TLB_CACHE
 	TLBCache_init();
+#else
+	tlb_mem2_init();
+#endif
 	//romFile_init(rom);
-	rom_read(rom);
+
+	if(rom_read(rom)){	// Something failed while trying to read the ROM.
+		hasLoadedROM = FALSE;
+		return -1;
+	}
 	
 	// Init everything for this ROM
 	init_memory();
@@ -214,12 +242,13 @@ void loadROM(fileBrowser_file* rom){
 	romOpen_input();
 	
 	cpu_init();
-	ogc_video__reset();
+	//ogc_video__reset();
+	return 0;
 }
 
 static void gfx_info_init(void){
 	gfx_info.MemoryBswaped = TRUE;
-	gfx_info.HEADER = ROM_HEADER;
+	gfx_info.HEADER = (BYTE*)ROM_HEADER;
 	gfx_info.RDRAM = (BYTE*)rdram;
 	gfx_info.DMEM = (BYTE*)SP_DMEM;
 	gfx_info.IMEM = (BYTE*)SP_IMEM;
@@ -252,7 +281,7 @@ static void gfx_info_init(void){
 
 static void audio_info_init(void){
 	audio_info.MemoryBswaped = TRUE;
-	audio_info.HEADER = ROM_HEADER;
+	audio_info.HEADER = (BYTE*)ROM_HEADER;
 	audio_info.RDRAM = (BYTE*)rdram;
 	audio_info.DMEM = (BYTE*)SP_DMEM;
 	audio_info.IMEM = (BYTE*)SP_IMEM;
@@ -269,7 +298,7 @@ static void audio_info_init(void){
 
 static void control_info_init(void){
 	control_info.MemoryBswaped = TRUE;
-	control_info.HEADER = ROM_HEADER;
+	control_info.HEADER = (BYTE*)ROM_HEADER;
 	control_info.Controls = Controls;
 	int i;
 	for (i=0; i<4; i++)
@@ -318,9 +347,9 @@ void ScanPADSandReset() {
 	if(!((*(u32*)0xCC003000)>>16))
 		stop = 1;
 }
+void ResetCallBack() {stop = 1;}
 
 static void Initialise (void){
-  static int whichfb = 0;        /*** Frame buffer toggle ***/
   VIDEO_Init();
   PAD_Init();
   PAD_Reset(0xf0000000);
@@ -375,7 +404,26 @@ static void Initialise (void){
 		isWii = 1;
 	else
 		isWii = 0;
-	DEBUG_print("Welcome to Mupen64GC :)\n\0",DBG_USBGECKO);
+	//SYS_SetResetCallback(ResetCallBack);	//not working, use old method for now
+	
+	// Init PS GQRs so I can load signed/unsigned chars/shorts as PS values
+	__asm__ volatile(
+		"lis	3, 4     \n"
+		"addi	3, 3, 4  \n"
+		"mtspr	913, 3   \n" // GQR1 = unsigned char
+		"lis	3, 6     \n"
+		"addi	3, 3, 6  \n"
+		"mtspr	914, 3   \n" // GQR2 = signed char
+		"lis	3, 5     \n"
+		"addi	3, 3, 5  \n"
+		"mtspr	915, 3   \n" // GQR3 = unsigned short
+		"lis	3, 7     \n"
+		"addi	3, 3, 7  \n"
+		"mtspr	916, 3   \n" // GQR4 = signed short
+		"lis	3, %0    \n"
+		"addi	3, 3, %0 \n"
+		"mtspr	917, 3   \n" // GQR5 = unsigned short / (2^16)
+		:: "n" (16<<8 | 5) : "r3");
 }
 
 /* Reinitialize GX */ 

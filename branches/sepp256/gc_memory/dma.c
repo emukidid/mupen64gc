@@ -65,14 +65,7 @@ int loadSram(fileBrowser_file* savepath){
 	int i, result = 0;
 	fileBrowser_file saveFile;
 	memcpy(&saveFile, savepath, sizeof(fileBrowser_file));
-	//strcat(&saveFile.name, ROM_SETTINGS.goodname);
-	for(i = strlen(ROM_SETTINGS.goodname); i>0; i--)
-	{
-		if(ROM_SETTINGS.goodname[i-1] !=  ' ') {
-			strncat((char*)saveFile.name,ROM_SETTINGS.goodname,i);
-			break;
-		}
-	}
+	strcat((char*)saveFile.name, ROM_SETTINGS.goodname);
 	strcat((char*)saveFile.name, ".sra");
 	
 	if( !(saveFile_readFile(&saveFile, &i, 4) <= 0) ){
@@ -94,17 +87,9 @@ int loadSram(fileBrowser_file* savepath){
 int saveSram(fileBrowser_file* savepath){
 	if(!sramWritten) return 0;
 	PRINT("Saving SRAM, do not turn off the console...\n");
-	int i;
 	fileBrowser_file saveFile;
 	memcpy(&saveFile, savepath, sizeof(fileBrowser_file));
-	//strcat(&saveFile.name, ROM_SETTINGS.goodname);
-	for(i = strlen(ROM_SETTINGS.goodname); i>0; i--)
-	{
-		if(ROM_SETTINGS.goodname[i-1] != ' ') {
-			strncat((char*)saveFile.name, ROM_SETTINGS.goodname,i);
-			break;
-		}
-	}
+	strcat((char*)saveFile.name, ROM_SETTINGS.goodname);
 	strcat((char*)saveFile.name, ".sra");
 	
 	saveFile_writeFile(&saveFile, sram, 0x8000);
@@ -214,6 +199,7 @@ void dma_pi_write()
 	     //  rom[(((pi_register.pi_cart_addr_reg-0x10000000)&0x3FFFFFF)+i)^S8];
 	     //ROMCache_read((char*)rdram + (pi_register.pi_dram_addr_reg+i)^S8, (((pi_register.pi_cart_addr_reg-0x10000000)&0x3FFFFFF)+i)^S8, 1);
 	     
+#if 0
 	     if(!invalid_code_get(rdram_address1>>12))
 	       //if(blocks[rdram_address1>>12]->block[(rdram_address1&0xFFF)/4].ops != NOTCOMPILED)
 		 invalid_code_set(rdram_address1>>12, 1);
@@ -221,6 +207,15 @@ void dma_pi_write()
 	     if(!invalid_code_get(rdram_address2>>12))
 	       //if(blocks[rdram_address2>>12]->block[(rdram_address2&0xFFF)/4].ops != NOTCOMPILED)
 		 invalid_code_set(rdram_address2>>12, 1);
+#else
+             if(!invalid_code_get(rdram_address1>>12))
+	       if(blocks[rdram_address1>>12]->code_addr[(rdram_address1&0xFFF)/4])
+		 invalid_code_set(rdram_address1>>12, 1);
+	     
+	     if(!invalid_code_get(rdram_address2>>12))
+	       if(blocks[rdram_address2>>12]->code_addr[(rdram_address2&0xFFF)/4])
+		 invalid_code_set(rdram_address2>>12, 1);
+#endif
 	  }
      }
    else
@@ -250,12 +245,23 @@ void dma_pi_write()
 	   case 2:
 	   case 3:
 	   case 6:
+#ifdef USE_EXPANSION
 	     rdram[0x318/4] = 0x800000;
+#else
+	     rdram[0x318/4] = 0x400000;
+#endif
 	     break;
 	   case 5:
+#ifdef USE_EXPANSION
 	     rdram[0x3F0/4] = 0x800000;
+#else
+	     rdram[0x3F0/4] = 0x400000;
+#endif
 	     break;
 	  }
+	  /* DK64 Fix */
+	/*if(strncmp(ROM_HEADER->nom, "DONKEY KONG 64", 14) == 0)
+		rdram[0x2FE1C0/4] = 0xAD170014;*/
      }
    
    pi_register.read_pi_status_reg |= 3;
