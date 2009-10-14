@@ -27,8 +27,9 @@ extern double* reg_cop1_double[32]; // 64-bit fprs
 
 extern int noCheckInterrupt;
 
-typedef enum { MEM_LW, MEM_LH, MEM_LB, MEM_LHU, MEM_LBU,
-               MEM_SW, MEM_SH, MEM_SB } memType;
+typedef enum { MEM_LW,  MEM_LH,  MEM_LB,  MEM_LD,
+               MEM_LWU, MEM_LHU, MEM_LBU,
+               MEM_SW,  MEM_SH,  MEM_SB } memType;
 
 unsigned int decodeNInterpret(MIPS_instr, unsigned int, int);
 int dyna_update_count(unsigned int pc);
