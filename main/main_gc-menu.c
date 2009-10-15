@@ -66,6 +66,7 @@ extern timers Timers;
        char padNeedScan;
        char wpadNeedScan;
 unsigned int isWii = 0;
+unsigned int MALLOC_MEM2 = 0;
 #define WII_CPU_VERSION 0x87102
 #define mfpvr()   ({unsigned int rval; \
       asm volatile("mfpvr %0" : "=r" (rval)); rval;})
