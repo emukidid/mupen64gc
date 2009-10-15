@@ -119,7 +119,7 @@ void recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 			// fn->function is a hole in func
 			PowerPC_func_hole_node* hole = malloc(sizeof(PowerPC_func_hole_node));
 			hole->addr = fn->function->start_addr;
-			hole->next = func->holes;
+			hole->next = func->holes; // TODO: Add all holes from fn->function
 			func->holes = hole;
 			// Free the hole
 			RecompCache_Free(ppc_block->start_address |
@@ -144,7 +144,8 @@ void recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 			src_first = ppc_block->mips_code + ((addr&0xfff)>>2);
 			addr_first = ppc_block->start_address + (addr&0xfff);
 			code_addr = ppc_block->code_addr + ((addr&0xfff)>>2);
-			pass0(ppc_block);
+			need_pad = pass0(ppc_block);
+			RecompCache_Update(addr);
 			// There cannot be another overlapping function
 			break;
 			
@@ -399,9 +400,8 @@ static int pass0(PowerPC_block* ppc_block){
 	//   delay slot as it will be recompiled ahead of the J/JR and
 	//   does not need to be recompiled after the J/JR as it belongs
 	//   to the next function if its used in that way.
-	// If the function continues into the next block, we have to turn
-	//   off register mappings because we don't know where the second
-	//   part of the function will branch to within the first part.
+	// If the function continues into the next block, we'll need to use
+	//   a jump pad at the end of the block.
 	unsigned int pc = addr_first >> 2;
 	int i;
 	// Set this to the end address of the block for is_j_out
@@ -441,7 +441,8 @@ static int pass0(PowerPC_block* ppc_block){
 				isJmpDst[ index + 1 + bd ] = 1;
 			}
 			--src;
-			isJmpDst[ index + 2 ] = 1; // XXX: This seems a bit hacky, but shouldn't be detrimental
+			if(index + 2 < 1024)
+				isJmpDst[ index + 2 ] = 1;
 		} else if(opcode == MIPS_OPCODE_R &&
 		          (MIPS_GET_FUNC(*src) == MIPS_FUNC_JR ||
 		           MIPS_GET_FUNC(*src) == MIPS_FUNC_JALR)){

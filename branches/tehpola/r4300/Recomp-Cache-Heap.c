@@ -149,7 +149,7 @@ static void release(int minNeeded){
 	// Restore the heap properties to pop the LRU
 	heapify();
 	// Release nodes' memory until we've freed enough
-	while(toFree > 0 || !cacheSize){
+	while(toFree > 0 && cacheSize){
 		// Pop the LRU to be freed
 		CacheMetaNode* n = heapPop();
 		// Free the function it contains
@@ -253,7 +253,7 @@ void RecompCache_Init(void){
 unsigned int RecompCache_Size(PowerPC_func* func){
 	int i;
 	// Find the corresponding node
-	for(i=heapSize-1; i; --i)
+	for(i=heapSize-1; i>=0; --i)
 		if(cacheHeap[i]->func == func)
 			return cacheHeap[i]->size;
 	return 0;
