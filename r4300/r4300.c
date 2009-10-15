@@ -28,7 +28,6 @@
 **/
 
 #include "../config.h"
-#include "../main/vcr.h"
 #include "../main/ROM-Cache.h"
 #include "r4300.h"
 #include "ops.h"
@@ -1622,6 +1621,7 @@ void go()
      }
    else
      {
+       interpcore = 0;
 	dynacore = 1;
 	//printf("dynamic recompiler\n");
 	if(cpu_inited){
