@@ -58,7 +58,7 @@ int has_next_src(void){ return (src_last-src) > 0; }
 unsigned int get_src_pc(void){ return addr_first + ((src-1-src_first)<<2); }
 void set_next_dst(PowerPC_instr i){ *(dst++) = i; ++code_length; }
 // Adjusts the code_addr for the current instruction to account for flushes
-void reset_code_addr(void){ if(src<src_last) code_addr[src-1-src_first] = dst; }
+void reset_code_addr(void){ if(src<=src_last) code_addr[src-1-src_first] = dst; } // FIXME: < or <=??
 
 int add_jump(int old_jump, int is_j, int is_out){
 	int id = current_jump;
@@ -92,16 +92,18 @@ void recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 	src_first = ppc_block->mips_code + ((addr&0xfff)>>2);
 	addr_first = ppc_block->start_address + (addr&0xfff);
 	code_addr = ppc_block->code_addr + ((addr&0xfff)>>2);
-	code_length = 0;
 	
 	int useRegMaps = pass0(ppc_block); // Sets src_last, addr_last
 	
+	code_length = 0;
 	unsigned int max_length = addr_last - addr_first; // 4x size
 	
 	// Create a PowerPC_func for this function
 	PowerPC_func* func = malloc(sizeof(PowerPC_func));
 	func->start_addr = addr_first&0xffff;
 	func->end_addr = addr_last&0xffff;
+	func->code = NULL;
+	func->holes = NULL;
 	// Create a corresponding PowerPC_func_node to add to ppc_block->funcs
 	PowerPC_func_node* node = malloc(sizeof(PowerPC_func_node));
 	node->function = func;
@@ -112,19 +114,69 @@ void recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 	PowerPC_func_node* fn, * next;
 	for(fn = node->next; fn != NULL; fn = next){
 		next = fn->next;
-		if((!fn->function->end_addr || // Runs to end
-		    func->start_addr < fn->function->end_addr) &&
-		   (!func->end_addr || // Function runs to the end of a 0xfxxx
-		    func->end_addr   > fn->function->start_addr))
+		if(fn->function->start_addr > func->start_addr &&
+		   fn->function->end_addr == func->end_addr){
+			// fn->function is a hole in func
+			printf("Recompiling outer function, inserting hole\n");
+			PowerPC_func_hole_node* hole = malloc(sizeof(PowerPC_func_hole_node));
+			hole->addr = fn->function->start_addr;
+			hole->next = func->holes;
+			func->holes = hole;
+			// Free the hole
+			RecompCache_Free(ppc_block->start_address |
+			                 fn->function->start_addr);
+			
+		} else if(func->start_addr > fn->function->start_addr &&
+		          func->end_addr == fn->function->end_addr){
+			// func is a hole in fn->function
+			printf("Recompiling hole\n");
+			printf("%04x - %04x is in ", func->start_addr, func->end_addr);
+			printf("%04x - %04x\n", fn->function->start_addr, fn->function->end_addr);
+			PowerPC_func_hole_node* hole = malloc(sizeof(PowerPC_func_hole_node));
+			hole->addr = func->start_addr;
+			hole->next = fn->function->holes;
+			fn->function->holes = hole;
+			printf("Hole inserted @ %04x\n", fn->function->holes->addr);
+			// Free up func and its node
+			ppc_block->funcs = node->next;
+			free(func);
+			free(node);
+			// Move all our pointers to the outer function
+			func = fn->function;
+			node = fn;
+			max_length = RecompCache_Size(func) / 4;
+			addr = ppc_block->start_address + (func->start_addr&0xfff);
+			src_first = ppc_block->mips_code + ((addr&0xfff)>>2);
+			addr_first = ppc_block->start_address + (addr&0xfff);
+			code_addr = ppc_block->code_addr + ((addr&0xfff)>>2);
+			pass0(ppc_block);
+			// There cannot be another overlapping function
+			break;
+			
+		} else if((!fn->function->end_addr || // Runs to end
+		           func->start_addr < fn->function->end_addr) &&
+		          (!func->end_addr || // Function runs to the end of a 0xfxxx
+		           func->end_addr   > fn->function->start_addr))
+			// We have some other non-containment overlap
 			RecompCache_Free(ppc_block->start_address |
 			                 fn->function->start_addr);
 	}
 	
+	printf("func->code: %08x\n", func->code);
+	if(!func->code){
+		// We aren't simply recompiling from a hole
 #ifdef USE_RECOMP_CACHE
-	RecompCache_Alloc(max_length * sizeof(PowerPC_instr), addr, func);
+		RecompCache_Alloc(max_length * sizeof(PowerPC_instr), addr, func);
 #else
-	func->code = malloc(max_length * sizeof(PowerPC_instr));
+		func->code = malloc(max_length * sizeof(PowerPC_instr));
 #endif
+	}
+	
+	PowerPC_func_hole_node* hole;
+	for(hole = func->holes; hole != NULL; hole = hole->next){
+		printf("Hole @ %04x\n", hole->addr);
+		isJmpDst[ (hole->addr&0xfff) >> 2 ] = 1;
+	}
 	
 	src = src_first;
 	dst = func->code;
@@ -148,7 +200,7 @@ void recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 			src++; start_new_mapping(); src--;
 		}
 		
-		ppc_block->code_addr[offset] = dst;
+		//ppc_block->code_addr[offset] = dst;
 		convert();
 	}
 	
@@ -395,7 +447,7 @@ static int pass0(PowerPC_block* ppc_block){
 			src+=2; ++pc;
 			bd |= (bd & 0x8000) ? 0xFFFF0000 : 0; // sign extend
 			if(!is_j_out(bd, 0)){
-				assert( index + bd >= 0 && index + bd < 1024 );
+				assert( index + 1 + bd >= 0 && index + 1 + bd < 1024 );
 				isJmpDst[ index + 1 + bd ] = 1;
 			}
 			--src;
