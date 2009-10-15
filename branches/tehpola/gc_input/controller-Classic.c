@@ -84,12 +84,12 @@ controller_t controller_Classic =
 	 };
 
 static void init(void){
-	int i;
+	int i, ret;
 	for(i=0; i<4; ++i){
 		WPADData wpad;
-		WPAD_ReadEvent(i, &wpad);
+		ret = WPAD_ReadEvent(i, &wpad);
 		// Only use a connected classic controller
-		if(wpad.err == WPAD_ERR_NONE &&
+		if(!ret && wpad.err == WPAD_ERR_NONE &&
 		   wpad.exp.type == WPAD_EXP_CLASSIC){
 			controller_Classic.available[i] = 1;
 			WPAD_SetDataFormat(i, WPAD_DATA_EXPANSION);
