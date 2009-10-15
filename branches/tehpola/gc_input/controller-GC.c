@@ -7,6 +7,7 @@
 
 static int _GetKeys(int Control, BUTTONS * Keys )
 {
+	if(padNeedScan){ PAD_ScanPads(); padNeedScan = 0; }
 	BUTTONS* c = Keys;
 		
 	int b = PAD_ButtonsHeld(Control);
