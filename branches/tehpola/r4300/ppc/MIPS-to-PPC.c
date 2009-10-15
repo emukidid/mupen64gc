@@ -24,6 +24,7 @@ static void genCallInterp(MIPS_instr);
 static void genJumpTo(unsigned int loc, unsigned int type);
 static void genUpdateCount(void);
 static void genCheckFP(void);
+void genCallDynaMem(memType type, int base, short immed);
 static int inline mips_is_jump(MIPS_instr);
 void jump_to(unsigned int);
 
@@ -236,7 +237,7 @@ int convert(void){
 	MIPS_instr mips = get_next_src();
 	int result = gen_ops[MIPS_GET_OPCODE(mips)](mips);
 	
-	/*if(needFlush)*/ flushRegisters();
+	if(needFlush) flushRegisters();
 	return result;
 }
 
