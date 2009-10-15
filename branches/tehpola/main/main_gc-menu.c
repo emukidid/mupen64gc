@@ -103,14 +103,14 @@ int main(){
 #endif
 	
 	// Default Settings
-	audioEnabled     = 0; // No audio
+	audioEnabled     = 1; // Audio
 	showFPSonScreen  = 1; // Show FPS on Screen
 	printToScreen    = 1; // Show DEBUG text on screen
 	printToSD        = 0; // Disable SD logging
-	Timers.limitVIs   = 1; // Limit VI/s
+	Timers.limitVIs   = 0; // Limit VI/s
 	saveEnabled      = 0; // Don't save game
 	creditsScrolling = 0; // Normal menu for now
-	dynacore         = 2; // Pure Interpreter
+	dynacore         = 1; // Dynarec
 
 	// 'Page flip' buttons so we know when it released
 	int which_pad = 0;
