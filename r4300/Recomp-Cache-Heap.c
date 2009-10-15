@@ -12,7 +12,7 @@ typedef struct _meta_node {
 	unsigned int  size;
 } CacheMetaNode;
 
-static heap_cntrl* cache;
+static heap_cntrl* cache = NULL;
 static int cacheSize = 0;
 
 #define HEAP_CHILD1(i) ((i<<1)+1)
@@ -84,6 +84,12 @@ static CacheMetaNode* heapPop(void){
 static void free_func(PowerPC_func* func, unsigned int addr){
 	// Free the code associated with the func
 	__lwp_heap_free(cache, func->code);
+	// Remove any holes into this func
+	PowerPC_func_hole_node* hole, * next;
+	for(hole = func->holes; hole != NULL; hole = next){
+		next = hole->next;
+		free(hole);
+	}
 	
 	// Remove any pointers to this code
 	PowerPC_block* block = blocks[addr>>12];
@@ -242,5 +248,14 @@ void RecompCache_Init(void){
 		__lwp_heap_init(cache, malloc(RECOMP_CACHE_SIZE),
 		                RECOMP_CACHE_SIZE, 32);
 	}
+}
+
+unsigned int RecompCache_Size(PowerPC_func* func){
+	int i;
+	// Find the corresponding node
+	for(i=heapSize-1; i; --i)
+		if(cacheHeap[i]->func == func)
+			return cacheHeap[i]->size;
+	return 0;
 }
 
