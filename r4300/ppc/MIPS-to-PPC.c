@@ -67,6 +67,7 @@ void start_new_block(void){
 void start_new_mapping(void){
 	flushRegisters();
 	FP_need_check = 1;
+	reset_code_addr();
 }
 
 static inline int signExtend(int value, int size){
