@@ -22,8 +22,15 @@
 #include "gczip.h"
 #include "zlib.h"
 
+#ifdef MENU_V2
+#define PRINT DUMMY_print
+#define SETLOADPROG DUMMY_setLoadProg
+#define DRAWGUI DUMMY_draw
+#else
 #define PRINT GUI_print
-
+#define SETLOADPROG GUI_setLoadProg
+#define DRAWGUI GUI_draw
+#endif
 
 #define BLOCK_SIZE (1024*1024)
 #define LOAD_SIZE  (4*1024)
@@ -45,6 +52,10 @@ extern BOOL hasLoadedROM;
 static u8  L1[256*1024];
 static u32 L1tag;
 #endif
+
+void DUMMY_print(char* string) { }
+void DUMMY_setLoadProg(float percent) { }
+void DUMMY_draw() { }
 
 PKZIPHEADER pkzip;
 
@@ -163,8 +174,10 @@ int ROMCache_load(fileBrowser_file* f){
 	char txt[128];
 	void* buf;
 	int ret;
+#ifndef MENU_V2
 	GUI_clear();
 	GUI_centerText(true);
+#endif
 	sprintf(txt, "%s ROM %s into MEM2.\n Please be patient...\n", ROMCompressed ? "Uncompressing" : "Loading",ROMTooBig ? "partially" : "fully");
 	PRINT(txt);
 
@@ -180,7 +193,7 @@ int ROMCache_load(fileBrowser_file* f){
 			bytes_read = romFile_readFile(f, buf, LOAD_SIZE);
 
 			if(bytes_read < 0){		// Read fail!
-				GUI_setLoadProg( -1.0f );
+				SETLOADPROG( -1.0f );
 				free(buf);
 				return -1;
 			}
@@ -200,14 +213,14 @@ int ROMCache_load(fileBrowser_file* f){
 				offset += ret;
 
 			if(!loads_til_update--){
-				GUI_setLoadProg( (float)offset/sizeToLoad );
-				GUI_draw();
+				SETLOADPROG( (float)offset/sizeToLoad );
+				DRAWGUI();
 				loads_til_update = 16;
 			}
 		}while(ret > 0);
 		free(buf);
 		if(ret){	// Uh oh, decompression fail!
-			GUI_setLoadProg( -1.0f );
+			SETLOADPROG( -1.0f );
 			return -1;
 		}
 	}
@@ -217,7 +230,7 @@ int ROMCache_load(fileBrowser_file* f){
 			bytes_read = romFile_readFile(f, ROMCACHE_LO + offset, LOAD_SIZE);
 			
 			if(bytes_read < 0){		// Read fail!
-				GUI_setLoadProg( -1.0f );
+				SETLOADPROG( -1.0f );
 				return -1;
 			}
 			//initialize byteswapping if it isn't already
@@ -232,8 +245,8 @@ int ROMCache_load(fileBrowser_file* f){
 			offset += bytes_read;
 		
 			if(!loads_til_update--){
-				GUI_setLoadProg( (float)offset/sizeToLoad );
-				GUI_draw();
+				SETLOADPROG( (float)offset/sizeToLoad );
+				DRAWGUI();
 				loads_til_update = 16;
 			}
 		}
@@ -249,7 +262,7 @@ int ROMCache_load(fileBrowser_file* f){
 			ROMBlocksLRU[i] = i;
 	}
 	
-	GUI_setLoadProg( -1.0f );
+	SETLOADPROG( -1.0f );
 	return 0;
 }
 

@@ -38,11 +38,16 @@
 #include <ogc/card.h>
 #include "Saves.h"
 
+#ifdef MENU_V2
+#define PRINT DUMMY_print
+extern void DUMMY_print(char* dummy);
+#else
 #ifdef USE_GUI
 #include "../gui/GUI.h"
 #define PRINT GUI_print
 #else
 #define PRINT printf
+#endif
 #endif
 
 int use_flashram;

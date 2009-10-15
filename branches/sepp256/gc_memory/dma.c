@@ -50,11 +50,16 @@
 	#define MEMMASK 0x3FFFFF
 #endif
 
+#ifdef MENU_V2
+#define PRINT DUMMY_print
+extern void DUMMY_print(char* dummy);
+#else
 #ifdef USE_GUI
 #include "../gui/GUI.h"
 #define PRINT GUI_print
 #else
 #define PRINT printf
+#endif
 #endif
 //todo: use one buffer for flashram+eeprom+sram cause they're never together at once
 static unsigned char sram[0x8000] __attribute__((aligned(32)));

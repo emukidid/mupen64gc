@@ -100,7 +100,8 @@ void jump_to(unsigned int);
 #define ROM_SECTION 5
 #define TLB_SECTION 6
 #define FP_SECTION 7
-#define NUM_SECTIONS 7
+#define INTERP_SECTION 8
+#define NUM_SECTIONS 8
 
 //#define PROFILE
 
