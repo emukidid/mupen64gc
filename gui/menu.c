@@ -281,7 +281,7 @@ static inline void menuStack_push(menu_item*);
 
 #define TOGGLE_AUDIO_INDEX MAIN_MENU_SIZE - 4
 #define TOGGLE_AUDIO_ITEM \
-	{ &toggleAudio_strings[0][0], \
+	{ &toggleAudio_strings[1][0], \
 	  MENU_ATTR_NONE, \
 	  { .func = toggleAudio_func } \
 	 }
@@ -723,7 +723,7 @@ static inline void menuStack_push(menu_item*);
 		   MENU_ATTR_NONE,
 		   { .func = TLBCache_dump }
 		  },
-		 { &toggleViLimit_strings[1][0],
+		 { &toggleViLimit_strings[0][0],
 		   MENU_ATTR_NONE,
 		   { .func = toggleViLimit_func }
 		  },
