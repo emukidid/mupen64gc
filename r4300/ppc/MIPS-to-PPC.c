@@ -1,7 +1,7 @@
 /* MIPS-to-PPC.c - convert MIPS code into PPC (take 2 1/2)
    by Mike Slegeir for Mupen64-GC
  ************************************************
-   TODO: FP conversion to/from longs and mtc1
+   TODO: FP conversion to/from longs
          Optimize idle branches (generate a call to gen_interrupt)
          Optimize instruction scheduling & reduce branch instructions
    FIXME: Branch comparisons need to operate on 64-bit values when necessary
@@ -1476,12 +1476,10 @@ static int SLLV(MIPS_instr mips){
 	PowerPC_instr ppc;
 	int rt = mapRegister( MIPS_GET_RT(mips) );
 	int rs = mapRegister( MIPS_GET_RS(mips) );
+	int rd = mapRegisterNew( MIPS_GET_RD(mips) );
 	GEN_RLWINM(ppc, 0, rs, 0, 27, 31); // Mask the lower 5-bits of rs
 	set_next_dst(ppc);
-	GEN_SLW(ppc,
-	        mapRegisterNew( MIPS_GET_RD(mips) ),
-	        rt,
-	        0);
+	GEN_SLW(ppc, rd, rt, 0);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -1491,12 +1489,10 @@ static int SRLV(MIPS_instr mips){
 	PowerPC_instr ppc;
 	int rt = mapRegister( MIPS_GET_RT(mips) );
 	int rs = mapRegister( MIPS_GET_RS(mips) );
+	int rd = mapRegisterNew( MIPS_GET_RD(mips) );
 	GEN_RLWINM(ppc, 0, rs, 0, 27, 31); // Mask the lower 5-bits of rs
 	set_next_dst(ppc);
-	GEN_SRW(ppc,
-	        mapRegisterNew( MIPS_GET_RD(mips) ),
-	        rt,
-	        0);
+	GEN_SRW(ppc, rd, rt, 0);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
@@ -1506,12 +1502,10 @@ static int SRAV(MIPS_instr mips){
 	PowerPC_instr ppc;
 	int rt = mapRegister( MIPS_GET_RT(mips) );
 	int rs = mapRegister( MIPS_GET_RS(mips) );
+	int rd = mapRegisterNew( MIPS_GET_RD(mips) );
 	GEN_RLWINM(ppc, 0, rs, 0, 27, 31); // Mask the lower 5-bits of rs
 	set_next_dst(ppc);
-	GEN_SRAW(ppc,
-	         mapRegisterNew( MIPS_GET_RD(mips) ),
-	         rt,
-	         0);
+	GEN_SRAW(ppc, rd, rt, 0);
 	set_next_dst(ppc);
 	
 	return CONVERT_SUCCESS;
