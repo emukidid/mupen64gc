@@ -24,7 +24,7 @@
 AUDIO_INFO AudioInfo;
 
 #define NUM_BUFFERS 4
-#define BUFFER_SIZE 3840/2
+#define BUFFER_SIZE 3840
 static char buffer[NUM_BUFFERS][BUFFER_SIZE] __attribute__((aligned(32)));
 static int which_buffer = 0;
 static unsigned int buffer_offset = 0;
@@ -33,8 +33,8 @@ static unsigned int freq;
 static unsigned int real_freq;
 static float freq_ratio;
 // NOTE: 32khz actually uses ~2136 bytes/frame @ 60hz
-static enum { BUFFER_SIZE_32_60 = 2176/2, BUFFER_SIZE_48_60 = 3200/2,
-              BUFFER_SIZE_32_50 = 2560/2, BUFFER_SIZE_48_50 = 3840/2 } buffer_size;
+static enum { BUFFER_SIZE_32_60 = 2112, BUFFER_SIZE_48_60 = 3200,
+              BUFFER_SIZE_32_50 = 2560, BUFFER_SIZE_48_50 = 3840 } buffer_size;
 
 #ifdef THREADED_AUDIO
 static lwp_t audio_thread;
