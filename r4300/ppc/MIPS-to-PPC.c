@@ -255,7 +255,7 @@ int convert(void){
 	MIPS_instr mips = get_next_src();
 	int result = gen_ops[MIPS_GET_OPCODE(mips)](mips);
 	
-	/*if(needFlush)*/ flushRegisters();
+	if(needFlush) flushRegisters();
 	return result;
 }
 
