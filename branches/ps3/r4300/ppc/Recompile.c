@@ -93,7 +93,7 @@ void recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 	addr_first = ppc_block->start_address + (addr&0xfff);
 	code_addr = ppc_block->code_addr + ((addr&0xfff)>>2);
 	
-	int useRegMaps = pass0(ppc_block); // Sets src_last, addr_last
+	int need_pad = pass0(ppc_block); // Sets src_last, addr_last
 	
 	code_length = 0;
 	unsigned int max_length = addr_last - addr_first; // 4x size
@@ -196,7 +196,7 @@ void recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 			resizeCode(ppc_block, func, max_length);
 		}
 		
-		if(isJmpDst[offset] || !useRegMaps){
+		if(isJmpDst[offset]){
 			src++; start_new_mapping(); src--;
 		}
 		
@@ -207,7 +207,7 @@ void recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 	// Flush any remaining mapped registers
 	flushRegisters(); //start_new_mapping();
 	// In case we couldn't compile the whole function, use a pad
-	if(!useRegMaps){
+	if(need_pad){
 		if(code_length + 8 > max_length)
 			resizeCode(ppc_block, func, code_length + 8);
 		genJumpPad();
@@ -409,9 +409,8 @@ static int pass0(PowerPC_block* ppc_block){
 	//   delay slot as it will be recompiled ahead of the J/JR and
 	//   does not need to be recompiled after the J/JR as it belongs
 	//   to the next function if its used in that way.
-	// If the function continues into the next block, we have to turn
-	//   off register mappings because we don't know where the second
-	//   part of the function will branch to within the first part.
+	// If the function continues into the next block, we'll need to use
+	//   a jump pad at the end of the block.
 	unsigned int pc = addr_first >> 2;
 	int i;
 	// Set this to the end address of the block for is_j_out
@@ -466,16 +465,11 @@ static int pass0(PowerPC_block* ppc_block){
 	if(pc < addr_last >> 2){
 		src_last = src;
 		addr_last = pc << 2;
-		// Return true (can use mappings) since the function
-		//   was contained in this block and if it didn't begin in
-		//   the previous block
-		return addr_first&0xfff;
+		return 0;
 	} else {
 		src_last = ppc_block->mips_code + 1024;
 		addr_last = ppc_block->end_address;
-		// Return false (we can't use mappings) because this function
-		//   extends past the bounds of this block
-		return 0;
+		return 1;
 	}
 }
 
