@@ -693,14 +693,16 @@ static int LB(MIPS_instr mips){
 	invalidateRegisters();
 	
 #ifdef FASTMEM
-	// If (base >> 16) & 0xDF80 == 0x8000
-	GEN_SRWI(ppc, 0, base, 16);
+	// If base in physical memory
+#ifdef USE_EXPANSION
+	GEN_LIS(ppc, 0, 0x8080);
+#else
+	GEN_LIS(ppc, 0, 0x8040);
+#endif
 	set_next_dst(ppc);
-	GEN_ANDI(ppc, 0, 0, 0xDF80);
+	GEN_CMP(ppc, base, 0, 1);
 	set_next_dst(ppc);
-	GEN_CMPLI(ppc, 0, 0x8000, 1);
-	set_next_dst(ppc);
-	GEN_BNE(ppc, 1, 9, 0, 0);
+	GEN_BGE(ppc, 1, 9, 0, 0);
 	set_next_dst(ppc);
 	
 	// Use rdram
@@ -763,14 +765,16 @@ static int LH(MIPS_instr mips){
 	invalidateRegisters();
 	
 #ifdef FASTMEM
-	// If (base >> 16) & 0xDF80 == 0x8000
-	GEN_SRWI(ppc, 0, base, 16);
+	// If base in physical memory
+#ifdef USE_EXPANSION
+	GEN_LIS(ppc, 0, 0x8080);
+#else
+	GEN_LIS(ppc, 0, 0x8040);
+#endif
 	set_next_dst(ppc);
-	GEN_ANDI(ppc, 0, 0, 0xDF80);
+	GEN_CMP(ppc, base, 0, 1);
 	set_next_dst(ppc);
-	GEN_CMPLI(ppc, 0, 0x8000, 1);
-	set_next_dst(ppc);
-	GEN_BNE(ppc, 1, 8, 0, 0);
+	GEN_BGE(ppc, 1, 8, 0, 0);
 	set_next_dst(ppc);
 	
 	// Use rdram
@@ -841,14 +845,16 @@ static int LW(MIPS_instr mips){
 	invalidateRegisters();
 	
 #ifdef FASTMEM
-	// If (base >> 16) & 0xDF80 == 0x8000
-	GEN_SRWI(ppc, 0, base, 16);
+	// If base in physical memory
+#ifdef USE_EXPANSION
+	GEN_LIS(ppc, 0, 0x8080);
+#else
+	GEN_LIS(ppc, 0, 0x8040);
+#endif
 	set_next_dst(ppc);
-	GEN_ANDI(ppc, 0, 0, 0xDF80);
+	GEN_CMP(ppc, base, 0, 1);
 	set_next_dst(ppc);
-	GEN_CMPLI(ppc, 0, 0x8000, 1);
-	set_next_dst(ppc);
-	GEN_BNE(ppc, 1, 8, 0, 0);
+	GEN_BGE(ppc, 1, 8, 0, 0);
 	set_next_dst(ppc);
 	
 	// Use rdram
@@ -908,14 +914,16 @@ static int LBU(MIPS_instr mips){
 	invalidateRegisters();
 	
 #ifdef FASTMEM
-	// If (base >> 16) & 0xDF80 == 0x8000
-	GEN_SRWI(ppc, 0, base, 16);
+	// If base in physical memory
+#ifdef USE_EXPANSION
+	GEN_LIS(ppc, 0, 0x8080);
+#else
+	GEN_LIS(ppc, 0, 0x8040);
+#endif
 	set_next_dst(ppc);
-	GEN_ANDI(ppc, 0, 0, 0xDF80);
+	GEN_CMP(ppc, base, 0, 1);
 	set_next_dst(ppc);
-	GEN_CMPLI(ppc, 0, 0x8000, 1);
-	set_next_dst(ppc);
-	GEN_BNE(ppc, 1, 8, 0, 0);
+	GEN_BGE(ppc, 1, 8, 0, 0);
 	set_next_dst(ppc);
 	
 	// Use rdram
@@ -975,14 +983,16 @@ static int LHU(MIPS_instr mips){
 	invalidateRegisters();
 	
 #ifdef FASTMEM
-	// If (base >> 16) & 0xDF80 == 0x8000
-	GEN_SRWI(ppc, 0, base, 16);
+	// If base in physical memory
+#ifdef USE_EXPANSION
+	GEN_LIS(ppc, 0, 0x8080);
+#else
+	GEN_LIS(ppc, 0, 0x8040);
+#endif
 	set_next_dst(ppc);
-	GEN_ANDI(ppc, 0, 0, 0xDF80);
+	GEN_CMP(ppc, base, 0, 1);
 	set_next_dst(ppc);
-	GEN_CMPLI(ppc, 0, 0x8000, 1);
-	set_next_dst(ppc);
-	GEN_BNE(ppc, 1, 8, 0, 0);
+	GEN_BGE(ppc, 1, 8, 0, 0);
 	set_next_dst(ppc);
 	
 	// Use rdram
@@ -1053,14 +1063,16 @@ static int LWU(MIPS_instr mips){
 	invalidateRegisters();
 	
 #ifdef FASTMEM
-	// If (base >> 16) & 0xDF80 == 0x8000
-	GEN_SRWI(ppc, 0, base, 16);
+	// If base in physical memory
+#ifdef USE_EXPANSION
+	GEN_LIS(ppc, 0, 0x8080);
+#else
+	GEN_LIS(ppc, 0, 0x8040);
+#endif
 	set_next_dst(ppc);
-	GEN_ANDI(ppc, 0, 0, 0xDF80);
+	GEN_CMP(ppc, base, 0, 1);
 	set_next_dst(ppc);
-	GEN_CMPLI(ppc, 0, 0x8000, 1);
-	set_next_dst(ppc);
-	GEN_BNE(ppc, 1, 8, 0, 0);
+	GEN_BGE(ppc, 1, 8, 0, 0);
 	set_next_dst(ppc);
 	
 	// Use rdram
@@ -1249,14 +1261,16 @@ static int LD(MIPS_instr mips){
 	invalidateRegisters();
 	
 #ifdef FASTMEM
-	// If (base >> 16) & 0xDF80 == 0x8000
-	GEN_SRWI(ppc, 0, base, 16);
+	// If base in physical memory
+#ifdef USE_EXPANSION
+	GEN_LIS(ppc, 0, 0x8080);
+#else
+	GEN_LIS(ppc, 0, 0x8040);
+#endif
 	set_next_dst(ppc);
-	GEN_ANDI(ppc, 0, 0, 0xDF80);
+	GEN_CMP(ppc, base, 0, 1);
 	set_next_dst(ppc);
-	GEN_CMPLI(ppc, 0, 0x8000, 1);
-	set_next_dst(ppc);
-	GEN_BNE(ppc, 1, 8, 0, 0);
+	GEN_BGE(ppc, 1, 8, 0, 0);
 	set_next_dst(ppc);
 	
 	// Use rdram
