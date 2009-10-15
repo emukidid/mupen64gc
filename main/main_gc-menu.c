@@ -63,6 +63,8 @@ extern char printToSD;
 extern timers Timers;
        char saveEnabled;
        char creditsScrolling;
+       char padNeedScan;
+       char wpadNeedScan;
 unsigned int isWii = 0;
 #define WII_CPU_VERSION 0x87102
 #define mfpvr()   ({unsigned int rval; \
@@ -116,6 +118,7 @@ int main(){
 	
 	/* MAIN LOOP */
 	while(TRUE){
+		if(padNeedScan){ PAD_ScanPads(); padNeedScan = 0; }
 		// First read the pads
 		buttons[which_pad] = PAD_ButtonsHeld(0) | readWPAD();
 		
@@ -149,13 +152,13 @@ int main(){
 
 #if defined(WII) && !defined(NO_BT)
 u16 readWPAD(void){
-	WPADData wpad;
-	WPAD_ReadEvent(0, &wpad);
+	if(wpadNeedScan){ WPAD_ScanPads(); wpadNeedScan = 0; }
+	WPADData* wpad = WPAD_Data(0);
 	
 	u16 b = 0;
-	if(wpad.err == WPAD_ERR_NONE &&
-	   wpad.exp.type == WPAD_EXP_CLASSIC){
-	   	u16 w = wpad.exp.classic.btns;
+	if(wpad->err == WPAD_ERR_NONE &&
+	   wpad->exp.type == WPAD_EXP_CLASSIC){
+	   	u16 w = wpad->exp.classic.btns;
 	   	b |= (w & CLASSIC_CTRL_BUTTON_UP)    ? PAD_BUTTON_UP    : 0;
 	   	b |= (w & CLASSIC_CTRL_BUTTON_DOWN)  ? PAD_BUTTON_DOWN  : 0;
 	   	b |= (w & CLASSIC_CTRL_BUTTON_LEFT)  ? PAD_BUTTON_LEFT  : 0;
@@ -323,7 +326,7 @@ static void rsp_info_init(void){
 }
 
 void ScanPADSandReset() {
-	PAD_ScanPads();
+	padNeedScan = wpadNeedScan = 1;
 	if(!((*(u32*)0xCC003000)>>16))
 		stop = 1;
 }
