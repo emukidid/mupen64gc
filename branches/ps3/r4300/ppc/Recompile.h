@@ -20,6 +20,7 @@ typedef struct {
 	PowerPC_instr* code;
 	unsigned int   lru;
 	PowerPC_func_hole_node* holes;
+	PowerPC_instr** code_addr;
 } PowerPC_func;
 
 typedef struct func_node {
@@ -31,7 +32,7 @@ typedef struct {
 	MIPS_instr*     mips_code;     // The code to recompile
 	uint            start_address; // The address this code begins for the 64
 	uint            end_address;
-	PowerPC_instr** code_addr;     // table of block offsets to code pointer,
+	//PowerPC_instr** code_addr;     // table of block offsets to code pointer,
 	                               //   its length is end_addr - start_addr
 	PowerPC_func_node* funcs;      // Linked list of functions in this block
 	unsigned long   adler32;       // Used for TLB

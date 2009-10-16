@@ -8,6 +8,8 @@
 #include "../r4300.h"
 #include "Wrappers.h"
 
+#include <assert.h>
+
 extern int stop;
 extern unsigned long instructionCount;
 extern void (*interp_ops[64])(void);
@@ -47,46 +49,52 @@ inline unsigned int dyna_run(unsigned int (*code)(void)){
 		   "r" (&FCR31), "r" (dyna_check_cop1_unusable)
 		: "14", "15", "16", "17", "18", "19", "20", "21",
 		  "22", "23", "24");
-	
+
 	unsigned int naddr = code();
-	
+
 	__asm__ volatile("lwz	1, 0(1)\n");
-	
+
 	return naddr;
 }
 
 void dynarec(unsigned int address){
 	while(!stop){
 		PowerPC_block* dst_block = blocks[address>>12];
-		
+
 		//printf("trampolining to 0x%08x from ~%08x\n", address, interp_addr);
-		
+
 		unsigned long paddr = update_invalid_addr(address);
 		if(!paddr){
 			printf("Caught you at last fucker!\nStay away from %08x\n", address);
 			return;
 		}
-		
+
 		if(!dst_block){
 			printf("block at %08x doesn't exist\n", address&~0xFFF);
 			blocks[address>>12] = malloc(sizeof(PowerPC_block));
 			dst_block = blocks[address>>12];
-			dst_block->code_addr     = NULL;
+			//dst_block->code_addr     = NULL;
 			dst_block->funcs         = NULL;
 			dst_block->start_address = address & ~0xFFF;
 			dst_block->end_address   = (address & ~0xFFF) + 0x1000;
-			
+
 			unsigned int offset = ((paddr-(address-dst_block->start_address))&0x0FFFFFFF)>>2;
 			unsigned int* base;
 			if(paddr > 0xb0000000) base = rom;
 			else base = rdram;
 			init_block(base+offset, dst_block);
-			
+
 		} else if(invalid_code_get(address>>12)){
 			invalidate_block(dst_block);
 		}
-		
-		if(!dst_block->code_addr[(address&0xFFF)>>2]){
+
+		PowerPC_func_node* fn;
+		for(fn = dst_block->funcs; fn != NULL; fn = fn->next)
+			if((address&0xFFFF) >= fn->function->start_addr &&
+			   ((address&0xFFFF) < fn->function->end_addr ||
+			    fn->function->end_addr == 0)) break;
+		if(!fn || !fn->function->code_addr[((address&0xFFFF) -
+		                                    fn->function->start_addr)>>2]){
 			printf("code at %08x is not compiled\n", address);
 			start_section(COMPILER_SECTION);
 			recompile_block(dst_block, address);
@@ -96,13 +104,18 @@ void dynarec(unsigned int address){
 			RecompCache_Update(address);
 #endif
 		}
-		
+
+		PowerPC_func* func = dst_block->funcs->function;
+		assert((address&0xFFFF) >= func->start_addr &&
+			   ((address&0xFFFF) < func->end_addr ||
+			    func->end_addr == 0));
+		int index = ((address&0xFFFF) - func->start_addr)>>2;
+
 		// Recompute the block offset
 		unsigned int (*code)(void);
-		code = (unsigned int (*)(void))dst_block->code_addr[(address&0xFFF)>>2];
-		
+		code = (unsigned int (*)(void))func->code_addr[index];
 		address = dyna_run(code);
-		
+
 		if(!noCheckInterrupt){
 			last_addr = interp_addr = address;
 			// Check for interrupts
@@ -124,9 +137,9 @@ unsigned int decodeNInterpret(MIPS_instr mips, unsigned int pc,
 	prefetch_opcode(mips);
 	interp_ops[MIPS_GET_OPCODE(mips)]();
 	delay_slot = 0;
-	
+
 	if(interp_addr != pc + 4) noCheckInterrupt = 1;
-	
+
 	return interp_addr != pc + 4 ? interp_addr : 0;
 }
 
@@ -139,10 +152,10 @@ int dyna_update_count(unsigned int pc){
 		printf("Tracing at %08x (last_addr: %08x, Count: %x)\n", pc, last_addr, Count);*/
 	if(pc < last_addr)
 		printf("pc (%08x) < last_addr (%08x)\n", pc, last_addr);
-	
+
 	Count += (pc - last_addr)/2;
 	last_addr = pc;
-	
+
 #ifdef COMPARE_CORE
 	if(isDelaySlot){
 		interp_addr = pc;
@@ -150,7 +163,7 @@ int dyna_update_count(unsigned int pc){
 		compare_core();
 	}
 #endif
-	
+
 	return next_interupt - Count;
 }
 
@@ -186,19 +199,19 @@ static void invalidate_func(unsigned int addr){
 }
 
 #define check_memory() \
-	if(!invalid_code_get(address>>12) && \
-	   blocks[address>>12]->code_addr[(address&0xfff)>>2]) \
+	if(!invalid_code_get(address>>12)/* && \
+	   blocks[address>>12]->code_addr[(address&0xfff)>>2]*/) \
 		invalidate_func(address);
 
 unsigned int dyna_mem(unsigned int value, unsigned int addr,
                       memType type, unsigned int pc, int isDelaySlot){
 	static unsigned long long dyna_rdword;
-	
+
 	address = addr;
 	rdword = &dyna_rdword;
 	PC->addr = interp_addr = pc;
 	delay_slot = isDelaySlot;
-	
+
 	switch(type){
 		case MEM_LW:
 			read_word_in_memory();
@@ -252,9 +265,9 @@ unsigned int dyna_mem(unsigned int value, unsigned int addr,
 			break;
 	}
 	delay_slot = 0;
-	
+
 	if(interp_addr != pc) noCheckInterrupt = 1;
-	
+
 	return interp_addr != pc ? interp_addr : 0;
 }
 
