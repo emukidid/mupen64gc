@@ -105,17 +105,17 @@ void (*writememd[0xFFFF])();
 void (*writememh[0xFFFF])();
 
 // memory sections
-static unsigned long *readrdramreg[0xFFFF];
-static unsigned long *readrspreg[0xFFFF];
-static unsigned long *readrsp[0xFFFF];
-static unsigned long *readmi[0xFFFF];
-static unsigned long *readvi[0xFFFF];
-static unsigned long *readai[0xFFFF];
-static unsigned long *readpi[0xFFFF];
-static unsigned long *readri[0xFFFF];
-static unsigned long *readsi[0xFFFF];
-static unsigned long *readdp[0xFFFF];
-static unsigned long *readdps[0xFFFF];
+static unsigned long *readrdramreg[0x10000];
+static unsigned long *readrspreg[0x10000];
+static unsigned long *readrsp[0x10000];
+static unsigned long *readmi[0x10000];
+static unsigned long *readvi[0x10000];
+static unsigned long *readai[0x10000];
+static unsigned long *readpi[0x10000];
+static unsigned long *readri[0x10000];
+static unsigned long *readsi[0x10000];
+static unsigned long *readdp[0x10000];
+static unsigned long *readdps[0x10000];
 
 // the frameBufferInfos
 static FrameBufferInfo frameBufferInfos[6];

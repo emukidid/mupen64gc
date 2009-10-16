@@ -429,7 +429,8 @@ static int pass0(PowerPC_block* ppc_block){
 				isJmpDst[ li & 0x3FF ] = 1;
 			}
 			--src;
-			if(opcode == MIPS_OPCODE_JAL) isJmpDst[ index + 2 ] = 1;
+			if(opcode == MIPS_OPCODE_JAL && index + 2 < 1024)
+				isJmpDst[ index + 2 ] = 1;
 			if(opcode == MIPS_OPCODE_J){ ++src, ++pc; break; }
 		} else if(opcode == MIPS_OPCODE_BEQ   ||
 		          opcode == MIPS_OPCODE_BNE   ||
@@ -450,7 +451,8 @@ static int pass0(PowerPC_block* ppc_block){
 				isJmpDst[ index + 1 + bd ] = 1;
 			}
 			--src;
-			isJmpDst[ index + 2 ] = 1; // XXX: This seems a bit hacky, but shouldn't be detrimental
+			if(index + 2 < 1024)
+				isJmpDst[ index + 2 ] = 1; // XXX: This seems a bit hacky, but shouldn't be detrimental
 		} else if(opcode == MIPS_OPCODE_R &&
 		          (MIPS_GET_FUNC(*src) == MIPS_FUNC_JR ||
 		           MIPS_GET_FUNC(*src) == MIPS_FUNC_JALR)){
