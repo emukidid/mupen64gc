@@ -9,6 +9,7 @@ Focus::Focus()
 		: focusActive(false),
 		  pressed(false),
 		  frameSwitch(true),
+		  clearInput(true),
 		  buttonsPressed(0),
 		  focusList(0),
 		  primaryFocusOwner(0),
@@ -39,6 +40,16 @@ void Focus::updateFocus()
 		frameSwitch = false;
 	}
 
+	if(clearInput)
+	{
+		for (int i=0; i<4; i++)
+		{
+			previousButtonsGC[i] = PAD_ButtonsHeld(i);
+			previousButtonsWii[i] = wiiPad[i].btns_h;
+		}
+		clearInput = false;
+	}
+
 	for (int i=0; i<4; i++)
 	{
 		u16 currentButtonsGC = PAD_ButtonsHeld(i);
@@ -63,8 +74,8 @@ void Focus::updateFocus()
 			}
 			if (currentButtonsDownGC & PAD_BUTTON_A) buttonsDown |= ACTION_SELECT;
 			if (currentButtonsDownGC & PAD_BUTTON_B) buttonsDown |= ACTION_BACK;
-			if (primaryFocusOwner == NULL) primaryFocusOwner = currentFrame->getDefaultFocus();
-			primaryFocusOwner = primaryFocusOwner->updateFocus(focusDirection,buttonsDown);
+			if (primaryFocusOwner == NULL && currentFrame) primaryFocusOwner = currentFrame->getDefaultFocus();
+			if (primaryFocusOwner) primaryFocusOwner = primaryFocusOwner->updateFocus(focusDirection,buttonsDown);
 			previousButtonsGC[i] = currentButtonsGC;
 			break;
 		}
@@ -89,8 +100,8 @@ void Focus::updateFocus()
 			}
 			if (currentButtonsDownWii & WPAD_BUTTON_A) buttonsDown |= ACTION_SELECT;
 			if (currentButtonsDownWii & WPAD_BUTTON_B) buttonsDown |= ACTION_BACK;
-			if (primaryFocusOwner == NULL) primaryFocusOwner = currentFrame->getDefaultFocus();
-			primaryFocusOwner = primaryFocusOwner->updateFocus(focusDirection,buttonsDown);
+			if (primaryFocusOwner == NULL && currentFrame) primaryFocusOwner = currentFrame->getDefaultFocus();
+			if (primaryFocusOwner) primaryFocusOwner = primaryFocusOwner->updateFocus(focusDirection,buttonsDown);
 			previousButtonsWii[i] = wiiPad[i].btns_h;
 			break;
 		}
@@ -111,6 +122,11 @@ void Focus::removeComponent(Component* component)
 	}
 }
 
+Frame* Focus::getCurrentFrame()
+{
+	return currentFrame;
+}
+
 void Focus::setCurrentFrame(Frame* frame)
 {
 	if(primaryFocusOwner) primaryFocusOwner->setFocus(false);
@@ -118,12 +134,18 @@ void Focus::setCurrentFrame(Frame* frame)
 	primaryFocusOwner = NULL;
 	currentFrame = frame;
 	frameSwitch = true;
+	Input::getInstance().clearInputData();
 }
 
 void Focus::setFocusActive(bool focusActiveBool)
 {
 	focusActive = focusActiveBool;
 	if (!focusActive && primaryFocusOwner) primaryFocusOwner->setFocus(false);
+}
+
+void Focus::clearInputData()
+{
+	clearInput = true;
 }
 
 void Focus::clearPrimaryFocus()

@@ -124,6 +124,7 @@ extern char printToSD;
 
 void Func_ToggleSDDebug()
 {
+	//This button is not implemented yet
 /*	printToSD ^= 1;
 	if(printToSD)
 		DEBUG_print("open",DBG_SDGECKOOPEN);

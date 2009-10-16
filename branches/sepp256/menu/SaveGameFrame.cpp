@@ -4,6 +4,7 @@
 #include "../libgui/resources.h"
 #include "../libgui/FocusManager.h"
 #include "../libgui/CursorManager.h"
+#include "../libgui/MessageBox.h"
 
 
 extern "C" {
@@ -114,7 +115,8 @@ void Func_SaveGameCardA()
 	result += saveFlashram(saveFile_dir);
 	saveFile_deinit(saveFile_dir);
 		
-//	return result ? "Saved game to memcard" : "Nothing to save";
+	if (result)	menu::MessageBox::getInstance().setMessage("Saved game to memcard in Slot A");
+	else		menu::MessageBox::getInstance().setMessage("Nothing to save");
 }
 
 void Func_SaveGameCardB()
@@ -136,7 +138,8 @@ void Func_SaveGameCardB()
 	result += saveFlashram(saveFile_dir);
 	saveFile_deinit(saveFile_dir);
 		
-//	return result ? "Saved game to memcard" : "Nothing to save";
+	if (result)	menu::MessageBox::getInstance().setMessage("Saved game to memcard in Slot B");
+	else		menu::MessageBox::getInstance().setMessage("Nothing to save");
 }
 
 void Func_SaveGameSD()
@@ -155,7 +158,8 @@ void Func_SaveGameSD()
 	result += saveMempak(saveFile_dir);
 	result += saveFlashram(saveFile_dir);
 		
-//	return result ? "Saved game to SD card" : "Nothing to save";
+	if (result)	menu::MessageBox::getInstance().setMessage("Saved game to SD card");
+	else		menu::MessageBox::getInstance().setMessage("Nothing to save");
 }
 
 void Func_SaveGameWiiFS()
@@ -176,7 +180,8 @@ void Func_SaveGameWiiFS()
 	result += saveFlashram(saveFile_dir);
 	saveFile_deinit(saveFile_dir);
 		
-//	return result ? "Saved game to filesystem" : "Nothing to save";
+	if (result)	menu::MessageBox::getInstance().setMessage("Saved game to Wii filesystem");
+	else		menu::MessageBox::getInstance().setMessage("Nothing to save");
 }
 
 extern MenuContext *pMenuContext;

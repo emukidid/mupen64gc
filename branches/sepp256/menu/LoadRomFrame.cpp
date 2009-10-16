@@ -50,11 +50,8 @@ struct ButtonInfo
 	{	NULL,	FRAME_STRINGS[2],	150.0,	300.0,	340.0,	40.0,	 1,	 0,	-1,	-1,	Func_LoadFromFS,	Func_ReturnFromLoadRomFrame }, // Load From Wii FS
 };
 
-LoadRomFrame::LoadRomFrame()/*(MenuContext *menuContext)
-		: menuContext(menuContext)*/
+LoadRomFrame::LoadRomFrame()
 {
-//	printf("MainFrame constructor\n");
-
 	buttonImage = new menu::Image(ButtonTexture, 16, 16, GX_TF_I8, GX_CLAMP, GX_CLAMP, GX_FALSE);
 	buttonFocusImage = new menu::Image(ButtonFocusTexture, 16, 16, GX_TF_I8, GX_CLAMP, GX_CLAMP, GX_FALSE);
 	for (int i = 0; i < NUM_FRAME_BUTTONS; i++)

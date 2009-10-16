@@ -4,6 +4,7 @@
 #include "../libgui/resources.h"
 #include "../libgui/FocusManager.h"
 #include "../libgui/CursorManager.h"
+#include "../libgui/MessageBox.h"
 
 void Func_ChoosePureInterp();
 void Func_ChooseDynarec();
@@ -13,7 +14,7 @@ void Func_ReturnFromSelectCPUFrame();
 #define FRAME_BUTTONS selectCPUFrameButtons
 #define FRAME_STRINGS selectCPUFrameStrings
 
-static char FRAME_STRINGS[4][22] =
+static char FRAME_STRINGS[2][19] =
 	{ "Pure Interpreter",
 	  "Dynamic Recompiler"};
 
@@ -92,7 +93,7 @@ void Func_ChoosePureInterp()
 	if(hasLoadedROM && dynacore != 2){ cpu_deinit(); needInit = 1; }
 	dynacore = 2;
 	if(hasLoadedROM && needInit) cpu_init();
-//	return "Running Pure Interpreter Mode";
+	menu::MessageBox::getInstance().setMessage("Running Pure Interpreter Mode");
 	pMenuContext->setActiveFrame(MenuContext::FRAME_MAIN);
 }
 
@@ -102,7 +103,7 @@ void Func_ChooseDynarec()
 	if(hasLoadedROM && dynacore != 1){ cpu_deinit(); needInit = 1; }
 	dynacore = 1;
 	if(hasLoadedROM && needInit) cpu_init();
-//	return "Running Dynarec Mode";
+	menu::MessageBox::getInstance().setMessage("Running Dynarec Mode");
 	pMenuContext->setActiveFrame(MenuContext::FRAME_MAIN);
 }
 

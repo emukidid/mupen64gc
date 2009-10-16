@@ -11,6 +11,7 @@ public:
 	void refreshInput();
 	WPADData* getWpad();
 	PADStatus* getPad();
+	void clearInputData();
 	static Input& getInstance()
 	{
 		static Input obj;

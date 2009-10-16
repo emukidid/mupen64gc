@@ -14,7 +14,6 @@ MenuContext::MenuContext(GXRModeObj *vmode)
 		  selectCPUFrame(0),
 		  devFrame(0)
 {
-//	printf("MenuContext constructor\n");
 	pMenuContext = this;
 
 	mainFrame = new MainFrame();
