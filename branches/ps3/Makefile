@@ -130,7 +130,6 @@ OBJ_GLN64	=glN64/glN64.o \
 		glN64/GBI.o \
 		glN64/DepthBuffer.o \
 		glN64/CRC.o \
-		glN64/2xSAI.o \
 		glN64/NV_register_combiners.o \
 		glN64/texture_env.o \
 		glN64/texture_env_combine.o \
