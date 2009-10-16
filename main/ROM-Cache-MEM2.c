@@ -23,6 +23,7 @@
 #include "zlib.h"
 
 #ifdef MENU_V2
+void LoadingBar_showBar(float percent, const char* string);
 #define PRINT DUMMY_print
 #define SETLOADPROG DUMMY_setLoadProg
 #define DRAWGUI DUMMY_draw
@@ -215,6 +216,9 @@ int ROMCache_load(fileBrowser_file* f){
 			if(!loads_til_update--){
 				SETLOADPROG( (float)offset/sizeToLoad );
 				DRAWGUI();
+#ifdef MENU_V2
+				LoadingBar_showBar((float)offset/sizeToLoad, txt);
+#endif
 				loads_til_update = 16;
 			}
 		}while(ret > 0);
@@ -247,6 +251,9 @@ int ROMCache_load(fileBrowser_file* f){
 			if(!loads_til_update--){
 				SETLOADPROG( (float)offset/sizeToLoad );
 				DRAWGUI();
+#ifdef MENU_V2
+				LoadingBar_showBar((float)offset/sizeToLoad, txt);
+#endif
 				loads_til_update = 16;
 			}
 		}

@@ -20,6 +20,7 @@ Cursor::Cursor()
 		  foundComponent(0),
 		  hoverOverComponent(0),
 		  pressed(false),
+		  clearInput(true),
 		  buttonsPressed(0),
 		  activeChan(-1)
 {
@@ -43,15 +44,23 @@ void Cursor::updateCursor()
 	//if (aimed at screen): set cursorX, cursorY, cursorRot, clear focusActive
 		if(wiiPad[i].ir.valid && wiiPad[i].err == WPAD_ERR_NONE)
 		{
-			if(activeChan == i)
+			if(activeChan != i)
 			{
 				//clear previous cursor state here
+				previousButtonsPressed[i] = wiiPad[i].btns_h;
 				activeChan = i;
+//				clearInput = false;
+			}
+			else
+			{
+				if(clearInput) previousButtonsPressed[i] = wiiPad[i].btns_h;
+				clearInput = false;
 			}
 			cursorX = wiiPad[i].ir.x;
 			cursorY = wiiPad[i].ir.y; 
 			cursorRot = wiiPad[i].ir.angle;
-			buttonsPressed = wiiPad[i].btns_h;
+			buttonsPressed = (wiiPad[i].btns_h ^ previousButtonsPressed[i]) & wiiPad[i].btns_h;
+			previousButtonsPressed[i] = wiiPad[i].btns_h;
 			pressed = (buttonsPressed & (WPAD_BUTTON_A | WPAD_BUTTON_B)) ? true : false;
 			Focus::getInstance().setFocusActive(false);
 			if (hoverOverComponent) hoverOverComponent->setFocus(false);
@@ -77,6 +86,7 @@ void Cursor::setCursorFocus(Component* component)
 {
 	int buttonsDown = 0;
 	int focusDirection = 0;
+
 //	hoverOverComponent = component;
 	if (buttonsPressed & WPAD_BUTTON_A) buttonsDown |= Focus::ACTION_SELECT;
 	if (buttonsPressed & WPAD_BUTTON_B) buttonsDown |= Focus::ACTION_BACK;
@@ -152,6 +162,16 @@ void Cursor::removeComponent(Frame* parentFrame, Component* component)
 void Cursor::setCurrentFrame(Frame* frame)
 {
 	currentFrame = frame;
+}
+
+Frame* Cursor::getCurrentFrame()
+{
+	return currentFrame;
+}
+
+void Cursor::clearInputData()
+{
+	clearInput = true;
 }
 
 } //namespace menu 

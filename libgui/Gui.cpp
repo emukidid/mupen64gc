@@ -3,6 +3,8 @@
 #include "InputManager.h"
 #include "CursorManager.h"
 #include "FocusManager.h"
+#include "MessageBox.h"
+#include "LoadingBar.h"
 
 namespace menu {
 
@@ -10,13 +12,12 @@ Gui::Gui(GXRModeObj *vmode)
 		: gfx(vmode)
 {
 	IplFont::getInstance().setVmode(vmode);
-
-	printf("Gui constructor\n");
+	MessageBox::getInstance().setGuiInstance(this);
+	LoadingBar::getInstance().setGuiInstance(this);
 }
 
 void Gui::addFrame(Frame *frame)
 {
-//	printf("Gui addFrame\n");
 	frameList.push_back(frame);
 }
 
@@ -39,6 +40,8 @@ void Gui::draw()
 	{
 		(*iteration)->drawChildren(gfx);
 	}
+	if (MessageBox::getInstance().getActive()) MessageBox::getInstance().drawMessageBox(gfx);
+	if (LoadingBar::getInstance().getActive()) LoadingBar::getInstance().drawLoadingBar(gfx);
 	Cursor::getInstance().drawCursor(gfx);
 
 	gfx.swapBuffers();

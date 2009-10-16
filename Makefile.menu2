@@ -53,6 +53,8 @@ OBJ		=main/rom_gc.o \
 		libgui/Image.o \
 		libgui/InputManager.o \
 		libgui/IPLFont.o \
+		libgui/LoadingBar.o \
+		libgui/MessageBox.o \
 		libgui/resources.o \
 		fileBrowser/fileBrowser-DVD.o \
 		fileBrowser/fileBrowser-CARD.o \

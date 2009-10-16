@@ -4,6 +4,7 @@
 #include "../libgui/resources.h"
 #include "../libgui/FocusManager.h"
 #include "../libgui/CursorManager.h"
+#include "../libgui/MessageBox.h"
 #ifdef DEBUGON
 # include <debug.h>
 #endif
@@ -27,7 +28,11 @@ void Func_ExitToLoader();
 void Func_RestartGame();
 void Func_PlayGame();
 
-static char mainFrameStrings[14][20] =
+#define NUM_MAIN_BUTTONS 13
+#define FRAME_BUTTONS mainFrameButtons
+#define FRAME_STRINGS mainFrameStrings
+
+static char FRAME_STRINGS[14][20] =
 	{ "Load ROM",
 	  "Load Save File",
 	  "Save Game",
@@ -43,7 +48,6 @@ static char mainFrameStrings[14][20] =
 	  "Restart Game",
 	  "Play Game"};
 
-#define NUM_MAIN_BUTTONS 13
 
 struct ButtonInfo
 {
@@ -59,51 +63,48 @@ struct ButtonInfo
 	int				focusRight;
 	ButtonFunc		clickedFunc;
 	ButtonFunc		returnFunc;
-} mainFrameButtons[NUM_MAIN_BUTTONS] =
+} FRAME_BUTTONS[NUM_MAIN_BUTTONS] =
 { //	button	buttonString			x		y		width	height	Up	Dwn	Lft	Rt	clickFunc				returnFunc
-	{	NULL,	mainFrameStrings[0],	 70.0,	 50.0,	250.0,	40.0,	 6,	 1,	 7,	 7,	Func_LoadROM,			NULL }, // Load ROM
-	{	NULL,	mainFrameStrings[1],	 70.0,	110.0,	250.0,	40.0,	 0,	 2,	 8,	 8,	Func_LoadSave,			NULL }, // Load Save File
-	{	NULL,	mainFrameStrings[2],	 70.0,	170.0,	250.0,	40.0,	 1,	 3,	 9,	 9,	Func_SaveGame,			NULL }, // Save Game
-	{	NULL,	mainFrameStrings[3],	 70.0,	230.0,	250.0,	40.0,	 2,	 4,	10,	10,	Func_StateManage,		NULL }, // State Management
-	{	NULL,	mainFrameStrings[4],	 70.0,	290.0,	250.0,	40.0,	 3,	 5,	11,	11,	Func_SelectCPU,			NULL }, // Select CPU Core
-	{	NULL,	mainFrameStrings[5],	 70.0,	350.0,	250.0,	40.0,	 4,	 6,	12,	12,	Func_ShowCredits,		NULL }, // Show Credits
-	{	NULL,	mainFrameStrings[6],	 70.0,	410.0,	250.0,	40.0,	 5,	 0,	-1,	-1,	Func_StopDVD,			NULL }, // Stop/Swap DVD
-	{	NULL,	mainFrameStrings[7],	380.0,	 50.0,	250.0,	40.0,	12,	 8,	 0,	 0,	Func_DevFeatures,		NULL }, // Dev Features
-	{	NULL,	mainFrameStrings[8],	380.0,	110.0,	250.0,	40.0,	 7,	 9,	 1,	 1,	Func_ControllerPaks,	NULL }, // Controller Paks
-	{	NULL,	mainFrameStrings[9],	380.0,	170.0,	250.0,	40.0,	 8,	10,	 2,	 2,	Func_ToggleAudio,		NULL }, // Toggle Audio
-	{	NULL,	mainFrameStrings[11],	380.0,	230.0,	250.0,	40.0,	 9,	11,	 3,	 3,	Func_ExitToLoader,		NULL }, // Exit to Loader
-	{	NULL,	mainFrameStrings[12],	380.0,	290.0,	250.0,	40.0,	10,	12,	 4,	 4,	Func_RestartGame,		NULL }, // Restart Game
-	{	NULL,	mainFrameStrings[13],	380.0,	350.0,	250.0,	40.0,	11,	 7,	 5,	 5,	Func_PlayGame,			NULL }, // Play Game
+	{	NULL,	FRAME_STRINGS[0],	 45.0,	 50.0,	250.0,	40.0,	 6,	 1,	 7,	 7,	Func_LoadROM,			NULL }, // Load ROM
+	{	NULL,	FRAME_STRINGS[1],	 45.0,	110.0,	250.0,	40.0,	 0,	 2,	 8,	 8,	Func_LoadSave,			NULL }, // Load Save File
+	{	NULL,	FRAME_STRINGS[2],	 45.0,	170.0,	250.0,	40.0,	 1,	 3,	 9,	 9,	Func_SaveGame,			NULL }, // Save Game
+	{	NULL,	FRAME_STRINGS[3],	 45.0,	230.0,	250.0,	40.0,	 2,	 4,	10,	10,	Func_StateManage,		NULL }, // State Management
+	{	NULL,	FRAME_STRINGS[4],	 45.0,	290.0,	250.0,	40.0,	 3,	 5,	11,	11,	Func_SelectCPU,			NULL }, // Select CPU Core
+	{	NULL,	FRAME_STRINGS[5],	 45.0,	350.0,	250.0,	40.0,	 4,	 6,	12,	12,	Func_ShowCredits,		NULL }, // Show Credits
+	{	NULL,	FRAME_STRINGS[6],	 45.0,	410.0,	250.0,	40.0,	 5,	 0,	-1,	-1,	Func_StopDVD,			NULL }, // Stop/Swap DVD
+	{	NULL,	FRAME_STRINGS[7],	345.0,	 50.0,	250.0,	40.0,	12,	 8,	 0,	 0,	Func_DevFeatures,		NULL }, // Dev Features
+	{	NULL,	FRAME_STRINGS[8],	345.0,	110.0,	250.0,	40.0,	 7,	 9,	 1,	 1,	Func_ControllerPaks,	NULL }, // Controller Paks
+	{	NULL,	FRAME_STRINGS[9],	345.0,	170.0,	250.0,	40.0,	 8,	10,	 2,	 2,	Func_ToggleAudio,		NULL }, // Toggle Audio
+	{	NULL,	FRAME_STRINGS[11],	345.0,	230.0,	250.0,	40.0,	 9,	11,	 3,	 3,	Func_ExitToLoader,		NULL }, // Exit to Loader
+	{	NULL,	FRAME_STRINGS[12],	345.0,	290.0,	250.0,	40.0,	10,	12,	 4,	 4,	Func_RestartGame,		NULL }, // Restart Game
+	{	NULL,	FRAME_STRINGS[13],	345.0,	350.0,	250.0,	40.0,	11,	 7,	 5,	 5,	Func_PlayGame,			NULL }, // Play Game
 };
 
-MainFrame::MainFrame()/*(MenuContext *menuContext)
-		: menuContext(menuContext)*/
+MainFrame::MainFrame()
 {
-//	printf("MainFrame constructor\n");
-
 	buttonImage = new menu::Image(ButtonTexture, 16, 16, GX_TF_I8, GX_CLAMP, GX_CLAMP, GX_FALSE);
 	buttonFocusImage = new menu::Image(ButtonFocusTexture, 16, 16, GX_TF_I8, GX_CLAMP, GX_CLAMP, GX_FALSE);
 	for (int i = 0; i < NUM_MAIN_BUTTONS; i++)
-		mainFrameButtons[i].button = new menu::Button(buttonImage, &mainFrameButtons[i].buttonString, 
-										mainFrameButtons[i].x, mainFrameButtons[i].y, 
-										mainFrameButtons[i].width, mainFrameButtons[i].height);
+		FRAME_BUTTONS[i].button = new menu::Button(buttonImage, &FRAME_BUTTONS[i].buttonString, 
+										FRAME_BUTTONS[i].x, FRAME_BUTTONS[i].y, 
+										FRAME_BUTTONS[i].width, FRAME_BUTTONS[i].height);
 
 	for (int i = 0; i < NUM_MAIN_BUTTONS; i++)
 	{
-		mainFrameButtons[i].button->setFocusImage(buttonFocusImage);
-		if (mainFrameButtons[i].focusUp != -1) mainFrameButtons[i].button->setNextFocus(menu::Focus::DIRECTION_UP, mainFrameButtons[mainFrameButtons[i].focusUp].button);
-		if (mainFrameButtons[i].focusDown != -1) mainFrameButtons[i].button->setNextFocus(menu::Focus::DIRECTION_DOWN, mainFrameButtons[mainFrameButtons[i].focusDown].button);
-		if (mainFrameButtons[i].focusLeft != -1) mainFrameButtons[i].button->setNextFocus(menu::Focus::DIRECTION_LEFT, mainFrameButtons[mainFrameButtons[i].focusLeft].button);
-		if (mainFrameButtons[i].focusRight != -1) mainFrameButtons[i].button->setNextFocus(menu::Focus::DIRECTION_RIGHT, mainFrameButtons[mainFrameButtons[i].focusRight].button);
-		mainFrameButtons[i].button->setActive(true);
-		if (mainFrameButtons[i].clickedFunc) mainFrameButtons[i].button->setClicked(mainFrameButtons[i].clickedFunc);
-		if (mainFrameButtons[i].returnFunc) mainFrameButtons[i].button->setReturn(mainFrameButtons[i].returnFunc);
-		add(mainFrameButtons[i].button);
-		menu::Cursor::getInstance().addComponent(this, mainFrameButtons[i].button, mainFrameButtons[i].x, 
-												mainFrameButtons[i].x+mainFrameButtons[i].width, mainFrameButtons[i].y, 
-												mainFrameButtons[i].y+mainFrameButtons[i].height);
+		FRAME_BUTTONS[i].button->setFocusImage(buttonFocusImage);
+		if (FRAME_BUTTONS[i].focusUp != -1) FRAME_BUTTONS[i].button->setNextFocus(menu::Focus::DIRECTION_UP, FRAME_BUTTONS[FRAME_BUTTONS[i].focusUp].button);
+		if (FRAME_BUTTONS[i].focusDown != -1) FRAME_BUTTONS[i].button->setNextFocus(menu::Focus::DIRECTION_DOWN, FRAME_BUTTONS[FRAME_BUTTONS[i].focusDown].button);
+		if (FRAME_BUTTONS[i].focusLeft != -1) FRAME_BUTTONS[i].button->setNextFocus(menu::Focus::DIRECTION_LEFT, FRAME_BUTTONS[FRAME_BUTTONS[i].focusLeft].button);
+		if (FRAME_BUTTONS[i].focusRight != -1) FRAME_BUTTONS[i].button->setNextFocus(menu::Focus::DIRECTION_RIGHT, FRAME_BUTTONS[FRAME_BUTTONS[i].focusRight].button);
+		FRAME_BUTTONS[i].button->setActive(true);
+		if (FRAME_BUTTONS[i].clickedFunc) FRAME_BUTTONS[i].button->setClicked(FRAME_BUTTONS[i].clickedFunc);
+		if (FRAME_BUTTONS[i].returnFunc) FRAME_BUTTONS[i].button->setReturn(FRAME_BUTTONS[i].returnFunc);
+		add(FRAME_BUTTONS[i].button);
+		menu::Cursor::getInstance().addComponent(this, FRAME_BUTTONS[i].button, FRAME_BUTTONS[i].x, 
+												FRAME_BUTTONS[i].x+FRAME_BUTTONS[i].width, FRAME_BUTTONS[i].y, 
+												FRAME_BUTTONS[i].y+FRAME_BUTTONS[i].height);
 	}
-	setDefaultFocus(mainFrameButtons[0].button);
+	setDefaultFocus(FRAME_BUTTONS[0].button);
 	setEnabled(true);
 
 }
@@ -112,8 +113,8 @@ MainFrame::~MainFrame()
 {
 	for (int i = 0; i < NUM_MAIN_BUTTONS; i++)
 	{
-		menu::Cursor::getInstance().removeComponent(this, mainFrameButtons[i].button);
-		delete mainFrameButtons[i].button;
+		menu::Cursor::getInstance().removeComponent(this, FRAME_BUTTONS[i].button);
+		delete FRAME_BUTTONS[i].button;
 	}
 	delete buttonFocusImage;
 	delete buttonImage;
@@ -139,6 +140,7 @@ void Func_SaveGame()
 
 void Func_StateManage()
 {
+	menu::MessageBox::getInstance().setMessage("Save states not implemented");
 }
 
 void Func_SelectCPU()
@@ -148,6 +150,7 @@ void Func_SelectCPU()
 
 void Func_ShowCredits()
 {
+	menu::MessageBox::getInstance().setMessage("Credits not implemented");
 }
 
 extern int rom_length;
@@ -165,10 +168,12 @@ void Func_StopDVD()
 		#else
 			DI_StopMotor();
 		#endif
-			return; // "Motor stopped";
+			menu::MessageBox::getInstance().setMessage("Motor stopped");
+			return;
 		}
 		else 
-			return; // "Game still needs DVD";
+			menu::MessageBox::getInstance().setMessage("Game still needs DVD");
+			return;
 	}
 	#ifndef HW_RVL
 		dvd_motor_off();
@@ -177,7 +182,8 @@ void Func_StopDVD()
 		DI_StopMotor();
 	#endif
 	dvdInitialized = 0;
-//	return "Motor Stopped";
+	menu::MessageBox::getInstance().setMessage("Motor stopped");
+	return;
 
 /*	//TODO: Add Swap DVD functionality here?
 	static char* dvd_swap_func(){
@@ -199,6 +205,7 @@ void Func_DevFeatures()
 
 void Func_ControllerPaks()
 {
+	menu::MessageBox::getInstance().setMessage("Controller pak menu not implemented");
 }
 
 extern char  audioEnabled;
@@ -206,8 +213,8 @@ extern char  audioEnabled;
 void Func_ToggleAudio()
 {
 	audioEnabled ^= 1;
-	if (audioEnabled) mainFrameButtons[9].buttonString = mainFrameStrings[10];
-	else mainFrameButtons[9].buttonString = mainFrameStrings[9];
+	if (audioEnabled) FRAME_BUTTONS[9].buttonString = FRAME_STRINGS[10];
+	else FRAME_BUTTONS[9].buttonString = FRAME_STRINGS[9];
 }
 
 void Func_ExitToLoader()
@@ -230,11 +237,11 @@ void Func_RestartGame()
 	{
 		cpu_deinit();
 		cpu_init();
-//		return "Game restarted";
+		menu::MessageBox::getInstance().setMessage("Game restarted");
 	}
 	else	
 	{
-//		return "Please load a ROM first";
+		menu::MessageBox::getInstance().setMessage("Please load a ROM first");
 	}
 }
 
@@ -246,8 +253,11 @@ void go(void);
 
 void Func_PlayGame()
 {
-//	if(!hasLoadedROM) return "Please load a ROM first";
-	if(!hasLoadedROM) return;
+	if(!hasLoadedROM)
+	{
+		menu::MessageBox::getInstance().setMessage("Please load a ROM first");
+		return;
+	}
 	
 	resumeAudio();
 	resumeInput();

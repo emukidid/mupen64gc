@@ -11,8 +11,10 @@ public:
 	void updateFocus();
 	void addComponent(Component* component);
 	void removeComponent(Component* component);
+	Frame* getCurrentFrame();
 	void setCurrentFrame(Frame* frame);
 	void setFocusActive(bool active);
+	void clearInputData();
 	void clearPrimaryFocus();
 	enum FocusDirection
 	{
@@ -37,8 +39,8 @@ public:
 private:
 	Focus();
 	~Focus();
-	bool focusActive, pressed, frameSwitch;
-	int buttonsPressed;
+	bool focusActive, pressed, frameSwitch, clearInput;
+	int buttonsPressed, previousButtonsPressed;
 	u32 previousButtonsWii[4];
 	u16 previousButtonsGC[4];
 	ComponentList focusList;

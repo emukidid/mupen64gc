@@ -14,6 +14,8 @@ public:
 	void addComponent(Frame* frame, Component* component, float x1, float x2, float y1, float y2);
 	void removeComponent(Frame* frame, Component* component);
 	void setCurrentFrame(Frame* frame);
+	Frame* getCurrentFrame();
+	void clearInputData();
 	static Cursor& getInstance()
 	{
 		static Cursor obj;
@@ -37,8 +39,8 @@ private:
 	Image *pointerImage, *grabImage;
 	float cursorX, cursorY, cursorRot, imageCenterX, imageCenterY;
 	Component *foundComponent, *hoverOverComponent;
-	bool pressed;
-	int buttonsPressed, activeChan;
+	bool pressed, clearInput;
+	int buttonsPressed, previousButtonsPressed[4], activeChan;
 
 };
 

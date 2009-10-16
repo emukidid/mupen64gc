@@ -4,6 +4,7 @@
 #include "../libgui/resources.h"
 #include "../libgui/FocusManager.h"
 #include "../libgui/CursorManager.h"
+#include "../libgui/MessageBox.h"
 
 
 extern "C" {
@@ -54,11 +55,8 @@ struct ButtonInfo
 	{	NULL,	FRAME_STRINGS[3],	150.0,	350.0,	340.0,	40.0,	 2,	 0,	-1,	-1,	Func_LoadSaveWiiFS,	Func_ReturnFromLoadSaveFrame }, // Load From Wii FS
 };
 
-LoadSaveFrame::LoadSaveFrame()/*(MenuContext *menuContext)
-		: menuContext(menuContext)*/
+LoadSaveFrame::LoadSaveFrame()
 {
-//	printf("MainFrame constructor\n");
-
 	buttonImage = new menu::Image(ButtonTexture, 16, 16, GX_TF_I8, GX_CLAMP, GX_CLAMP, GX_FALSE);
 	buttonFocusImage = new menu::Image(ButtonFocusTexture, 16, 16, GX_TF_I8, GX_CLAMP, GX_CLAMP, GX_FALSE);
 	for (int i = 0; i < NUM_FRAME_BUTTONS; i++)
@@ -102,7 +100,11 @@ extern BOOL hasLoadedROM;
 
 void Func_LoadSaveCardA()
 {
-	if(!hasLoadedROM) return; // "Please load a ROM first";
+	if(!hasLoadedROM)
+	{
+		menu::MessageBox::getInstance().setMessage("Please load a ROM first");
+		return;
+	}
 	// Adjust saveFile pointers
 //	saveFile_dir = (item_num%2) ? &saveDir_CARD_SlotB : &saveDir_CARD_SlotA;
 	saveFile_dir	   = &saveDir_CARD_SlotA;
@@ -120,12 +122,17 @@ void Func_LoadSaveCardA()
 	result += loadFlashram(saveFile_dir);
 	saveFile_deinit(saveFile_dir);
 	
-//	return result ? "Loaded save from memcard" : "No saves found on memcard";
+	if (result)	menu::MessageBox::getInstance().setMessage("Loaded save from memcard in slot A");
+	else		menu::MessageBox::getInstance().setMessage("No saves found on memcard");
 }
 
 void Func_LoadSaveCardB()
 {
-	if(!hasLoadedROM) return; // "Please load a ROM first";
+	if(!hasLoadedROM)
+	{
+		menu::MessageBox::getInstance().setMessage("Please load a ROM first");
+		return;
+	}
 	// Adjust saveFile pointers
 //	saveFile_dir = (item_num%2) ? &saveDir_CARD_SlotB : &saveDir_CARD_SlotA;
 	saveFile_dir	   = &saveDir_CARD_SlotB;
@@ -143,12 +150,17 @@ void Func_LoadSaveCardB()
 	result += loadFlashram(saveFile_dir);
 	saveFile_deinit(saveFile_dir);
 	
-//	return result ? "Loaded save from memcard" : "No saves found on memcard";
+	if (result)	menu::MessageBox::getInstance().setMessage("Loaded save from memcard in slot B");
+	else		menu::MessageBox::getInstance().setMessage("No saves found on memcard");
 }
 
 void Func_LoadSaveSD()
 {
-	if(!hasLoadedROM) return; // "Please load a ROM first";
+	if(!hasLoadedROM)
+	{
+		menu::MessageBox::getInstance().setMessage("Please load a ROM first");
+		return;
+	}
 	// Adjust saveFile pointers
 	saveFile_dir = &saveDir_libfat_Default;
 	saveFile_readFile  = fileBrowser_libfat_readFile;
@@ -163,13 +175,18 @@ void Func_LoadSaveSD()
 	result += loadMempak(saveFile_dir);
 	result += loadFlashram(saveFile_dir);
 		
-//	return result ? "Loaded save from SD card" : "No saves found on SD card";
+	if (result)	menu::MessageBox::getInstance().setMessage("Loaded save from SD card");
+	else		menu::MessageBox::getInstance().setMessage("No saves found on SD card");
 }
 
 void Func_LoadSaveWiiFS()
 {
 #ifdef WII
-	if(!hasLoadedROM) return; // "Please load a ROM first";
+	if(!hasLoadedROM) return;
+	{
+		menu::MessageBox::getInstance().setMessage("Please load a ROM first");
+		return;
+	}
 	// Adjust saveFile pointers
 	saveFile_dir       = &saveDir_WiiFS;
 	saveFile_readFile  = fileBrowser_WiiFS_readFile;
@@ -186,7 +203,8 @@ void Func_LoadSaveWiiFS()
 	result += loadFlashram(saveFile_dir);
 	saveFile_deinit(saveFile_dir);
 		
-//	return result ? "Loaded save from filesystem" : "No saves found on filesystem";
+	if (result)	menu::MessageBox::getInstance().setMessage("Loaded save from Wii filesystem");
+	else		menu::MessageBox::getInstance().setMessage("No saves found on Wii filesystem");
 #endif
 }
 

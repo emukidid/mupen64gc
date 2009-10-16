@@ -68,11 +68,8 @@ struct ButtonInfo
 	{	NULL,	FRAME_STRINGS[2],	120.0,	400.0,	400.0,	35.0,	10,	 2,	 0,	 1,	Func_Select10,	Func_ReturnFromFileBrowserFrame }, // File Button 10
 };
 
-FileBrowserFrame::FileBrowserFrame()/*(MenuContext *menuContext)
-		: menuContext(menuContext)*/
+FileBrowserFrame::FileBrowserFrame()
 {
-//	printf("MainFrame constructor\n");
-
 	buttonImage = new menu::Image(ButtonTexture, 16, 16, GX_TF_I8, GX_CLAMP, GX_CLAMP, GX_FALSE);
 	buttonFocusImage = new menu::Image(ButtonFocusTexture, 16, 16, GX_TF_I8, GX_CLAMP, GX_CLAMP, GX_FALSE);
 	for (int i = 0; i < NUM_FRAME_BUTTONS; i++)

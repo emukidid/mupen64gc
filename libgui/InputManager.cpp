@@ -1,4 +1,6 @@
 #include "InputManager.h"
+#include "FocusManager.h"
+#include "CursorManager.h"
 
 namespace menu {
 
@@ -34,6 +36,12 @@ WPADData* Input::getWpad()
 PADStatus* Input::getPad()
 {
 	return gcPad;
+}
+
+void Input::clearInputData()
+{
+	Focus::getInstance().clearInputData();
+	Cursor::getInstance().clearInputData();
 }
 
 } //namespace menu 
