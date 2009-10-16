@@ -1093,11 +1093,11 @@ void TextureCache_LoadBackground( CachedTexture *texInfo )
 		scaledDest = (u32*)malloc( texInfo->textureBytes );
 
 		if (glInternalFormat == GL_RGBA8)
-			_2xSaI8888( (u32*)dest, (u32*)scaledDest, texInfo->realWidth, texInfo->realHeight, texInfo->clampS, texInfo->clampT );
+			_2xSaI( (Color8888*)dest, (Color8888*)scaledDest, texInfo->realWidth, texInfo->realHeight, texInfo->clampS, texInfo->clampT );
 		else if (glInternalFormat == GL_RGBA4)
-			_2xSaI4444( (u16*)dest, (u16*)scaledDest, texInfo->realWidth, texInfo->realHeight, texInfo->clampS, texInfo->clampT );
+			_2xSaI( (Color4444*)dest, (Color4444*)scaledDest, texInfo->realWidth, texInfo->realHeight, texInfo->clampS, texInfo->clampT );
 		else
-			_2xSaI5551( (u16*)dest, (u16*)scaledDest, texInfo->realWidth, texInfo->realHeight, texInfo->clampS, texInfo->clampT );
+			_2xSaI( (Color5551*)dest, (Color5551*)scaledDest, texInfo->realWidth, texInfo->realHeight, texInfo->clampS, texInfo->clampT );
 
 		glTexImage2D( GL_TEXTURE_2D, 0, glInternalFormat, texInfo->realWidth << 1, texInfo->realHeight << 1, 0, GL_RGBA, glType, scaledDest );
 
@@ -1394,11 +1394,11 @@ void TextureCache_Load( CachedTexture *texInfo )
 		scaledDest = (u32*)malloc( texInfo->textureBytes );
 
 		if (glInternalFormat == GL_RGBA8)
-			_2xSaI8888( (u32*)dest, (u32*)scaledDest, texInfo->realWidth, texInfo->realHeight, 1, 1 );//texInfo->clampS, texInfo->clampT );
+			_2xSaI( (Color8888*)dest, (Color8888*)scaledDest, texInfo->realWidth, texInfo->realHeight, 1, 1 );//texInfo->clampS, texInfo->clampT );
 		else if (glInternalFormat == GL_RGBA4)
-			_2xSaI4444( (u16*)dest, (u16*)scaledDest, texInfo->realWidth, texInfo->realHeight, 1, 1 );//texInfo->clampS, texInfo->clampT );
+			_2xSaI( (Color4444*)dest, (Color4444*)scaledDest, texInfo->realWidth, texInfo->realHeight, 1, 1 );//texInfo->clampS, texInfo->clampT );
 		else
-			_2xSaI5551( (u16*)dest, (u16*)scaledDest, texInfo->realWidth, texInfo->realHeight, 1, 1 );//texInfo->clampS, texInfo->clampT );
+			_2xSaI( (Color5551*)dest, (Color5551*)scaledDest, texInfo->realWidth, texInfo->realHeight, 1, 1 );//texInfo->clampS, texInfo->clampT );
 
 		glTexImage2D( GL_TEXTURE_2D, 0, glInternalFormat, texInfo->realWidth << 1, texInfo->realHeight << 1, 0, GL_RGBA, glType, scaledDest );
 
