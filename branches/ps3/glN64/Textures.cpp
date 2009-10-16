@@ -1088,16 +1088,26 @@ void TextureCache_LoadBackground( CachedTexture *texInfo )
 #ifndef __GX__
 	if (cache.enable2xSaI)
 	{
+		static Interpolator8888 i8888;
+		static Interpolator4444 i4444;
+		static Interpolator5551 i5551;
+		
 		texInfo->textureBytes <<= 2;
 
 		scaledDest = (u32*)malloc( texInfo->textureBytes );
 
+		Interpolator* interpolator;
 		if (glInternalFormat == GL_RGBA8)
-			_2xSaI( (Color8888*)dest, (Color8888*)scaledDest, texInfo->realWidth, texInfo->realHeight, texInfo->clampS, texInfo->clampT );
+			interpolator = &i8888;
 		else if (glInternalFormat == GL_RGBA4)
-			_2xSaI( (Color4444*)dest, (Color4444*)scaledDest, texInfo->realWidth, texInfo->realHeight, texInfo->clampS, texInfo->clampT );
+			interpolator = &i4444;
 		else
-			_2xSaI( (Color5551*)dest, (Color5551*)scaledDest, texInfo->realWidth, texInfo->realHeight, texInfo->clampS, texInfo->clampT );
+			interpolator = &i5551;
+		
+		_2xSaI( dest, scaledDest,
+		        texInfo->realWidth, texInfo->realHeight,
+		        texInfo->clampS, texInfo->clampT,
+		        interpolator );
 
 		glTexImage2D( GL_TEXTURE_2D, 0, glInternalFormat, texInfo->realWidth << 1, texInfo->realHeight << 1, 0, GL_RGBA, glType, scaledDest );
 
@@ -1389,16 +1399,26 @@ void TextureCache_Load( CachedTexture *texInfo )
 #ifndef __GX__
 	if (cache.enable2xSaI)
 	{
+		static Interpolator8888 i8888;
+		static Interpolator4444 i4444;
+		static Interpolator5551 i5551;
+		
 		texInfo->textureBytes <<= 2;
 
 		scaledDest = (u32*)malloc( texInfo->textureBytes );
 
+		Interpolator* interpolator;
 		if (glInternalFormat == GL_RGBA8)
-			_2xSaI( (Color8888*)dest, (Color8888*)scaledDest, texInfo->realWidth, texInfo->realHeight, 1, 1 );//texInfo->clampS, texInfo->clampT );
+			interpolator = &i8888;
 		else if (glInternalFormat == GL_RGBA4)
-			_2xSaI( (Color4444*)dest, (Color4444*)scaledDest, texInfo->realWidth, texInfo->realHeight, 1, 1 );//texInfo->clampS, texInfo->clampT );
+			interpolator = &i4444;
 		else
-			_2xSaI( (Color5551*)dest, (Color5551*)scaledDest, texInfo->realWidth, texInfo->realHeight, 1, 1 );//texInfo->clampS, texInfo->clampT );
+			interpolator = &i5551;
+		
+		_2xSaI( dest, scaledDest,
+		        texInfo->realWidth, texInfo->realHeight,
+		        1, 1,
+		        interpolator );
 
 		glTexImage2D( GL_TEXTURE_2D, 0, glInternalFormat, texInfo->realWidth << 1, texInfo->realHeight << 1, 0, GL_RGBA, glType, scaledDest );
 
