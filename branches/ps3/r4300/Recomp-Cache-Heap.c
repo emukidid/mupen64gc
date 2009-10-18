@@ -166,7 +166,7 @@ void RecompCache_Alloc(unsigned int size, unsigned int address, PowerPC_func* fu
 	newBlock->size = size;
 	newBlock->func = func;
 	
-	int num_instrs = func->end_addr - func->start_addr;
+	int num_instrs = (func->end_addr ? func->end_addr : 0x10000) - func->start_addr;
 	if(cacheSize + size + num_instrs * sizeof(void*) > RECOMP_CACHE_SIZE)
 		// Free up at least enough space for it to fit
 		release(cacheSize + size + num_instrs * sizeof(void*) - RECOMP_CACHE_SIZE);
@@ -175,6 +175,7 @@ void RecompCache_Alloc(unsigned int size, unsigned int address, PowerPC_func* fu
 	cacheSize += size;
 	newBlock->func->code = malloc(size);
 	newBlock->func->code_addr = malloc(num_instrs * sizeof(void*));
+	memset(newBlock->func->code_addr, 0, num_instrs * sizeof(void*));
 	// Add it to the heap
 	heapPush(newBlock);
 	// Make this function the LRU
