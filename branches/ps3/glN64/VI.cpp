@@ -22,9 +22,9 @@
 
 VIInfo VI;
 
+#ifdef __GX__
 extern GXRModeObj *vmode;
 
-#ifdef __GX__
 char printToScreen;
 char showFPSonScreen;
 

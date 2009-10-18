@@ -135,6 +135,7 @@ EXPORT void CALL GetKeys(int Control, BUTTONS * Keys )
 {
    if (Control == 0)
      Keys->Value = b.Value;
+   if(b.A_BUTTON) printf("Getting A button pressed\n");
 }
 
 /******************************************************************
@@ -262,6 +263,7 @@ EXPORT void CALL WM_KeyDown( WPARAM wParam, LPARAM lParam )
 	b.B_BUTTON = 1;
 	break;
       case SDLK_w:
+	printf("SDLK_w pressed\n");
 	b.A_BUTTON = 1;
 	break;
       case SDLK_PAGEDOWN:
@@ -342,6 +344,7 @@ EXPORT void CALL WM_KeyUp( WPARAM wParam, LPARAM lParam )
 	b.B_BUTTON = 0;
 	break;
       case SDLK_w:
+	printf("SDLK_w up\n");
 	b.A_BUTTON = 0;
 	break;
       case SDLK_PAGEDOWN:

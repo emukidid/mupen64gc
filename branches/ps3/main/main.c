@@ -62,7 +62,7 @@
 #include <signal.h>
 #endif
 
-#define stop_it() exit(0)
+#define stop_it() stop = 1
 
 int autoinc_slot = 0;
 int *autoinc_save_slot = &autoinc_slot;
@@ -680,7 +680,7 @@ int main (int argc, char *argv[])
    romOpen_input();
    // ------------------------------------------------------------
    SDL_SetEventFilter(filter);
-   
+
    if(p_fullscreen)
      changeWindow();
    
