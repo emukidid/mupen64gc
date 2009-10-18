@@ -75,7 +75,7 @@ typedef union {
 
 		signed   X_AXIS       : 8;
 	};
-} BUTTONS;
+} __attribute__((packed)) BUTTONS;
 
 typedef struct {
 	HWND hMainWindow;

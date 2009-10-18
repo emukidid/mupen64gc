@@ -925,7 +925,11 @@ void TextureCache_LoadBackground( CachedTexture *texInfo )
 	bpl = gSP.bgImage.width << gSP.bgImage.size >> 1;
 	numBytes = bpl * gSP.bgImage.height;
 	swapped = (u8*)malloc( numBytes );
+#ifndef _BIG_ENDIAN
 	UnswapCopy( &RDRAM[gSP.bgImage.address], swapped, numBytes );
+#else // !_BIG_ENDIAN
+	memcpy( swapped, &RDRAM[gSP.bgImage.address], numBytes );
+#endif // _BIG_ENDIAN
 	dest = (u32*)malloc( texInfo->textureBytes );
 
 	clampSClamp = texInfo->width - 1;
@@ -1111,6 +1115,7 @@ void TextureCache_LoadBackground( CachedTexture *texInfo )
 
 		glTexImage2D( GL_TEXTURE_2D, 0, glInternalFormat, texInfo->realWidth << 1, texInfo->realHeight << 1, 0, GL_RGBA, glType, scaledDest );
 
+		free( swapped );
 		free( dest );
 		free( scaledDest );
 	}
@@ -1118,6 +1123,7 @@ void TextureCache_LoadBackground( CachedTexture *texInfo )
 	{
 		glTexImage2D( GL_TEXTURE_2D, 0, glInternalFormat, texInfo->realWidth, texInfo->realHeight, 0, GL_RGBA, glType, dest );
 
+		free (swapped );
 		free( dest );
 	}
 #else // !__GX__

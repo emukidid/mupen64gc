@@ -2511,12 +2511,4 @@ void prefetch_opcode(unsigned long instr)
    src = instr;
    op = instr;
    recomp_ops[((src >> 26) & 0x3F)]();
-   
-#if 0
-   // Relocated because this is not the appropriate place
-   if(dynacore){
-      update_count();
-      if(next_interupt <= Count) gen_interupt();
-   }
-#endif
 }

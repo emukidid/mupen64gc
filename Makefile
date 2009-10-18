@@ -4,7 +4,7 @@ CC		=gcc
 CXX		=g++
 
 #CFLAGS		=-DX86 -O3 -mpentium -Wall -DEMU64_DEBUG
-CFLAGS		=-g -fPIC -ffast-math -fno-strict-aliasing -Wall -pipe -DPPC_DYNAREC
+CFLAGS		=-g -fPIC -ffast-math -fno-strict-aliasing -Wall -pipe -DPPC_DYNAREC -DUSE_RECOMP_CACHE #-DCOMPARE_CORE
 #CFLAGS		=-DX86 -O3 -mcpu=pentium -Wall -g -pg
 #CFLAGS		=-DX86 -Wall -pipe -g3 -DEMU64_DEBUG
 #CFLAGS		=-DX86 -Wall -pipe -g -DEMU64_DEBUG -DCOMPARE_CORE
@@ -45,11 +45,13 @@ OBJ		=main/rom.o \
 		main/savestates.o \
 		r4300/profile.o \
 		main/adler32.o \
-#		r4300/compare_core.o
+		r4300/compare_core.o \
+		r4300/Recomp-Cache-Heap.o
 
 OBJ_PPC		=r4300/ppc/MIPS-to-PPC.o \
 		r4300/ppc/Recompile.o \
-		r4300/ppc/Wrappers.o
+		r4300/ppc/Wrappers.o \
+		r4300/ppc/Register-Cache.o
 
 OBJ_X86         =r4300/x86/gr4300.o \
 		r4300/x86/gcop0.o \
@@ -173,7 +175,7 @@ endif
 PREFIX		=$(shell grep WITH_HOME config.h | cut -d '"' -f 2)
 SHARE		="$(PREFIX)share/mupen64/"
 
-PLUGINS		=plugins/mupen64_input.so plugins/blight_input.so plugins/mupen64_hle_rsp_azimer.so plugins/dummyaudio.so plugins/mupen64_audio.so plugins/jttl_audio.so plugins/mupen64_soft_gfx.so plugins/glN64.so
+PLUGINS		=plugins/mupen64_input.so plugins/blight_input.so plugins/mupen64_hle_rsp_azimer.so plugins/dummyaudio.so plugins/mupen64_audio.so plugins/jttl_audio.so plugins/mupen64_soft_gfx.so 
 
 all:	mupen64 mupen64_nogui $(PLUGINS)
 

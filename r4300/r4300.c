@@ -37,6 +37,7 @@
 #include "macros.h"
 #include "recomp.h"
 #include "recomph.h"
+#include "Recomp-Cache.h"
 
 #ifdef DBG
 extern int debugger_mode;
@@ -1354,7 +1355,7 @@ void NOTCOMPILED()
 {
    if ((PC->addr>>16) == 0xa400){
 #ifdef PPC_DYNAREC
-     recompile_block(blocks[0xa4000000>>12]);
+     //recompile_block(blocks[0xa4000000>>12], PC->addr);
 #else
      recompile_block(SP_DMEM, blocks[0xa4000000>>12], PC->addr);
 #endif
@@ -1371,19 +1372,20 @@ void NOTCOMPILED()
 		  //printf("not compiled rom:%x\n", paddr);
 #ifdef PPC_DYNAREC
 		  // FIXME: We need to read from the romcache into a buffer and recompile the buffer
-		  recompile_block(blocks[PC->addr>>12]);
+		  //recompile_block(blocks[PC->addr>>12]);
 #else
 		  recompile_block((unsigned long*)rom+((((paddr-(PC->addr-blocks[PC->addr>>12]->start)) & 0x1FFFFFFF) - 0x10000000)>>2),
 				  blocks[PC->addr>>12], PC->addr);
 #endif
 	       }
-	     else
+	     else {
 #ifdef PPC_DYNAREC
-		recompile_block(blocks[PC->addr>>12]);
+		//recompile_block(blocks[PC->addr>>12]);
 #else
 	       recompile_block(rdram+(((paddr-(PC->addr-blocks[PC->addr>>12]->start)) & 0x1FFFFFFF)>>2),
 			       blocks[PC->addr>>12], PC->addr);
 #endif
+		}
 	  }
 	else printf("not compiled exception\n");
      }
@@ -1461,6 +1463,9 @@ inline void jump_to_func()
 	init_block(rdram+(((paddr-(addr-blocks[addr>>12]->start)) & 0x1FFFFFFF)>>2),
 		   blocks[addr>>12]);
      }
+#ifdef USE_RECOMP_CACHE
+	else RecompCache_Update(addr>>12);
+#endif
    PC=actual->block+((addr-actual->start)>>2);
 
    //if (dynacore) dyna_jump();
@@ -1479,34 +1484,34 @@ int check_cop1_unusable()
    return 0;
 }
 
-#ifdef PPC_DYNAREC
-unsigned int instructionCount;
-#endif
 
 void update_count()
 {
-   if (interpcore)
+   if (dynacore || interpcore)
      {
+        /*if(Count >= 0xf98000)
+	  printf("Tracing at %08x (last_addr: %08x, Count: %x)\n", interp_addr, last_addr, Count);*/
+		if(interp_addr < last_addr){
+			printf("interp_addr (%08x) < last_addr (%08x)\n", interp_addr, last_addr);
+		}
 	Count = Count + (interp_addr - last_addr)/2;
 	last_addr = interp_addr;
      }
    else
      {
-#ifdef PPC_DYNAREC
-	Count += instructionCount * 2;
-	last_addr = interp_addr;
-#else	
 	if (PC->addr < last_addr)
 	  {
 	     printf("PC->addr < last_addr\n");
 	  }
 	Count = Count + (PC->addr - last_addr)/2;
 	last_addr = PC->addr;
-#endif
      }
 #ifdef COMPARE_CORE
-   if (delay_slot)
+   if (delay_slot){
+     if(interp_addr&0xffff0000 == 0x800c0000)
+     	printf("compare_core @ %08x - %08x\n", interp_addr, last_addr);
      compare_core();
+   }
 #endif
 #ifdef DBG
    if (debugger_mode) update_debugger();
@@ -1532,11 +1537,11 @@ void init_blocks()
 #else
    blocks[0xa4000000>>12] = malloc(sizeof(PowerPC_block));
    //blocks[0xa4000000>>12]->code_addr = NULL;
-   blocks[0xa4000000>>12]->code = NULL;
+   blocks[0xa4000000>>12]->funcs = NULL;
    blocks[0xa4000000>>12]->start_address = 0xa4000000;
    blocks[0xa4000000>>12]->end_address = 0xa4001000;
 #endif
-   invalid_code[0xa4000000>>12] = 1;
+   invalid_code[0xa4000000>>12] = 0;
    actual=blocks[0xa4000000>>12];
    init_block(SP_DMEM, blocks[0xa4000000>>12]);
 #ifdef PPC_DYNAREC
@@ -1849,7 +1854,7 @@ void go()
 	dynacore = 1;
 	printf("dynamic recompiler\n");
 	init_blocks();
-	#ifdef PPC_DYNAREC
+#ifdef PPC_DYNAREC
 	//jump_to(0xa4000040);
 	dynarec(0xa4000040);
 	//_break();
@@ -1886,7 +1891,11 @@ void go()
 		     deinit_block(blocks[i]);
 #else
 		     if (blocks[i]->block) {
-			free(blocks[i]->block);
+#ifdef USE_RECOMP_CACHE
+				invalidate_block(blocks[i]);
+#else
+				free(blocks[i]->block);
+#endif
 			blocks[i]->block = NULL;
 		     }
 		     if (blocks[i]->code) {
