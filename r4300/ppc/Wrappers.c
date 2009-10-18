@@ -105,15 +105,16 @@ void dynarec(unsigned int address){
 #endif
 		}
 
-		PowerPC_func* func = dst_block->funcs->function;
-		assert((address&0xFFFF) >= func->start_addr &&
-			   ((address&0xFFFF) < func->end_addr ||
-			    func->end_addr == 0));
-		int index = ((address&0xFFFF) - func->start_addr)>>2;
+		for(fn = dst_block->funcs; fn != NULL; fn = fn->next)
+			if((address&0xFFFF) >= fn->function->start_addr &&
+			   ((address&0xFFFF) < fn->function->end_addr ||
+			    fn->function->end_addr == 0)) break;
+		assert(fn);
+		int index = ((address&0xFFFF) - fn->function->start_addr)>>2;
 
 		// Recompute the block offset
 		unsigned int (*code)(void);
-		code = (unsigned int (*)(void))func->code_addr[index];
+		code = (unsigned int (*)(void))fn->function->code_addr[index];
 		address = dyna_run(code);
 
 		if(!noCheckInterrupt){
