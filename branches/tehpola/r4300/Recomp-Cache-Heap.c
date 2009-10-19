@@ -174,8 +174,8 @@ void RecompCache_Alloc(unsigned int size, unsigned int address, PowerPC_func* fu
 		release(size);
 		code = __lwp_heap_allocate(cache, size);
 	}
-	int num_instrs = (func->end_addr ? func->end_addr : 0x10000) -
-                     func->start_addr;
+	int num_instrs = ((func->end_addr ? func->end_addr : 0x10000) -
+                      func->start_addr) >> 2;
 	void* code_addr = __lwp_heap_allocate(cache, num_instrs * sizeof(void*));
 	while(!code){
 		release(num_instrs * sizeof(void*));
@@ -185,7 +185,7 @@ void RecompCache_Alloc(unsigned int size, unsigned int address, PowerPC_func* fu
 	cacheSize += size;
 	newBlock->func->code = code;
 	newBlock->func->code_addr = code_addr;
-	memset(newBlock->func->code_addr, 0, num_instrs * sizeof(void*));
+	memset(code_addr, 0, num_instrs * sizeof(void*));
 	// Add it to the heap
 	heapPush(newBlock);
 	// Make this function the LRU
