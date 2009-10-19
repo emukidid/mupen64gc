@@ -54,6 +54,8 @@ void ROMCache_deinit(){
 }
 
 void ROMCache_load_block(char* dst, u32 rom_offset){
+  if((hasLoadedROM) && (!stop))
+    pauseAudio();
 	romFile_seekFile(ROMFile, rom_offset, FILE_BROWSER_SEEK_SET);
 	
 	u32 offset = 0, bytes_read, loads_til_update = 0;
@@ -68,6 +70,8 @@ void ROMCache_load_block(char* dst, u32 rom_offset){
 		}
 	}
 	showLoadProgress( 1.0f );
+	if((hasLoadedROM) && (!stop))
+	  resumeAudio();
 }
 
 void ROMCache_read(u32* dest, u32 offset, u32 length){
@@ -89,10 +93,10 @@ void ROMCache_read(u32* dest, u32 offset, u32 length){
 			if(!ROMBlocks[block]){
 				// The block we're trying to read isn't in the cache
 				// Find the Least Recently Used Block
-				int i, max_i = 0;
+				int i, max_i = 0, max_lru = 0;
 				for(i=0; i<64; ++i)
-					if(ROMBlocks[i] && ROMBlocksLRU[i] > ROMBlocksLRU[max_i])
-						max_i = i;
+					if(ROMBlocks[i] && ROMBlocksLRU[i] > max_lru)
+						max_i = i, max_lru = ROMBlocksLRU[i];
 				ROMBlocks[block] = ROMBlocks[max_i]; // Take its place
 				ROMCache_load_block(ROMBlocks[block], offset&0xFFF00000);
 				ROMBlocks[max_i] = 0; // Evict the LRU block
