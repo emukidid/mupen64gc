@@ -130,7 +130,7 @@ static inline void update_lru(PowerPC_func* func){
 	if(!nextLRU){
 		// Handle nextLRU overflows
 		// By heap-sorting and assigning new LRUs
-		//heapify();
+		heapify();
 		// Since you can't do an in-place min-heap ascending-sort
 		//   I have to create a new heap
 		CacheMetaNode** newHeap = malloc(maxHeapSize * sizeof(CacheMetaNode*));
@@ -150,7 +150,7 @@ static void release(int minNeeded){
 	// Frees alloc'ed blocks so that at least minNeeded bytes are available
 	int toFree = minNeeded * 2; // Free 2x what is needed
 	// Restore the heap properties to pop the LRU
-	//heapify();
+	heapify();
 	// Release nodes' memory until we've freed enough
 	while(toFree > 0 && cacheSize){
 		// Pop the LRU to be freed

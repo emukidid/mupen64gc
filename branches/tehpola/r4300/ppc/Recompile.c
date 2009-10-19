@@ -286,6 +286,7 @@ void init_block(MIPS_instr* mips_code, PowerPC_block* ppc_block){
 }
 
 void deinit_block(PowerPC_block* ppc_block){
+	invalidate_block(ppc_block);
 	/*if(ppc_block->code_addr){
 		invalidate_block(ppc_block);
 		free(ppc_block->code_addr);
@@ -538,6 +539,7 @@ void invalidate_block(PowerPC_block* ppc_block){
 		RecompCache_Free(ppc_block->start_address | n->function->start_addr);
 #else
 		free(n->function->code);
+		free(n->function->code_addr);
 		free(n->function);
 		free(n);
 #endif
