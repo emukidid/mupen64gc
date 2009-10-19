@@ -24,7 +24,7 @@ static void genCallInterp(MIPS_instr);
 #define JUMPTO_OFF_SIZE  3
 #define JUMPTO_ADDR_SIZE 3
 static void genJumpTo(unsigned int loc, unsigned int type);
-static void genUpdateCount(void);
+static void genUpdateCount(int checkCount);
 static void genCheckFP(void);
 void genCallDynaMem(memType type, int base, short immed);
 static int inline mips_is_jump(MIPS_instr);
@@ -155,7 +155,7 @@ static int branch(int offset, condition cond, int link, int likely){
 
 	if(likely) set_jump_special(likely_id, delaySlot+1);
 
-	genUpdateCount(); // Sets cr2 to (next_interupt ? Count)
+	genUpdateCount(1); // Sets cr2 to (next_interupt ? Count)
 
 #ifndef INTERPRET_BRANCH
 	// If we're jumping out, we need to trampoline using genJumpTo
@@ -280,7 +280,8 @@ static int J(MIPS_instr mips){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 
-	genUpdateCount(); // Sets cr2 to (next_interupt ? Count)
+	// Sets cr2 to (next_interupt ? Count) if we're not jumping out
+	genUpdateCount(!is_j_out(MIPS_GET_LI(mips), 1));
 
 #ifdef INTERPRET_J
 	genJumpTo(MIPS_GET_LI(mips), JUMPTO_ADDR);
@@ -336,7 +337,8 @@ static int JAL(MIPS_instr mips){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 
-	genUpdateCount(); // Sets cr2 to (next_interupt ? Count)
+	// Sets cr2 to (next_interupt ? Count) if we're not jumping out
+	genUpdateCount(!is_j_out(MIPS_GET_LI(mips), 1));
 
 	// Set LR to next instruction
 	int lr = mapRegisterNew(MIPS_REG_LR);
@@ -1583,7 +1585,7 @@ static int JR(MIPS_instr mips){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 
-	genUpdateCount();
+	genUpdateCount(0);
 
 #ifdef INTERPRET_JR
 	genJumpTo(MIPS_GET_RS(mips), JUMPTO_REG);
@@ -1618,7 +1620,7 @@ static int JALR(MIPS_instr mips){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 
-	genUpdateCount();
+	genUpdateCount(0);
 
 	// Set LR to next instruction
 	int rd = mapRegisterNew(MIPS_GET_RD(mips));
@@ -2529,7 +2531,7 @@ static int ERET(MIPS_instr mips){
 	
 	flushRegisters();
 	
-	genUpdateCount();
+	genUpdateCount(0);
 	// Load Status
 	GEN_LWZ(ppc, 3, 12*4, DYNAREG_COP0);
 	set_next_dst(ppc);
@@ -4024,7 +4026,7 @@ static void genJumpTo(unsigned int loc, unsigned int type){
 }
 
 // Updates Count, and sets cr2 to (next_interupt ? Count)
-static void genUpdateCount(void){
+static void genUpdateCount(int checkCount){
 	PowerPC_instr ppc = NEW_PPC_INSTR();
 #if 1
 	// Dynarec inlined code equivalent:
@@ -4053,15 +4055,19 @@ static void genUpdateCount(void){
 	// add    r0,  r0, tmp           // r0 += Count
 	GEN_ADD(ppc, 0, 0, tmp);
 	set_next_dst(ppc);
-	// lwz    tmp, 0(&next_interupt) // tmp = next_interupt
-	GEN_LWZ(ppc, tmp, 0, DYNAREG_NINTR);
-	set_next_dst(ppc);
+	if(checkCount){
+		// lwz    tmp, 0(&next_interupt) // tmp = next_interupt
+		GEN_LWZ(ppc, tmp, 0, DYNAREG_NINTR);
+		set_next_dst(ppc);
+	}
 	// stw    r0,  9*4(reg_cop0)    // Count = r0
 	GEN_STW(ppc, 0, 9*4, DYNAREG_COP0);
 	set_next_dst(ppc);
-	// cmpl   cr2,  tmp, r0         // cr2 = next_interupt ? Count
-	GEN_CMPL(ppc, tmp, 0, 2);
-	set_next_dst(ppc);
+	if(checkCount){
+		// cmpl   cr2,  tmp, r0  // cr2 = next_interupt ? Count
+		GEN_CMPL(ppc, tmp, 0, 2);
+		set_next_dst(ppc);
+	}
 	// Free tmp register
 	unmapRegisterTemp(tmp);
 #else
@@ -4081,9 +4087,11 @@ static void genUpdateCount(void){
 	set_next_dst(ppc);
 	GEN_MTLR(ppc, 0);
 	set_next_dst(ppc);
-	// If next_interupt <= Count (cr2)
-	GEN_CMPI(ppc, 3, 0, 2);
-	set_next_dst(ppc);
+	if(checkCount){
+		// If next_interupt <= Count (cr2)
+		GEN_CMPI(ppc, 3, 0, 2);
+		set_next_dst(ppc);
+	}
 #endif
 }
 
