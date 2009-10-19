@@ -379,12 +379,12 @@ static void pass2(PowerPC_block* ppc_block){
 #endif
 
 		} else { // Jump instruction
-			// The jump_address is actually calculated with the delay slot address
-			unsigned int jump_address = (jump_table[i].old_jump << 2) |
-			                            ((unsigned int)ppc_block->start_address & 0xF0000000);
+			// The destination is actually calculated from the delay slot
+			unsigned int jump_addr = (jump_table[i].old_jump << 2) |
+			                         (ppc_block->start_address & 0xF0000000);
 
 			// We're jumping within this block, find out where
-			int jump_offset = (jump_address - addr_first) >> 2;
+			int jump_offset = (jump_addr - addr_first) >> 2;
 			jump_table[i].new_jump = code_addr[jump_offset] - current;
 
 			*current &= ~(PPC_LI_MASK << PPC_LI_SHIFT);
