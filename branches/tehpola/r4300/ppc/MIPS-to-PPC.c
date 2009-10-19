@@ -29,6 +29,8 @@ static void genCheckFP(void);
 void genCallDynaMem(memType type, int base, short immed);
 static int inline mips_is_jump(MIPS_instr);
 void jump_to(unsigned int);
+void check_interupt();
+extern int llbit;
 
 #define CANT_COMPILE_DELAY() \
 	((get_src_pc()&0xFFF) == 0xFFC && \
@@ -2478,6 +2480,103 @@ static int REGIMM(MIPS_instr mips){
 
 // -- COP0 Instructions --
 
+static int TLBR(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_TLBR
+	genCallInterp(mips);
+	return INTERPRETED;
+#else
+	return CONVERT_ERROR;
+#endif
+}
+
+static int TLBWI(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_TLBWI
+	genCallInterp(mips);
+	return INTERPRETED;
+#else
+	return CONVERT_ERROR;
+#endif
+}
+
+static int TLBWR(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_TLBWR
+	genCallInterp(mips);
+	return INTERPRETED;
+#else
+	return CONVERT_ERROR;
+#endif
+}
+
+static int TLBP(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_TLBP
+	genCallInterp(mips);
+	return INTERPRETED;
+#else
+	return CONVERT_ERROR;
+#endif
+}
+
+static int ERET(MIPS_instr mips){
+	PowerPC_instr ppc;
+#ifdef INTERPRET_ERET
+	genCallInterp(mips);
+	return INTERPRETED;
+#else // INTERPRET_ERET
+	
+	flushRegisters();
+	
+	genUpdateCount();
+	// Load Status
+	GEN_LWZ(ppc, 3, 12*4, DYNAREG_COP0);
+	set_next_dst(ppc);
+	// Load upper address of llbit
+	GEN_LIS(ppc, 4, extractUpper16(&llbit));
+	set_next_dst(ppc);
+	// Status & 0xFFFFFFFD
+	GEN_RLWINM(ppc, 3, 3, 0, 31, 29);
+	set_next_dst(ppc);
+	// llbit = 0
+	GEN_STW(ppc, DYNAREG_ZERO, extractLower16(&llbit), 4);
+	set_next_dst(ppc);
+	// Store updated Status
+	GEN_STW(ppc, 3, 12*4, DYNAREG_COP0);
+	set_next_dst(ppc);
+	// check_interupt()
+	GEN_B(ppc, add_jump(&check_interupt, 1, 1), 0, 1);
+	set_next_dst(ppc);
+	// Load the old LR
+	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	// interp_addr = EPC
+	GEN_LWZ(ppc, 3, 14*4, DYNAREG_COP0);
+	set_next_dst(ppc);
+	// Restore the LR
+	GEN_MTLR(ppc, 0);
+	set_next_dst(ppc);
+	// Return to trampoline with EPC
+	GEN_BLR(ppc, 0);
+	set_next_dst(ppc);
+	
+	return CONVERT_SUCCESS;
+#endif
+}
+
+static int (*gen_tlb[64])(MIPS_instr) =
+{
+   NI  , TLBR, TLBWI, NI, NI, NI, TLBWR, NI,
+   TLBP, NI  , NI   , NI, NI, NI, NI   , NI,
+   NI  , NI  , NI   , NI, NI, NI, NI   , NI,
+   ERET, NI  , NI   , NI, NI, NI, NI   , NI,
+   NI  , NI  , NI   , NI, NI, NI, NI   , NI,
+   NI  , NI  , NI   , NI, NI, NI, NI   , NI,
+   NI  , NI  , NI   , NI, NI, NI, NI   , NI,
+   NI  , NI  , NI   , NI, NI, NI, NI   , NI
+};
+
 static int MFC0(MIPS_instr mips){
 	PowerPC_instr ppc;
 #ifdef INTERPRET_MFC0
@@ -2510,7 +2609,7 @@ static int TLB(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else
-	return CONVERT_ERROR;
+	return gen_tlb[mips&0x3f](mips);
 #endif
 }
 
