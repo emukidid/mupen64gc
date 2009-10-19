@@ -36,26 +36,19 @@ inline unsigned int dyna_run(unsigned int (*code)(void)){
 		"stw	14, 8(1)  \n"
 		// Setup saved registers for code
 		"mr	14, %0    \n"
-		"addi	15, 0, 0  \n"
-		"mr	16, %1    \n"
-		"mr	17, %2    \n"
-		"mr	18, %3    \n"
-		"mr	19, %4    \n"
-		"mr	20, %5    \n"
-		"mr	21, %6    \n"
-		"mr	22, %7    \n"
-		"mr	23, %8    \n"
-		"mr	24, %9    \n"
-		"mr	25, %10   \n"
-		"mr	26, %11   \n"
-		:: "r" (reg), "r" (decodeNInterpret),
-		   "r" (dyna_update_count), "r" (&last_addr),
-		   "r" (rdram), "r" (dyna_mem),
+		"mr	15, %1    \n"
+		"mr	16, %2    \n"
+		"mr	17, %3    \n"
+		"mr	18, %4    \n"
+		"mr	19, %5    \n"
+		"mr	20, %6    \n"
+		"mr	21, %7    \n"
+		"addi	22, 0, 0  \n"
+		:: "r" (reg), "r" (reg_cop0),
 		   "r" (reg_cop1_simple), "r" (reg_cop1_double),
-		   "r" (&FCR31), "r" (dyna_check_cop1_unusable),
-		   "r" (reg_cop0), "r" (&next_interupt)
-		: "14", "15", "16", "17", "18", "19", "20", "21",
-		  "22", "23", "24", "25", "26");
+		   "r" (&FCR31), "r" (rdram),
+		   "r" (&last_addr), "r" (&next_interupt)
+		: "14", "15", "16", "17", "18", "19", "20", "21", "22");
 
 	// naddr = code();
 	__asm__ volatile(
