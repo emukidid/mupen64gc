@@ -60,15 +60,15 @@ void set_next_dst(PowerPC_instr i){ *(dst++) = i; ++code_length; }
 // Adjusts the code_addr for the current instruction to account for flushes
 void reset_code_addr(void){ if(src<=src_last) code_addr[src-1-src_first] = dst; } // FIXME: < or <=??
 
-int add_jump(int old_jump, int is_j, int is_out){
+int add_jump(int old_jump, int is_j, int is_call){
 	int id = current_jump;
 	jump_node* jump = &jump_table[current_jump++];
 	jump->old_jump  = old_jump;
 	jump->new_jump  = 0;     // This should be filled in when known
 	jump->src_instr = src-1; // src points to the next
 	jump->dst_instr = dst;   // set_next hasn't happened
-	jump->type      = (is_j   ? JUMP_TYPE_J   : 0)
-	                | (is_out ? JUMP_TYPE_OUT : 0);
+	jump->type      = (is_j    ? JUMP_TYPE_J    : 0)
+	                | (is_call ? JUMP_TYPE_CALL : 0);
 	return id;
 }
 
@@ -357,10 +357,13 @@ static void pass2(PowerPC_block* ppc_block){
 			continue;
 		}
 
-		if(jump_table[i].type & JUMP_TYPE_OUT){
-			// FIXME: Deprecated
-			printf("Deprecated jump out\n");
-			//stop = 1;
+		if(jump_table[i].type & JUMP_TYPE_CALL){ // Call to C function code
+			// old_jump is the address of the function to call
+			int jump_offset = ((unsigned int)jump_table[i].old_jump -
+			                   (unsigned int)current)/4;
+			// We're filling in a jump instrucion
+			*current &= ~(PPC_LI_MASK << PPC_LI_SHIFT);
+			PPC_SET_LI(*current, jump_offset);
 
 		} else if(!(jump_table[i].type & JUMP_TYPE_J)){ // Branch instruction
 			int jump_offset = (unsigned int)jump_table[i].old_jump +

@@ -3779,8 +3779,8 @@ static void genCallInterp(MIPS_instr mips){
 	GEN_LI(ppc, 5, 0, isDelaySlot ? 1 : 0);
 	set_next_dst(ppc);
 	// Move the address of decodeNInterpret to ctr for a bctr
-	GEN_MTCTR(ppc, DYNAREG_INTERP);
-	set_next_dst(ppc);
+	//GEN_MTCTR(ppc, DYNAREG_INTERP);
+	//set_next_dst(ppc);
 	// Load our argument into r3 (mips)
 	GEN_LIS(ppc, 3, mips>>16);
 	set_next_dst(ppc);
@@ -3792,7 +3792,8 @@ static void genCallInterp(MIPS_instr mips){
 	GEN_ORI(ppc, 4, 4, get_src_pc());
 	set_next_dst(ppc);
 	// Branch to decodeNInterpret
-	GEN_BCTRL(ppc);
+	//GEN_BCTRL(ppc);
+	GEN_B(ppc, add_jump(&decodeNInterpret, 1, 1), 0, 1);
 	set_next_dst(ppc);
 	// Restore the lr
 	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
@@ -3903,8 +3904,8 @@ static void genCheckFP(void){
 		flushRegisters();
 		reset_code_addr();
 		// Move &dyna_check_cop1_unusable to ctr for call
-		GEN_MTCTR(ppc, DYNAREG_CHKFP);
-		set_next_dst(ppc);
+		//GEN_MTCTR(ppc, DYNAREG_CHKFP);
+		//set_next_dst(ppc);
 		// Load the current PC as the argument
 		GEN_LIS(ppc, 3, get_src_pc()>>16);
 		set_next_dst(ppc);
@@ -3914,7 +3915,8 @@ static void genCheckFP(void){
 		GEN_LI(ppc, 4, 0, isDelaySlot ? 1 : 0);
 		set_next_dst(ppc);
 		// Call dyna_check_cop1_unusable
-		GEN_BCTRL(ppc);
+		//GEN_BCTRL(ppc);
+		GEN_B(ppc, add_jump(&dyna_check_cop1_unusable, 1, 1), 0, 1);
 		set_next_dst(ppc);
 		// Load the lr
 		GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
@@ -3936,8 +3938,8 @@ void genCallDynaMem(memType type, int base, short immed){
 	PowerPC_instr ppc;
 	// PRE: value to store, or register # to load into should be in r3
 	// mtctr DYNAREG_RWMEM
-	GEN_MTCTR(ppc, DYNAREG_RWMEM);
-	set_next_dst(ppc);
+	//GEN_MTCTR(ppc, DYNAREG_RWMEM);
+	//set_next_dst(ppc);
 	// addr = base + immed
 	GEN_ADDI(ppc, 4, base, immed);
 	set_next_dst(ppc);
@@ -3953,7 +3955,8 @@ void genCallDynaMem(memType type, int base, short immed){
 	GEN_LI(ppc, 7, 0, isDelaySlot ? 1 : 0);
 	set_next_dst(ppc);
 	// call dyna_mem
-	GEN_BCTRL(ppc);
+	//GEN_BCTRL(ppc);
+	GEN_B(ppc, add_jump(&dyna_mem, 1, 1), 0, 1);
 	set_next_dst(ppc);
 	// restore lr
 	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
