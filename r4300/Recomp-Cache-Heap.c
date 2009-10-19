@@ -84,13 +84,14 @@ static CacheMetaNode* heapPop(void){
 static void free_func(PowerPC_func* func, unsigned int addr){
 	// Free the code associated with the func
 	__lwp_heap_free(cache, func->code);
+	__lwp_heap_free(cache, func->code_addr);
 	// Remove any holes into this func
 	PowerPC_func_hole_node* hole, * next;
 	for(hole = func->holes; hole != NULL; hole = next){
 		next = hole->next;
 		free(hole);
 	}
-	
+
 	// Remove any pointers to this code
 	PowerPC_block* block = blocks[addr>>12];
 	// Null out the corresponding code_addr entries
@@ -99,8 +100,8 @@ static void free_func(PowerPC_func* func, unsigned int addr){
 	int end = (func->end_addr - func->start_addr)>>2;
 	if(end < 0) end = 1024;
 	else end += start;
-	for(i=start; i<end; ++i)
-		block->code_addr[i] = NULL;
+	//for(i=start; i<end; ++i)
+	//	block->code_addr[i] = NULL;
 	// Remove the function from the linked list
 	PowerPC_func_node* fn = block->funcs;
 	if(fn && fn->function == func){
@@ -123,7 +124,7 @@ static void free_func(PowerPC_func* func, unsigned int addr){
 static inline void update_lru(PowerPC_func* func){
 	static unsigned int nextLRU = 0;
 	/*if(func->lru != nextLRU-1)*/ func->lru = nextLRU++;
-	
+
 	if(!nextLRU){
 		// Handle nextLRU overflows
 		// By heap-sorting and assigning new LRUs
@@ -138,7 +139,7 @@ static inline void update_lru(PowerPC_func* func){
 		}
 		free(cacheHeap);
 		cacheHeap = newHeap;
-		
+
 		nextLRU = heapSize = savedSize;
 	}
 }
@@ -166,16 +167,25 @@ void RecompCache_Alloc(unsigned int size, unsigned int address, PowerPC_func* fu
 	newBlock->addr = address;
 	newBlock->size = size;
 	newBlock->func = func;
-	
+
 	// Allocate new memory for this code
 	void* code = __lwp_heap_allocate(cache, size);
 	while(!code){
 		release(size);
 		code = __lwp_heap_allocate(cache, size);
 	}
-	
+	int num_instrs = (func->end_addr ? func->end_addr : 0x10000) -
+                     func->start_addr;
+	void* code_addr = __lwp_heap_allocate(cache, num_instrs * sizeof(void*));
+	while(!code){
+		release(num_instrs * sizeof(void*));
+		code_addr = __lwp_heap_allocate(cache, num_instrs * sizeof(void*));
+	}
+
 	cacheSize += size;
 	newBlock->func->code = code;
+	newBlock->func->code_addr = code_addr;
+	memset(newBlock->func->code_addr, 0, num_instrs * sizeof(void*));
 	// Add it to the heap
 	heapPush(newBlock);
 	// Make this function the LRU
@@ -191,9 +201,9 @@ void RecompCache_Realloc(PowerPC_func* func, unsigned int size){
 			n = cacheHeap[i];
 	// Make this function the LRU
 	update_lru(func);
-	
+
 	int neededSpace = size - n->size;
-	
+
 	// Allocate new memory (releasing if necessary)
 	void* code = __lwp_heap_allocate(cache, size);
 	while(!code){
@@ -204,7 +214,7 @@ void RecompCache_Realloc(PowerPC_func* func, unsigned int size){
 	memcpy(code, n->func->code, n->size);
 	// Free the old memory
 	__lwp_heap_free(cache, n->func->code);
-	
+
 	// Adjust everything for this code
 	cacheSize += neededSpace;
 	n->func->code = code;

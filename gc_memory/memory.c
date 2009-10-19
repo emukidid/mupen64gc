@@ -4,7 +4,7 @@
  *
  * Mupen64 homepage: http://mupen64.emulation64.com
  * email address: hacktarux@yahoo.fr
- * 
+ *
  * If you want to contribute to the project please contact
  * me first (maybe someone is already making what you are
  * planning to do).
@@ -89,7 +89,7 @@ unsigned char *PIF_RAMb = (unsigned char *)(PIF_RAM);
 unsigned long address = 0;
 // *address_low = the lower 16 bit of the address :
 #ifdef _BIG_ENDIAN
-static unsigned short *address_low = (unsigned short *)(&address)+1; 
+static unsigned short *address_low = (unsigned short *)(&address)+1;
 #else
 static unsigned short *address_low = (unsigned short *)(&address);
 #endif
@@ -219,24 +219,24 @@ static int firstFrameBufferSetting;
 int init_memory()
 {
    int i;
-   
+
    //swap rom
    //unsigned long *roml;
    //roml = (void *)rom;
    //for (i=0; i<(taille_rom/4); i++) roml[i] = sl(roml[i]);
-   
+
    //TLBCache_init();
    /*loadEeprom();
    loadMempak();
    loadSram();
    loadFlashram();*/
-   
+
    //init hash tables
    for (i=0; i<(0x10000); i++)
      {
 	rwmem[i] = rw_nomem;
      }
-   
+
    //init RDRAM
 #ifdef USE_EXPANSION
    for (i=0; i<(0x800000/4); i++) rdram[i]=0;
@@ -251,14 +251,14 @@ int init_memory()
      }
 #ifdef USE_EXPANSION
    for (i=0x80; i<0x3F0; i++)	//TODO: set at runtime based on 4MB/8MB DRAM size
-#else   
-   for (i=0x40/*0x80*/; i<0x3F0; i++)	//TODO: set at runtime based on 4MB/8MB DRAM size 
+#else
+   for (i=0x40/*0x80*/; i<0x3F0; i++)	//TODO: set at runtime based on 4MB/8MB DRAM size
 #endif
      {
 	rwmem[0x8000+i] = rw_nothing;
 	rwmem[0xa000+i] = rw_nothing;
      }
-   
+
    //init RDRAM registers
    rwmem[0x83f0] = rw_rdramreg;
    rwmem[0xa3f0] = rw_rdramreg;
@@ -282,26 +282,26 @@ int init_memory()
    readrdramreg[0x1c] = &rdram_register.rdram_min_interval;
    readrdramreg[0x20] = &rdram_register.rdram_addr_select;
    readrdramreg[0x24] = &rdram_register.rdram_device_manuf;
-   
+
    for (i=0x28; i<0xFFFF; i++) readrdramreg[i] = &trash;
    for (i=1; i<0x10; i++)
      {
 	rwmem[0x83f0+i] = rw_nothing;
 	rwmem[0xa3f0+i] = rw_nothing;
      }
-   
+
    //init RSP memory
    rwmem[0x8400] = rw_rsp_mem;
    rwmem[0xa400] = rw_rsp_mem;
    for (i=0; i<(0x1000/4); i++) SP_DMEM[i]=0;
    for (i=0; i<(0x1000/4); i++) SP_IMEM[i]=0;
-   
+
    for (i=1; i<0x4; i++)
      {
 	rwmem[0x8400+i] = rw_nothing;
 	rwmem[0xa400+i] = rw_nothing;
      }
-   
+
    //init RSP registers
    rwmem[0x8404] = rw_rsp_reg;
    rwmem[0xa404] = rw_rsp_reg;
@@ -337,28 +337,28 @@ int init_memory()
    readrspreg[0x14] = &sp_register.sp_dma_full_reg;
    readrspreg[0x18] = &sp_register.sp_dma_busy_reg;
    readrspreg[0x1c] = &sp_register.sp_semaphore_reg;
-   
+
    for (i=0x20; i<0x30; i++) readrspreg[i] = &trash;
    for (i=5; i<8; i++)
      {
 	rwmem[0x8400+i] = rw_nothing;
 	rwmem[0xa400+i] = rw_nothing;
      }
-   
+
    rwmem[0x8408] = rw_rsp;
    rwmem[0xa408] = rw_rsp;
    rsp_register.rsp_pc=0;
    rsp_register.rsp_ibist=0;
    readrsp[0x0] = &rsp_register.rsp_pc;
    readrsp[0x4] = &rsp_register.rsp_ibist;
-   
+
    for (i=0x8; i<0x10; i++) readrsp[i] = &trash;
    for (i=9; i<0x10; i++)
      {
 	rwmem[0x8400+i] = rw_nothing;
 	rwmem[0xa400+i] = rw_nothing;
      }
-   
+
    //init rdp command registers
    rwmem[0x8410] = rw_dp;
    rwmem[0xa410] = rw_dp;
@@ -390,14 +390,14 @@ int init_memory()
    readdp[0x14] = &dpc_register.dpc_bufbusy;
    readdp[0x18] = &dpc_register.dpc_pipebusy;
    readdp[0x1c] = &dpc_register.dpc_tmem;
-   
+
    for (i=0x20; i<0x30; i++) readdp[i] = &trash;
    for (i=1; i<0x10; i++)
      {
 	rwmem[0x8410+i] = rw_nothing;
 	rwmem[0xa410+i] = rw_nothing;
      }
-   
+
    //init rsp span registers
    rwmem[0x8420] = rw_dps;
    rwmem[0xa420] = rw_dps;
@@ -409,14 +409,14 @@ int init_memory()
    readdps[0x4] = &dps_register.dps_test_mode;
    readdps[0x8] = &dps_register.dps_buftest_addr;
    readdps[0xc] = &dps_register.dps_buftest_data;
-   
+
    for (i=0x10; i<0x20; i++) readdps[i] = &trash;
    for (i=1; i<0x10; i++)
      {
 	rwmem[0x8420+i] = rw_nothing;
 	rwmem[0xa420+i] = rw_nothing;
      }
-   
+
    //init mips registers
    rwmem[0xa830] = rw_mi;
    rwmem[0xa430] = rw_mi;
@@ -440,14 +440,14 @@ int init_memory()
    readmi[0x4] = &MI_register.mi_version_reg;
    readmi[0x8] = &MI_register.mi_intr_reg;
    readmi[0xc] = &MI_register.mi_intr_mask_reg;
-   
+
    for (i=0x10; i<0x20; i++) readmi[i] = &trash;
    for (i=1; i<0x10; i++)
      {
 	rwmem[0x8430+i] = rw_nothing;
 	rwmem[0xa430+i] = rw_nothing;
      }
-   
+
    //init VI registers
    rwmem[0x8440] = rw_vi;
    rwmem[0xa440] = rw_vi;
@@ -479,14 +479,14 @@ int init_memory()
    readvi[0x2c] = &vi_register.vi_v_burst;
    readvi[0x30] = &vi_register.vi_x_scale;
    readvi[0x34] = &vi_register.vi_y_scale;
-   
+
    for (i=0x38; i<0x40; i++) readvi[i] = &trash;
    for (i=1; i<0x10; i++)
      {
 	rwmem[0x8440+i] = rw_nothing;
 	rwmem[0xa440+i] = rw_nothing;
      }
-   
+
    //init AI registers
    rwmem[0x8450] = rw_ai;
    rwmem[0xa450] = rw_ai;
@@ -506,14 +506,14 @@ int init_memory()
    readai[0xc] = &ai_register.ai_status;
    readai[0x10] = &ai_register.ai_dacrate;
    readai[0x14] = &ai_register.ai_bitrate;
-   
+
    for (i=0x18; i<0x20; i++) readai[i] = &trash;
    for (i=1; i<0x10; i++)
      {
 	rwmem[0x8450+i] = rw_nothing;
 	rwmem[0xa450+i] = rw_nothing;
      }
-   
+
    //init PI registers
    rwmem[0x8460] = rw_pi;
    rwmem[0xa460] = rw_pi;
@@ -543,14 +543,14 @@ int init_memory()
    readpi[0x28] = &pi_register.pi_bsd_dom2_pwd_reg;
    readpi[0x2c] = &pi_register.pi_bsd_dom2_pgs_reg;
    readpi[0x30] = &pi_register.pi_bsd_dom2_rls_reg;
-   
+
    for (i=0x34; i<0xFFFF; i++) readpi[i] = &trash;
    for (i=1; i<0x10; i++)
      {
 	rwmem[0x8460+i] = rw_nothing;
 	rwmem[0xa460+i] = rw_nothing;
      }
-   
+
    //init RI registers
    rwmem[0x8470] = rw_ri;
    rwmem[0xa470] = rw_ri;
@@ -570,14 +570,14 @@ int init_memory()
    readri[0x14] = &ri_register.ri_latency;
    readri[0x18] = &ri_register.ri_error;
    readri[0x1c] = &ri_register.ri_werror;
-   
+
    for (i=0x20; i<0x30; i++) readri[i] = &trash;
    for (i=1; i<0x10; i++)
      {
 	rwmem[0x8470+i] = rw_nothing;
 	rwmem[0xa470+i] = rw_nothing;
      }
-   
+
    //init SI registers
    rwmem[0x8480] = rw_si;
    rwmem[0xa480] = rw_si;
@@ -591,56 +591,56 @@ int init_memory()
    readsi[0x10] = &si_register.si_pif_addr_wr64b;
    readsi[0x14] = &trash;
    readsi[0x18] = &si_register.si_status;
-   
+
    for (i=0x1c; i<0x20; i++) readsi[i] = &trash;
    for (i=0x481; i<0x800; i++)
      {
 	rwmem[0x8000+i] = rw_nothing;
 	rwmem[0xa000+i] = rw_nothing;
      }
-   
+
    //init flashram / sram
    rwmem[0x8800] = rw_flashram0;
    rwmem[0xa800] = rw_flashram0;
    rwmem[0x8801] = rw_flashram1;
    rwmem[0xa801] = rw_flashram1;
-   
+
    for (i=0x802; i<0x1000; i++)
      {
 	rwmem[0x8000+i] = rw_nothing;
 	rwmem[0xa000+i] = rw_nothing;
      }
-   
+
    //init rom area
-   for (i=0; i<(rom_length >> 16); i++) 
+   for (i=0; i<(rom_length >> 16); i++)
      {
 	rwmem[0x9000+i] = rw_rom0;
 	rwmem[0xb000+i] = rw_rom1;
      }
-   for (i=(rom_length >> 16); i<0xfc0; i++) 
+   for (i=(rom_length >> 16); i<0xfc0; i++)
      {
 	rwmem[0x9000+i] = rw_nothing;
 	rwmem[0xb000+i] = rw_nothing;
      }
-   
+
    //init PIF_RAM
    rwmem[0x9fc0] = rw_pif;
    rwmem[0xbfc0] = rw_pif;
    for (i=0; i<(0x40/4); i++) PIF_RAM[i]=0;
-   
-   for (i=0xfc1; i<0x1000; i++) 
+
+   for (i=0xfc1; i<0x1000; i++)
      {
 	rwmem[0x9000+i] = rw_nothing;
 	rwmem[0xb000+i] = rw_nothing;
      }
-   
+
    use_flashram = 0;
    init_flashram();
-   
+
    frameBufferInfos[0].addr = 0;
    fast_memory = 1;
    firstFrameBufferSetting = 1;
-   
+
    //printf("memory initialized\n");
    return 0;
 }
@@ -659,7 +659,7 @@ void free_memory()
 static void update_MI_init_mode_reg()
 {
    MI_register.init_length = MI_register.w_mi_init_mode_reg & 0x7F;
-   if (MI_register.w_mi_init_mode_reg & 0x80) 
+   if (MI_register.w_mi_init_mode_reg & 0x80)
      MI_register.init_mode = 0;
    if (MI_register.w_mi_init_mode_reg & 0x100)
      MI_register.init_mode = 1;
@@ -782,7 +782,7 @@ void update_SP()
 				(sp_register.signal7 << 14)
 				);
    //if (get_event(SP_INT)) return;
-   if (!(sp_register.w_sp_status_reg & 0x1) && 
+   if (!(sp_register.w_sp_status_reg & 0x1) &&
        !(sp_register.w_sp_status_reg & 0x4)) return;
    if (!sp_register.halt && !sp_register.broke)
      {
@@ -790,7 +790,7 @@ void update_SP()
 	if (SP_DMEM[0xFC0/4] == 1)
 	  {
 	     // unprotecting old frame buffers
-	     if(fBGetFrameBufferInfo && fBRead && fBWrite && 
+	     if(fBGetFrameBufferInfo && fBRead && fBWrite &&
 		frameBufferInfos[0].addr)
 	       {
 		  int i;
@@ -813,7 +813,7 @@ void update_SP()
 			 }
 		    }
 	       }
-	     
+
 	     //processDList();
 	     rsp_register.rsp_pc &= 0xFFF;
 	     start_section(GFX_SECTION);
@@ -821,13 +821,13 @@ void update_SP()
 	     end_section(GFX_SECTION);
 	     rsp_register.rsp_pc |= save_pc;
 	     new_frame();
-	     
+
 	     MI_register.mi_intr_reg &= ~0x21;
 	     sp_register.sp_status_reg &= ~0x303;
 	     update_count();
 	     add_interupt_event(SP_INT, 1000);
 	     add_interupt_event(DP_INT, 1000);
-	     
+
 	     // protecting new frame buffers
 	     if(fBGetFrameBufferInfo && fBRead && fBWrite) fBGetFrameBufferInfo(frameBufferInfos);
 	     if(fBGetFrameBufferInfo && fBRead && fBWrite &&
@@ -878,7 +878,7 @@ void update_SP()
 	     doRspCycles(100);
 	     end_section(AUDIO_SECTION);
 	     rsp_register.rsp_pc |= save_pc;
-	     
+
 	     MI_register.mi_intr_reg &= ~0x1;
 	     sp_register.sp_status_reg &= ~0x303;
 	     update_count();
@@ -891,7 +891,7 @@ void update_SP()
 	     rsp_register.rsp_pc &= 0xFFF;
 	     doRspCycles(100);
 	     rsp_register.rsp_pc |= save_pc;
-	     
+
 	     MI_register.mi_intr_reg &= ~0x1;
 	     sp_register.sp_status_reg &= ~0x203;
 	     update_count();
@@ -1001,7 +1001,7 @@ void read_nomemd()
 void write_nomem()
 {
    if (!interpcore && !invalid_code_get(address>>12))
-     if (blocks[address>>12]->code_addr[(address&0xFFF)/4])
+     //if (blocks[address>>12]->code_addr[(address&0xFFF)/4])
        invalid_code_set(address>>12, 1);
    address = virtual_to_physical_address(address,1);
    if (address == 0x00000000) return;
@@ -1011,7 +1011,7 @@ void write_nomem()
 void write_nomemb()
 {
    if (!interpcore && !invalid_code_get(address>>12))
-     if (blocks[address>>12]->code_addr[(address&0xFFF)/4])
+     //if (blocks[address>>12]->code_addr[(address&0xFFF)/4])
        invalid_code_set(address>>12, 1);
    address = virtual_to_physical_address(address,1);
    if (address == 0x00000000) return;
@@ -1021,7 +1021,7 @@ void write_nomemb()
 void write_nomemh()
 {
    if (!interpcore && !invalid_code_get(address>>12))
-     if (blocks[address>>12]->code_addr[(address&0xFFF)/4])
+     //if (blocks[address>>12]->code_addr[(address&0xFFF)/4])
        invalid_code_set(address>>12, 1);
    address = virtual_to_physical_address(address,1);
    if (address == 0x00000000) return;
@@ -1031,7 +1031,7 @@ void write_nomemh()
 void write_nomemd()
 {
    if (!interpcore && !invalid_code_get(address>>12))
-     if (blocks[address>>12]->code_addr[(address&0xFFF)/4])
+     //if (blocks[address>>12]->code_addr[(address&0xFFF)/4])
        invalid_code_set(address>>12, 1);
    address = virtual_to_physical_address(address,1);
    if (address == 0x00000000) return;
@@ -1041,12 +1041,12 @@ void write_nomemd()
 	//taken from 1964 source code.
 	//This as well as the 4Mb hack need to be done in a while loop which runs before bootup
 	//i.e. while (N64_ProgramCounter != rom[8]) executeN64(); patch();
-		
+
 	// Azimer - DK64 Hack to break out of infinite loop £
 	// I believe this memory location is some sort of copyright protection which £
 	// is written to using the RSP on bootup. The only issue I see is if it £
 	// affects any other roms?
-	 	 
+
 	if(strncmp(ROM_HEADER->nom, "DONKEY KONG 64", 14) == 0)
 		rdram[0x2FE1C0/4] = 0xAD170014;
 */
@@ -1873,7 +1873,7 @@ void write_mi()
       case 0xc:
 	MI_register.w_mi_intr_mask_reg = word;
 	update_MI_intr_mask_reg();
-	
+
 	check_interupt();
 	update_count();
 	if (next_interupt <= Count) gen_interupt();
@@ -1900,7 +1900,7 @@ void write_mib()
 	*((unsigned char*)&MI_register.w_mi_intr_mask_reg
 	  + ((*address_low&3)^S8) ) = byte;
 	update_MI_intr_mask_reg();
-	
+
 	check_interupt();
 	update_count();
 	if (next_interupt <= Count) gen_interupt();
@@ -1923,7 +1923,7 @@ void write_mih()
 	*((unsigned short*)((unsigned char*)&MI_register.w_mi_intr_mask_reg
 			    + ((*address_low&3)^S16) )) = hword;
 	update_MI_intr_mask_reg();
-	
+
 	check_interupt();
 	update_count();
 	if (next_interupt <= Count) gen_interupt();
@@ -1942,7 +1942,7 @@ void write_mid()
       case 0x8:
 	MI_register.w_mi_intr_mask_reg = dword & 0xFFFFFFFF;
 	update_MI_intr_mask_reg();
-	
+
 	check_interupt();
 	update_count();
 	if (next_interupt <= Count) gen_interupt();
@@ -3291,7 +3291,7 @@ void write_pifd()
 	return;
      }
 #endif
-   *((unsigned long *)(PIF_RAMb + (address & 0x7FF) - 0x7C0)) = 
+   *((unsigned long *)(PIF_RAMb + (address & 0x7FF) - 0x7C0)) =
      sl((unsigned long)(dword >> 32));
    *((unsigned long *)(PIF_RAMb + (address & 0x7FF) - 0x7C0)) =
      sl((unsigned long)(dword & 0xFFFFFFFF));
