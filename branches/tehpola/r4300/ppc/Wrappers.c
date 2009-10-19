@@ -28,7 +28,7 @@ int noCheckInterrupt = 0;
 
 inline unsigned int dyna_run(unsigned int (*code)(void)){
 	unsigned int naddr;
-	
+
 	__asm__ volatile(
 		// Create the stack frame for code
 		"stwu	1, -16(1) \n"
@@ -53,7 +53,7 @@ inline unsigned int dyna_run(unsigned int (*code)(void)){
 		   "r" (&FCR31), "r" (dyna_check_cop1_unusable)
 		: "14", "15", "16", "17", "18", "19", "20", "21",
 		  "22", "23", "24");
-	
+
 	// naddr = code();
 	__asm__ volatile(
 		// Save the lr so the recompiled code won't have to
@@ -70,7 +70,7 @@ inline unsigned int dyna_run(unsigned int (*code)(void)){
 		: "=r" (naddr)
 		: "r" (code)
 		: "3", "4", "5", "6", "7", "8", "9", "10", "11", "12");
-	
+
 	return naddr;
 }
 
@@ -83,12 +83,12 @@ void dynarec(unsigned int address){
 		DEBUG_print(txtbuffer, DBG_USBGECKO);
 		*/
 		if(!paddr){ stop=1; return; }
-		
+
 		if(!dst_block){
 			/*sprintf(txtbuffer, "block at %08x doesn't exist\n", address&~0xFFF);
 			DEBUG_print(txtbuffer, DBG_USBGECKO);*/
 			dst_block = blocks[address>>12] = malloc(sizeof(PowerPC_block));
-			dst_block->code_addr     = NULL;
+			//dst_block->code_addr     = NULL;
 			dst_block->funcs         = NULL;
 			dst_block->start_address = address & ~0xFFF;
 			dst_block->end_address   = (address & ~0xFFF) + 0x1000;
@@ -97,8 +97,14 @@ void dynarec(unsigned int address){
 		} else if(invalid_code_get(address>>12)){
 			invalidate_block(dst_block);
 		}
-		
-		if(!dst_block->code_addr[(address&0xFFF)>>2]){
+
+		PowerPC_func_node* fn;
+		for(fn = dst_block->funcs; fn != NULL; fn = fn->next)
+			if((address&0xFFFF) >= fn->function->start_addr &&
+			   ((address&0xFFFF) < fn->function->end_addr ||
+			    fn->function->end_addr == 0)) break;
+		if(!fn || !fn->function->code_addr[((address&0xFFFF) -
+		                                    fn->function->start_addr)>>2]){
 			/*sprintf(txtbuffer, "code at %08x is not compiled\n", address);
 			DEBUG_print(txtbuffer, DBG_USBGECKO);*/
 			start_section(COMPILER_SECTION);
@@ -109,16 +115,18 @@ void dynarec(unsigned int address){
 			RecompCache_Update(address);
 #endif
 		}
-		
+
+		for(fn = dst_block->funcs; fn != NULL; fn = fn->next)
+			if((address&0xFFFF) >= fn->function->start_addr &&
+			   ((address&0xFFFF) < fn->function->end_addr ||
+			    fn->function->end_addr == 0)) break;
+		int index = ((address&0xFFFF) - fn->function->start_addr)>>2;
+
 		// Recompute the block offset
 		unsigned int (*code)(void);
-		code = (unsigned int (*)(void))dst_block->code_addr[(address&0xFFF)>>2];
-		/*
-		sprintf(txtbuffer, "Entering dynarec code @ 0x%08x\n", code);
-		DEBUG_print(txtbuffer, DBG_USBGECKO);
-		*/
+		code = (unsigned int (*)(void))fn->function->code_addr[index];
 		address = dyna_run(code);
-		
+
 		if(!noCheckInterrupt){
 			last_addr = interp_addr = address;
 			// Check for interrupts
@@ -141,16 +149,16 @@ unsigned int decodeNInterpret(MIPS_instr mips, unsigned int pc,
 	interp_ops[MIPS_GET_OPCODE(mips)]();
 	end_section(INTERP_SECTION);
 	delay_slot = 0;
-	
+
 	if(interp_addr != pc + 4) noCheckInterrupt = 1;
-	
+
 	return interp_addr != pc + 4 ? interp_addr : 0;
 }
 
 int dyna_update_count(unsigned int pc){
 	Count += (pc - last_addr)/2;
 	last_addr = pc;
-	
+
 	return next_interupt - Count;
 }
 
@@ -184,19 +192,19 @@ static void invalidate_func(unsigned int addr){
 }
 
 #define check_memory() \
-	if(!invalid_code_get(address>>12) && \
-	   blocks[address>>12]->code_addr[(address&0xfff)>>2]) \
+	if(!invalid_code_get(address>>12)/* && \
+	   blocks[address>>12]->code_addr[(address&0xfff)>>2]*/) \
 		invalidate_func(address);
 
 unsigned int dyna_mem(unsigned int value, unsigned int addr,
                       memType type, unsigned int pc, int isDelaySlot){
 	static unsigned long long dyna_rdword;
-	
+
 	address = addr;
 	rdword = &dyna_rdword;
 	PC->addr = interp_addr = pc;
 	delay_slot = isDelaySlot;
-	
+
 	switch(type){
 		case MEM_LW:
 			read_word_in_memory();
@@ -269,9 +277,9 @@ unsigned int dyna_mem(unsigned int value, unsigned int addr,
 			break;
 	}
 	delay_slot = 0;
-	
+
 	if(interp_addr != pc) noCheckInterrupt = 1;
-	
+
 	return interp_addr != pc ? interp_addr : 0;
 }
 

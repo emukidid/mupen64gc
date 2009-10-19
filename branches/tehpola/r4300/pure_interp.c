@@ -4,7 +4,7 @@
  *
  * Mupen64 homepage: http://mupen64.emulation64.com
  * email address: hacktarux@yahoo.fr
- * 
+ *
  * If you want to contribute to the project please contact
  * me first (maybe someone is already making what you are
  * planning to do).
@@ -67,8 +67,8 @@ static void invalidate_func(unsigned int addr){
 }
 
 #define check_memory() \
-	if(dynacore && !invalid_code_get(address>>12) && \
-	   blocks[address>>12]->code_addr[(address&0xfff)>>2]) \
+	if(dynacore && !invalid_code_get(address>>12)/* && \
+	   blocks[address>>12]->code_addr[(address&0xfff)>>2]*/) \
 		invalidate_func(address); //invalid_code_set(address>>12, 1);
 #else
 #define check_memory()
@@ -160,7 +160,7 @@ static void JALR()
      {
 	*dest = interp_addr;
 	sign_extended(*dest);
-	
+
 	interp_addr = local_rs32;
      }
    last_addr = interp_addr;
@@ -293,7 +293,7 @@ static void DMULT()
    unsigned long long int result1, result2, result3, result4;
    unsigned long long int temp1, temp2, temp3, temp4;
    int sign = 0;
-   
+
    if (rrs < 0)
      {
 	op2 = -rrs;
@@ -306,22 +306,22 @@ static void DMULT()
 	sign = 1 - sign;
      }
    else op4 = rrt;
-   
+
    op1 = op2 & 0xFFFFFFFF;
    op2 = (op2 >> 32) & 0xFFFFFFFF;
    op3 = op4 & 0xFFFFFFFF;
    op4 = (op4 >> 32) & 0xFFFFFFFF;
-   
+
    temp1 = op1 * op3;
    temp2 = (temp1 >> 32) + op1 * op4;
    temp3 = op2 * op3;
    temp4 = (temp3 >> 32) + op2 * op4;
-   
+
    result1 = temp1 & 0xFFFFFFFF;
    result2 = temp2 + (temp3 & 0xFFFFFFFF);
    result3 = (result2 >> 32) + temp4;
    result4 = (result3 >> 32);
-   
+
    lo = result1 | (result2 << 32);
    hi = (result3 & 0xFFFFFFFF) | (result4 << 32);
    if (sign)
@@ -338,25 +338,25 @@ static void DMULTU()
    unsigned long long int op1, op2, op3, op4;
    unsigned long long int result1, result2, result3, result4;
    unsigned long long int temp1, temp2, temp3, temp4;
-   
+
    op1 = rrs & 0xFFFFFFFF;
    op2 = (rrs >> 32) & 0xFFFFFFFF;
    op3 = rrt & 0xFFFFFFFF;
    op4 = (rrt >> 32) & 0xFFFFFFFF;
-   
+
    temp1 = op1 * op3;
    temp2 = (temp1 >> 32) + op1 * op4;
    temp3 = op2 * op3;
    temp4 = (temp3 >> 32) + op2 * op4;
-   
+
    result1 = temp1 & 0xFFFFFFFF;
    result2 = temp2 + (temp3 & 0xFFFFFFFF);
    result3 = (result2 >> 32) + temp4;
    result4 = (result3 >> 32);
-   
+
    lo = result1 | (result2 << 32);
    hi = (result3 & 0xFFFFFFFF) | (result4 << 32);
-   
+
    interp_addr+=4;
 }
 
@@ -543,7 +543,7 @@ static void BLTZ()
 	    {
 	       update_count();
 	       skip = next_interupt - Count;
-	       if (skip > 3) 
+	       if (skip > 3)
 		 {
 		    Count += (skip & 0xFFFFFFFC);
 		    return;
@@ -573,7 +573,7 @@ static void BGEZ()
 	    {
 	       update_count();
 	       skip = next_interupt - Count;
-	       if (skip > 3) 
+	       if (skip > 3)
 		 {
 		    Count += (skip & 0xFFFFFFFC);
 		    return;
@@ -603,7 +603,7 @@ static void BLTZL()
 	    {
 	       update_count();
 	       skip = next_interupt - Count;
-	       if (skip > 3) 
+	       if (skip > 3)
 		 {
 		    Count += (skip & 0xFFFFFFFC);
 		    return;
@@ -636,7 +636,7 @@ static void BGEZL()
 	    {
 	       update_count();
 	       skip = next_interupt - Count;
-	       if (skip > 3) 
+	       if (skip > 3)
 		 {
 		    Count += (skip & 0xFFFFFFFC);
 		    return;
@@ -672,7 +672,7 @@ static void BLTZAL()
 		 {
 		    update_count();
 		    skip = next_interupt - Count;
-		    if (skip > 3) 
+		    if (skip > 3)
 		      {
 			 Count += (skip & 0xFFFFFFFC);
 			 return;
@@ -707,7 +707,7 @@ static void BGEZAL()
 		 {
 		    update_count();
 		    skip = next_interupt - Count;
-		    if (skip > 3) 
+		    if (skip > 3)
 		      {
 			 Count += (skip & 0xFFFFFFFC);
 			 return;
@@ -742,7 +742,7 @@ static void BLTZALL()
 		 {
 		    update_count();
 		    skip = next_interupt - Count;
-		    if (skip > 3) 
+		    if (skip > 3)
 		      {
 			 Count += (skip & 0xFFFFFFFC);
 			 return;
@@ -780,7 +780,7 @@ static void BGEZALL()
 		 {
 		    update_count();
 		    skip = next_interupt - Count;
-		    if (skip > 3) 
+		    if (skip > 3)
 		      {
 			 Count += (skip & 0xFFFFFFFC);
 			 return;
@@ -830,7 +830,7 @@ static void TLBR()
 static void TLBWI()
 {
    unsigned int i;
-   
+
    if (tlb_e[Index&0x3F].v_even)
      {
 	for (i=tlb_e[Index&0x3F].start_even; i<tlb_e[Index&0x3F].end_even; i+=0x1000)
@@ -876,12 +876,12 @@ static void TLBWI()
    tlb_e[Index&0x3F].vpn2 = (EntryHi & 0xFFFFE000) >> 13;
    //tlb_e[Index&0x3F].r = (EntryHi & 0xC000000000000000LL) >> 62;
    tlb_e[Index&0x3F].mask = (PageMask & 0x1FFE000) >> 13;
-   
+
    tlb_e[Index&0x3F].start_even = tlb_e[Index&0x3F].vpn2 << 13;
    tlb_e[Index&0x3F].end_even = tlb_e[Index&0x3F].start_even+
      (tlb_e[Index&0x3F].mask << 12) + 0xFFF;
    tlb_e[Index&0x3F].phys_even = tlb_e[Index&0x3F].pfn_even << 12;
-   
+
    if (tlb_e[Index&0x3F].v_even)
      {
 	if (tlb_e[Index&0x3F].start_even < tlb_e[Index&0x3F].end_even &&
@@ -891,29 +891,29 @@ static void TLBWI()
 	  {
 	     for (i=tlb_e[Index&0x3F].start_even;i<tlb_e[Index&0x3F].end_even;i+=0x1000)
 #ifdef USE_TLB_CACHE
-		TLBCache_set_r(i>>12, 0x80000000 | 
+		TLBCache_set_r(i>>12, 0x80000000 |
 	       (tlb_e[Index&0x3F].phys_even + (i - tlb_e[Index&0x3F].start_even + 0xFFF)));
 #else
-	       tlb_LUT_r[i>>12] = 0x80000000 | 
+	       tlb_LUT_r[i>>12] = 0x80000000 |
 	       (tlb_e[Index&0x3F].phys_even + (i - tlb_e[Index&0x3F].start_even + 0xFFF));
 #endif
 	     if (tlb_e[Index&0x3F].d_even)
 	       for (i=tlb_e[Index&0x3F].start_even;i<tlb_e[Index&0x3F].end_even;i+=0x1000)
 #ifdef USE_TLB_CACHE
-		TLBCache_set_w(i>>12, 0x80000000 | 
+		TLBCache_set_w(i>>12, 0x80000000 |
 	       (tlb_e[Index&0x3F].phys_even + (i - tlb_e[Index&0x3F].start_even + 0xFFF)));
 #else
-		 tlb_LUT_w[i>>12] = 0x80000000 | 
+		 tlb_LUT_w[i>>12] = 0x80000000 |
 	       (tlb_e[Index&0x3F].phys_even + (i - tlb_e[Index&0x3F].start_even + 0xFFF));
 #endif
 	  }
      }
-   
+
    tlb_e[Index&0x3F].start_odd = tlb_e[Index&0x3F].end_even+1;
    tlb_e[Index&0x3F].end_odd = tlb_e[Index&0x3F].start_odd+
      (tlb_e[Index&0x3F].mask << 12) + 0xFFF;
    tlb_e[Index&0x3F].phys_odd = tlb_e[Index&0x3F].pfn_odd << 12;
-   
+
    if (tlb_e[Index&0x3F].v_odd)
      {
 	if (tlb_e[Index&0x3F].start_odd < tlb_e[Index&0x3F].end_odd &&
@@ -923,19 +923,19 @@ static void TLBWI()
 	  {
 	     for (i=tlb_e[Index&0x3F].start_odd;i<tlb_e[Index&0x3F].end_odd;i+=0x1000)
 #ifdef USE_TLB_CACHE
-		TLBCache_set_r(i>>12, 0x80000000 | 
+		TLBCache_set_r(i>>12, 0x80000000 |
 	       (tlb_e[Index&0x3F].phys_odd + (i - tlb_e[Index&0x3F].start_odd + 0xFFF)));
 #else
-	       tlb_LUT_r[i>>12] = 0x80000000 | 
+	       tlb_LUT_r[i>>12] = 0x80000000 |
 	       (tlb_e[Index&0x3F].phys_odd + (i - tlb_e[Index&0x3F].start_odd + 0xFFF));
 #endif
 	     if (tlb_e[Index&0x3F].d_odd)
 	       for (i=tlb_e[Index&0x3F].start_odd;i<tlb_e[Index&0x3F].end_odd;i+=0x1000)
 #ifdef USE_TLB_CACHE
-		TLBCache_set_w(i>>12, 0x80000000 | 
+		TLBCache_set_w(i>>12, 0x80000000 |
 	       (tlb_e[Index&0x3F].phys_odd + (i - tlb_e[Index&0x3F].start_odd + 0xFFF)));
 #else
-		 tlb_LUT_w[i>>12] = 0x80000000 | 
+		 tlb_LUT_w[i>>12] = 0x80000000 |
 	       (tlb_e[Index&0x3F].phys_odd + (i - tlb_e[Index&0x3F].start_odd + 0xFFF));
 #endif
 	  }
@@ -948,7 +948,7 @@ static void TLBWR()
 	unsigned int i;
 	update_count();
 	Random = (Count/2 % (32 - Wired)) + Wired;
-	
+
 	if (tlb_e[Random].v_even){
 		for (i=tlb_e[Random].start_even; i<tlb_e[Random].end_even; i+=0x1000)
 #ifdef USE_TLB_CACHE
@@ -979,7 +979,7 @@ static void TLBWR()
 			tlb_LUT_w[i>>12] = 0;
 #endif
 	}
-	
+
 	tlb_e[Random].g = (EntryLo0 & EntryLo1 & 1);
 	tlb_e[Random].pfn_even = (EntryLo0 & 0x3FFFFFC0) >> 6;
 	tlb_e[Random].pfn_odd = (EntryLo1 & 0x3FFFFFC0) >> 6;
@@ -993,12 +993,12 @@ static void TLBWR()
 	tlb_e[Random].vpn2 = (EntryHi & 0xFFFFE000) >> 13;
 	//tlb_e[Random].r = (EntryHi & 0xC000000000000000LL) >> 62;
 	tlb_e[Random].mask = (PageMask & 0x1FFE000) >> 13;
-   
+
 	tlb_e[Random].start_even = tlb_e[Random].vpn2 << 13;
 	tlb_e[Random].end_even = tlb_e[Random].start_even+
 		(tlb_e[Random].mask << 12) + 0xFFF;
 	tlb_e[Random].phys_even = tlb_e[Random].pfn_even << 12;
-   
+
 	if (tlb_e[Random].v_even){
 		if(tlb_e[Random].start_even < tlb_e[Random].end_even &&
 		   !(tlb_e[Random].start_even >= 0x80000000 &&
@@ -1006,19 +1006,19 @@ static void TLBWR()
 		   tlb_e[Random].phys_even < 0x20000000){
 			for (i=tlb_e[Random].start_even;i<tlb_e[Random].end_even;i+=0x1000)
 #ifdef USE_TLB_CACHE
-				TLBCache_set_r(i>>12, 0x80000000 | 
+				TLBCache_set_r(i>>12, 0x80000000 |
 					(tlb_e[Random].phys_even + (i - tlb_e[Random].start_even + 0xFFF)));
 #else
-				tlb_LUT_r[i>>12] = 0x80000000 | 
+				tlb_LUT_r[i>>12] = 0x80000000 |
 					(tlb_e[Random].phys_even + (i - tlb_e[Random].start_even + 0xFFF));
 #endif
 			if (tlb_e[Random].d_even)
 				for (i=tlb_e[Random].start_even;i<tlb_e[Random].end_even;i+=0x1000)
 #ifdef USE_TLB_CACHE
-					TLBCache_set_w(i>>12, 0x80000000 | 
+					TLBCache_set_w(i>>12, 0x80000000 |
 						(tlb_e[Random].phys_even + (i - tlb_e[Random].start_even + 0xFFF)));
 #else
-					tlb_LUT_w[i>>12] = 0x80000000 | 
+					tlb_LUT_w[i>>12] = 0x80000000 |
 						(tlb_e[Random].phys_even + (i - tlb_e[Random].start_even + 0xFFF));
 #endif
 		}
@@ -1027,7 +1027,7 @@ static void TLBWR()
 	tlb_e[Random].end_odd = tlb_e[Random].start_odd+
 		(tlb_e[Random].mask << 12) + 0xFFF;
 	tlb_e[Random].phys_odd = tlb_e[Random].pfn_odd << 12;
-	
+
 	if (tlb_e[Random].v_odd){
 		if(tlb_e[Random].start_odd < tlb_e[Random].end_odd &&
 		   !(tlb_e[Random].start_odd >= 0x80000000 &&
@@ -1035,19 +1035,19 @@ static void TLBWR()
 		   tlb_e[Random].phys_odd < 0x20000000){
 			for (i=tlb_e[Random].start_odd;i<tlb_e[Random].end_odd;i+=0x1000)
 #ifdef USE_TLB_CACHE
-				TLBCache_set_r(i>>12, 0x80000000 | 
+				TLBCache_set_r(i>>12, 0x80000000 |
 					(tlb_e[Random].phys_odd + (i - tlb_e[Random].start_odd + 0xFFF)));
 #else
-				tlb_LUT_r[i>>12] = 0x80000000 | 
+				tlb_LUT_r[i>>12] = 0x80000000 |
 					(tlb_e[Random].phys_odd + (i - tlb_e[Random].start_odd + 0xFFF));
 #endif
 			if (tlb_e[Random].d_odd)
 				for (i=tlb_e[Random].start_odd;i<tlb_e[Random].end_odd;i+=0x1000)
 #ifdef USE_TLB_CACHE
-					TLBCache_set_w(i>>2, 0x80000000 | 
+					TLBCache_set_w(i>>2, 0x80000000 |
 						(tlb_e[Random].phys_odd + (i - tlb_e[Random].start_odd + 0xFFF)));
 #else
-					tlb_LUT_w[i>>12] = 0x80000000 | 
+					tlb_LUT_w[i>>12] = 0x80000000 |
 						(tlb_e[Random].phys_odd + (i - tlb_e[Random].start_odd + 0xFFF));
 #endif
 		}
@@ -1127,7 +1127,7 @@ static void MTC0()
      {
       case 0:    // Index
 	Index = rrt & 0x8000003F;
-	if ((Index & 0x3F) > 31) 
+	if ((Index & 0x3F) > 31)
 	  {
 	     printf ("il y a plus de 32 TLB\n");
 	     stop=1;
@@ -1277,7 +1277,7 @@ static void BC1F()
 	    {
 	       update_count();
 	       skip = next_interupt - Count;
-	       if (skip > 3) 
+	       if (skip > 3)
 		 {
 		    Count += (skip & 0xFFFFFFFC);
 		    return;
@@ -1306,7 +1306,7 @@ static void BC1T()
 	    {
 	       update_count();
 	       skip = next_interupt - Count;
-	       if (skip > 3) 
+	       if (skip > 3)
 		 {
 		    Count += (skip & 0xFFFFFFFC);
 		    return;
@@ -1335,7 +1335,7 @@ static void BC1FL()
 	    {
 	       update_count();
 	       skip = next_interupt - Count;
-	       if (skip > 3) 
+	       if (skip > 3)
 		 {
 		    Count += (skip & 0xFFFFFFFC);
 		    return;
@@ -1368,7 +1368,7 @@ static void BC1TL()
 	    {
 	       update_count();
 	       skip = next_interupt - Count;
-	       if (skip > 3) 
+	       if (skip > 3)
 		 {
 		    Count += (skip & 0xFFFFFFFC);
 		    return;
@@ -2228,7 +2228,7 @@ static void J()
 	  {
 	     update_count();
 	     skip = next_interupt - Count;
-	     if (skip > 3) 
+	     if (skip > 3)
 	       {
 		  Count += (skip & 0xFFFFFFFC);
 		  return;
@@ -2255,7 +2255,7 @@ static void JAL()
 	  {
 	     update_count();
 	     skip = next_interupt - Count;
-	     if (skip > 3) 
+	     if (skip > 3)
 	       {
 		  Count += (skip & 0xFFFFFFFC);
 		  return;
@@ -2272,7 +2272,7 @@ static void JAL()
      {
 	reg[31]=interp_addr;
 	sign_extended(reg[31]);
-	
+
 	interp_addr = naddr;
      }
    last_addr = interp_addr;
@@ -2291,7 +2291,7 @@ static void BEQ()
 	    {
 	       update_count();
 	       skip = next_interupt - Count;
-	       if (skip > 3) 
+	       if (skip > 3)
 		 {
 		    Count += (skip & 0xFFFFFFFC);
 		    return;
@@ -2322,7 +2322,7 @@ static void BNE()
 	    {
 	       update_count();
 	       skip = next_interupt - Count;
-	       if (skip > 3) 
+	       if (skip > 3)
 		 {
 		    Count += (skip & 0xFFFFFFFC);
 		    return;
@@ -2352,7 +2352,7 @@ static void BLEZ()
 	    {
 	       update_count();
 	       skip = next_interupt - Count;
-	       if (skip > 3) 
+	       if (skip > 3)
 		 {
 		    Count += (skip & 0xFFFFFFFC);
 		    return;
@@ -2382,7 +2382,7 @@ static void BGTZ()
 	    {
 	       update_count();
 	       skip = next_interupt - Count;
-	       if (skip > 3) 
+	       if (skip > 3)
 		 {
 		    Count += (skip & 0xFFFFFFFC);
 		    return;
@@ -2480,7 +2480,7 @@ static void BEQL()
 	    {
 	       update_count();
 	       skip = next_interupt - Count;
-	       if (skip > 3) 
+	       if (skip > 3)
 		 {
 		    Count += (skip & 0xFFFFFFFC);
 		    return;
@@ -2518,7 +2518,7 @@ static void BNEL()
 	    {
 	       update_count();
 	       skip = next_interupt - Count;
-	       if (skip > 3) 
+	       if (skip > 3)
 		 {
 		    Count += (skip & 0xFFFFFFFC);
 		    return;
@@ -2555,7 +2555,7 @@ static void BLEZL()
 	    {
 	       update_count();
 	       skip = next_interupt - Count;
-	       if (skip > 3) 
+	       if (skip > 3)
 		 {
 		    Count += (skip & 0xFFFFFFFC);
 		    return;
@@ -2592,7 +2592,7 @@ static void BGTZL()
 	    {
 	       update_count();
 	       skip = next_interupt - Count;
-	       if (skip > 3) 
+	       if (skip > 3)
 		 {
 		    Count += (skip & 0xFFFFFFFC);
 		    return;
@@ -2684,7 +2684,7 @@ static void LDL()
 	irt = (irt & 0xFFFFFFFFFFFFFFLL) | (word << 56);
 	break;
      }
-/*     if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+/*     if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) {
 	     sprintf(txtbuffer,"LDL() address: %08X @ %08x\n",address,interp_addr);
 	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;*/
 }
@@ -2743,7 +2743,7 @@ static void LDR()
 	read_dword_in_memory();
 	break;
      }
-/*     if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+/*     if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) {
 	     sprintf(txtbuffer,"LDR() address: %08X @ %08x\n",address,interp_addr);
 	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;*/
 }
@@ -2765,7 +2765,7 @@ static void LH()
    rdword = &irt;
    read_hword_in_memory();
    sign_extendedh(irt);
-/*   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+/*   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) {
 	   sprintf(txtbuffer,"LH() address: %08X @ %08x\n",address,interp_addr);
 	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;*/
 }
@@ -2801,7 +2801,7 @@ static void LWL()
 	break;
      }
    sign_extended(irt);
-/*   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+/*   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) {
 	   sprintf(txtbuffer,"LWL() address: %08X @ %08x\n",address,interp_addr);
 	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;*/
 }
@@ -2813,7 +2813,7 @@ static void LW()
    interp_addr+=4;
    read_word_in_memory();
    sign_extended(irt);
-/*   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+/*   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) {
 	   sprintf(txtbuffer,"LW() address: %08X @ %08x\n",address,interp_addr);
 	   DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;*/
 }
@@ -2824,7 +2824,7 @@ static void LBU()
    address = iimmediate + irs32;
    rdword = &irt;
    read_byte_in_memory();
-/*   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+/*   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) {
 	   sprintf(txtbuffer,"LBU() address: %08X @ %08x\n",address,interp_addr);
 	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;*/
 }
@@ -2835,7 +2835,7 @@ static void LHU()
    address = iimmediate + irs32;
    rdword = &irt;
    read_hword_in_memory();
-/*   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+/*   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) {
 	   sprintf(txtbuffer,"LHU() address: %08X @ %08x\n",address,interp_addr);
 	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;*/
 }
@@ -2870,7 +2870,7 @@ static void LWR()
 	read_word_in_memory();
 	sign_extended(irt);
      }
-/*	if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+/*	if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) {
 		sprintf(txtbuffer,"LWR() address: %08X @ %08x\n",address,interp_addr);
 	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;*/
 }
@@ -2881,7 +2881,7 @@ static void LWU()
    rdword = &irt;
    interp_addr+=4;
    read_word_in_memory();
-/*   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+/*   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) {
 	   sprintf(txtbuffer,"LWU() address: %08X @ %08x\n",address,interp_addr);
 	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;*/
 }
@@ -2893,7 +2893,7 @@ static void SB()
    byte = (unsigned char)(irt & 0xFF);
    write_byte_in_memory();
    check_memory();
-/*   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+/*   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) {
 	   sprintf(txtbuffer,"SB() address: %08X @ %08x\n",address,interp_addr);
 	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;*/
 }
@@ -2905,7 +2905,7 @@ static void SH()
    hword = (unsigned short)(irt & 0xFFFF);
    write_hword_in_memory();
    check_memory();
-/*   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+/*   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) {
 	   sprintf(txtbuffer,"SH() address: %08X @ %08x\n",address,interp_addr);
 	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;*/
 }
@@ -2944,7 +2944,7 @@ static void SWL()
 	check_memory();
 	break;
      }
-/* if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+/* if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) {
 	   sprintf(txtbuffer,"SWL() address: %08X @ %08x\n",address,interp_addr);
 	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;*/
 }
@@ -2956,7 +2956,7 @@ static void SW()
    word = (unsigned long)(irt & 0xFFFFFFFF);
    write_word_in_memory();
    check_memory();
-/*   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+/*   if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) {
 	   sprintf(txtbuffer,"SW() address: %08X @ %08x\n",address,interp_addr);
 	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;*/
 }
@@ -3030,7 +3030,7 @@ static void SDL()
 	check_memory();
 	break;
      }
-/*  if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+/*  if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) {
 	   sprintf(txtbuffer,"SDL() address: %08X @ %08x\n",address,interp_addr);
 	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;*/
 }
@@ -3104,7 +3104,7 @@ static void SDR()
 	check_memory();
 	break;
      }
-/*  if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+/*  if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) {
 	   sprintf(txtbuffer,"SDR() address: %08X @ %08x\n",address,interp_addr);
 	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;*/
 }
@@ -3146,7 +3146,7 @@ static void SWR()
 	check_memory();
 	break;
      }
-/*  if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) { 
+/*  if(numPrinted>=MIN_PRINT&&numPrinted<MAX_PRINT) {
 	   sprintf(txtbuffer,"SWR() address: %08X @ %08x\n",address,interp_addr);
 	     DEBUG_print(txtbuffer,DBG_USBGECKO); } numPrinted++;*/
 }
@@ -3275,7 +3275,7 @@ void prefetch()
 		 interp_addr, op, line);*/
      //}
    //printf("addr:%x\n", interp_addr);
-   
+
    // --- Trying to track down a bug ---
    /*static disturbed = 0;
    if(reg[31] == 0x100000 && !disturbed){
@@ -3293,11 +3293,11 @@ void prefetch()
    	printf("PI DRAM addr reg changed to %08x\n at last_addr %08x, op: %08x, count: %u\n",
    	       pi_reg_value, (int)last_addr, rdram[(last_addr&0xFFFFFF)/4], (unsigned int)debug_count+Count);
    }
-   
+
    if(!((debug_count + Count) % 100000)) printf("%u instructions executed\n",
                                              (unsigned int)(debug_count + Count));*/
    // --- OK ---
-   
+
 if ((interp_addr >= 0x80000000) && (interp_addr < 0xc0000000))
      {
 	if ((interp_addr >= 0x80000000) && (interp_addr < 0x80800000))
@@ -3340,7 +3340,7 @@ if ((interp_addr >= 0x80000000) && (interp_addr < 0xc0000000))
 	last_addr = addr;
 	last_phys = phys;
 	if (phys != 0x00000000) interp_addr = phys;
-	else 
+	else
 	  {
 	     prefetch();
 	     //tlb_used = 0;
