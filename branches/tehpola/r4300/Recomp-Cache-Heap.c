@@ -94,14 +94,16 @@ static void free_func(PowerPC_func* func, unsigned int addr){
 
 	// Remove any pointers to this code
 	PowerPC_block* block = blocks[addr>>12];
+	/*
 	// Null out the corresponding code_addr entries
 	int i;
 	int start = (func->start_addr&0xfff)>>2;
 	int end = (func->end_addr - func->start_addr)>>2;
 	if(end < 0) end = 1024;
 	else end += start;
-	//for(i=start; i<end; ++i)
-	//	block->code_addr[i] = NULL;
+	for(i=start; i<end; ++i)
+		block->code_addr[i] = NULL;
+	*/
 	// Remove the function from the linked list
 	PowerPC_func_node* fn = block->funcs;
 	if(fn && fn->function == func){
@@ -128,7 +130,7 @@ static inline void update_lru(PowerPC_func* func){
 	if(!nextLRU){
 		// Handle nextLRU overflows
 		// By heap-sorting and assigning new LRUs
-		heapify();
+		//heapify();
 		// Since you can't do an in-place min-heap ascending-sort
 		//   I have to create a new heap
 		CacheMetaNode** newHeap = malloc(maxHeapSize * sizeof(CacheMetaNode*));
@@ -148,7 +150,7 @@ static void release(int minNeeded){
 	// Frees alloc'ed blocks so that at least minNeeded bytes are available
 	int toFree = minNeeded * 2; // Free 2x what is needed
 	// Restore the heap properties to pop the LRU
-	heapify();
+	//heapify();
 	// Release nodes' memory until we've freed enough
 	while(toFree > 0 && cacheSize){
 		// Pop the LRU to be freed
@@ -177,7 +179,7 @@ void RecompCache_Alloc(unsigned int size, unsigned int address, PowerPC_func* fu
 	int num_instrs = ((func->end_addr ? func->end_addr : 0x10000) -
                       func->start_addr) >> 2;
 	void* code_addr = __lwp_heap_allocate(cache, num_instrs * sizeof(void*));
-	while(!code){
+	while(!code_addr){
 		release(num_instrs * sizeof(void*));
 		code_addr = __lwp_heap_allocate(cache, num_instrs * sizeof(void*));
 	}
