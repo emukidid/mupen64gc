@@ -2830,7 +2830,7 @@ static int ADD_FP(MIPS_instr mips, int dbl){
 	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
 	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl );
 
-	GEN_FADD(ppc, fd, fs, ft);
+	GEN_FADD(ppc, fd, fs, ft, dbl);
 	set_next_dst(ppc);
 
 	return CONVERT_SUCCESS;
@@ -2850,7 +2850,7 @@ static int SUB_FP(MIPS_instr mips, int dbl){
 	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
 	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl );
 
-	GEN_FSUB(ppc, fd, fs, ft);
+	GEN_FSUB(ppc, fd, fs, ft, dbl);
 	set_next_dst(ppc);
 
 	return CONVERT_SUCCESS;
@@ -2870,7 +2870,7 @@ static int MUL_FP(MIPS_instr mips, int dbl){
 	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
 	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl );
 
-	GEN_FMUL(ppc, fd, fs, ft);
+	GEN_FMUL(ppc, fd, fs, ft, dbl);
 	set_next_dst(ppc);
 
 	return CONVERT_SUCCESS;
@@ -2890,7 +2890,7 @@ static int DIV_FP(MIPS_instr mips, int dbl){
 	int ft = mapFPR( MIPS_GET_FT(mips), dbl );
 	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl );
 
-	GEN_FDIV(ppc, fd, fs, ft);
+	GEN_FDIV(ppc, fd, fs, ft, dbl);
 	set_next_dst(ppc);
 
 	return CONVERT_SUCCESS;
@@ -3866,7 +3866,7 @@ static int CVT_FP_W(MIPS_instr mips, int dbl){
 	GEN_LFD(ppc, fd, -8, 1);
 	set_next_dst(ppc);
 	// fsub fd, fd, f0
-	GEN_FSUB(ppc, fd, fd, 0);
+	GEN_FSUB(ppc, fd, fd, 0, dbl);
 	set_next_dst(ppc);
 
 	unmapRegisterTemp(tmp);
