@@ -16,6 +16,6 @@ void RecompCache_Realloc(PowerPC_func* func, unsigned int size);
 void RecompCache_Free(unsigned int addr);
 // Update the LRU info of the indicated block
 //   (call when the block is accessed)
-void RecompCache_Update(unsigned int addr);
+void RecompCache_Update(PowerPC_func* func);
 
 #endif
