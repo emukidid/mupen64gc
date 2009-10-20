@@ -8,6 +8,7 @@
 #include "../../gc_memory/memory.h"
 #include "../interupt.h"
 #include "../r4300.h"
+#include "../Recomp-Cache.h"
 #include "Wrappers.h"
 
 extern int stop;
@@ -103,19 +104,22 @@ void dynarec(unsigned int address){
 		                                    fn->function->start_addr)>>2]){
 			/*sprintf(txtbuffer, "code at %08x is not compiled\n", address);
 			DEBUG_print(txtbuffer, DBG_USBGECKO);*/
+			fn = NULL;
 			start_section(COMPILER_SECTION);
 			recompile_block(dst_block, address);
 			end_section(COMPILER_SECTION);
 		} else {
 #ifdef USE_RECOMP_CACHE
-			RecompCache_Update(address);
+			RecompCache_Update(fn->function);
 #endif
 		}
 
-		for(fn = dst_block->funcs; fn != NULL; fn = fn->next)
-			if((address&0xFFFF) >= fn->function->start_addr &&
-			   ((address&0xFFFF) < fn->function->end_addr ||
-			    fn->function->end_addr == 0)) break;
+		if(!fn){
+			for(fn = dst_block->funcs; fn != NULL; fn = fn->next)
+				if((address&0xFFFF) >= fn->function->start_addr &&
+				   ((address&0xFFFF) < fn->function->end_addr ||
+					fn->function->end_addr == 0)) break;
+		}
 		int index = ((address&0xFFFF) - fn->function->start_addr)>>2;
 
 		// Recompute the block offset

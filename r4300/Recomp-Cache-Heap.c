@@ -242,8 +242,8 @@ void RecompCache_Free(unsigned int addr){
 	}
 }
 
-void RecompCache_Update(unsigned int addr){
-	PowerPC_func_node* n = blocks[addr>>12]->funcs;
+void RecompCache_Update(PowerPC_func* func){
+	/*PowerPC_func_node* n = blocks[addr>>12]->funcs;
 	addr &= 0xffff;
 	for(; n != NULL; n = n->next){
 		if(addr >= n->function->start_addr &&
@@ -251,7 +251,8 @@ void RecompCache_Update(unsigned int addr){
 			update_lru(n->function);
 			break;
 		}
-	}
+	}*/
+	update_lru(func);
 }
 
 void RecompCache_Init(void){
