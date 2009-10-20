@@ -2,6 +2,7 @@
 
 #include <ogc/lwp_heap.h>
 #include <stdlib.h>
+#include "../gc_memory/MEM2.h"
 #include "r4300.h"
 #include "ppc/Recompile.h"
 #include "Invalid_Code.h"
@@ -13,7 +14,7 @@ typedef struct _meta_node {
 	unsigned int  size;
 } CacheMetaNode;
 
-static heap_cntrl* cache = NULL;
+static heap_cntrl* cache = NULL, * meta_cache = NULL;
 static int cacheSize = 0;
 
 #define HEAP_CHILD1(i) ((i<<1)+1)
@@ -85,7 +86,7 @@ static CacheMetaNode* heapPop(void){
 static void free_func(PowerPC_func* func, unsigned int addr){
 	// Free the code associated with the func
 	__lwp_heap_free(cache, func->code);
-	__lwp_heap_free(cache, func->code_addr);
+	__lwp_heap_free(meta_cache, func->code_addr);
 	// Remove any holes into this func
 	PowerPC_func_hole_node* hole, * next;
 	for(hole = func->holes; hole != NULL; hole = next){
@@ -95,35 +96,6 @@ static void free_func(PowerPC_func* func, unsigned int addr){
 
 	// Remove any pointers to this code
 	PowerPC_block* block = blocks[addr>>12];
-	/*
-	// Null out the corresponding code_addr entries
-	int i;
-	int start = (func->start_addr&0xfff)>>2;
-	int end = (func->end_addr - func->start_addr)>>2;
-	if(end < 0) end = 1024;
-	else end += start;
-	for(i=start; i<end; ++i)
-		block->code_addr[i] = NULL;
-	*/
-#if 0
-	// Remove the function from the linked list
-	PowerPC_func_node* fn = block->funcs;
-	if(fn && fn->function == func){
-		block->funcs = fn->next;
-		free(fn->function);
-		free(fn);
-	} else {
-		for(; fn != NULL; fn = fn->next){
-			if(fn->next && fn->next->function == func){
-				PowerPC_func_node* t = fn->next;
-				fn->next = t->next;
-				free(t->function);
-				free(t);
-				break;
-			}
-		}
-	}
-#endif
 	remove_func(&block->funcs, func);
 	free(func);
 }
@@ -183,10 +155,10 @@ void RecompCache_Alloc(unsigned int size, unsigned int address, PowerPC_func* fu
 	}
 	int num_instrs = ((func->end_addr ? func->end_addr : 0x10000) -
                       func->start_addr) >> 2;
-	void* code_addr = __lwp_heap_allocate(cache, num_instrs * sizeof(void*));
+	void* code_addr = __lwp_heap_allocate(meta_cache, num_instrs * sizeof(void*));
 	while(!code_addr){
 		release(num_instrs * sizeof(void*));
-		code_addr = __lwp_heap_allocate(cache, num_instrs * sizeof(void*));
+		code_addr = __lwp_heap_allocate(meta_cache, num_instrs * sizeof(void*));
 	}
 
 	cacheSize += size;
@@ -248,15 +220,6 @@ void RecompCache_Free(unsigned int addr){
 }
 
 void RecompCache_Update(PowerPC_func* func){
-	/*PowerPC_func_node* n = blocks[addr>>12]->funcs;
-	addr &= 0xffff;
-	for(; n != NULL; n = n->next){
-		if(addr >= n->function->start_addr &&
-		   addr <  n->function->end_addr){
-			update_lru(n->function);
-			break;
-		}
-	}*/
 	update_lru(func);
 }
 
@@ -265,6 +228,11 @@ void RecompCache_Init(void){
 		cache = malloc(sizeof(heap_cntrl));
 		__lwp_heap_init(cache, malloc(RECOMP_CACHE_SIZE),
 		                RECOMP_CACHE_SIZE, 32);
+	}
+	if(!meta_cache){
+		meta_cache = malloc(sizeof(heap_cntrl));
+		__lwp_heap_init(meta_cache, RECOMPMETA_LO,
+		                RECOMPMETA_SIZE, 32);
 	}
 }
 
