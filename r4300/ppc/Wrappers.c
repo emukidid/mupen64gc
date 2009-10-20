@@ -9,6 +9,7 @@
 #include "../interupt.h"
 #include "../r4300.h"
 #include "../Recomp-Cache.h"
+#include "Recompile.h"
 #include "Wrappers.h"
 
 extern int stop;
@@ -95,36 +96,44 @@ void dynarec(unsigned int address){
 			invalidate_block(dst_block);
 		}
 
+#if 0
 		PowerPC_func_node* fn;
 		for(fn = dst_block->funcs; fn != NULL; fn = fn->next)
 			if((address&0xFFFF) >= fn->function->start_addr &&
 			   ((address&0xFFFF) < fn->function->end_addr ||
 			    fn->function->end_addr == 0)) break;
-		if(!fn || !fn->function->code_addr[((address&0xFFFF) -
-		                                    fn->function->start_addr)>>2]){
+#else
+		PowerPC_func* func = find_func(&dst_block->funcs, address&0xFFFF);
+#endif
+
+		if(!func || !func->code_addr[((address&0xFFFF)-func->start_addr)>>2]){
 			/*sprintf(txtbuffer, "code at %08x is not compiled\n", address);
 			DEBUG_print(txtbuffer, DBG_USBGECKO);*/
-			fn = NULL;
+			func = NULL;
 			start_section(COMPILER_SECTION);
 			recompile_block(dst_block, address);
 			end_section(COMPILER_SECTION);
 		} else {
 #ifdef USE_RECOMP_CACHE
-			RecompCache_Update(fn->function);
+			RecompCache_Update(func);
 #endif
 		}
 
-		if(!fn){
+		if(!func){
+#if 0
 			for(fn = dst_block->funcs; fn != NULL; fn = fn->next)
 				if((address&0xFFFF) >= fn->function->start_addr &&
 				   ((address&0xFFFF) < fn->function->end_addr ||
 					fn->function->end_addr == 0)) break;
+#else
+			func = find_func(&dst_block->funcs, address&0xFFFF);
+#endif
 		}
-		int index = ((address&0xFFFF) - fn->function->start_addr)>>2;
+		int index = ((address&0xFFFF) - func->start_addr)>>2;
 
 		// Recompute the block offset
 		unsigned int (*code)(void);
-		code = (unsigned int (*)(void))fn->function->code_addr[index];
+		code = (unsigned int (*)(void))func->code_addr[index];
 		address = dyna_run(code);
 
 		if(!noCheckInterrupt){
@@ -178,6 +187,7 @@ unsigned int dyna_check_cop1_unusable(unsigned int pc, int isDelaySlot){
 
 static void invalidate_func(unsigned int addr){
 	PowerPC_block* block = blocks[address>>12];
+#if 0
 	PowerPC_func_node* fn;
 	for(fn = block->funcs; fn != NULL; fn = fn->next){
 		if((addr&0xffff) >= fn->function->start_addr &&
@@ -187,6 +197,11 @@ static void invalidate_func(unsigned int addr){
 			break;
 		}
 	}
+#else
+	PowerPC_func* func = find_func(&block->funcs, addr&0xffff);
+	if(func)
+		RecompCache_Free(block->start_address | func->start_addr);
+#endif
 }
 
 #define check_memory() \

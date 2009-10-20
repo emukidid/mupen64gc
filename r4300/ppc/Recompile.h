@@ -25,8 +25,13 @@ typedef struct {
 
 typedef struct func_node {
 	PowerPC_func* function;
-	struct func_node* next;
+	struct func_node* left;
+	struct func_node* right;
 } PowerPC_func_node;
+
+PowerPC_func* find_func(PowerPC_func_node** root, unsigned short addr);
+void insert_func(PowerPC_func_node** root, PowerPC_func* func);
+void remove_func(PowerPC_func_node** root, PowerPC_func* func);
 
 typedef struct {
 	MIPS_instr*     mips_code;     // The code to recompile
@@ -34,7 +39,7 @@ typedef struct {
 	uint            end_address;
 	//PowerPC_instr** code_addr;     // table of block offsets to code pointer,
 	                               //   its length is end_addr - start_addr
-	PowerPC_func_node* funcs;      // Linked list of functions in this block
+	PowerPC_func_node* funcs;      // BST of functions in this block
 	unsigned long   adler32;       // Used for TLB
 } PowerPC_block;
 
