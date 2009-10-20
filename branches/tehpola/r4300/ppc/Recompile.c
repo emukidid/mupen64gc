@@ -88,7 +88,7 @@ void set_jump_special(int which, int new_jump){
 }
 
 // Converts a sequence of MIPS instructions to a PowerPC block
-void recompile_block(PowerPC_block* ppc_block, unsigned int addr){
+PowerPC_func* recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 	src_first = ppc_block->mips_code + ((addr&0xfff)>>2);
 	addr_first = ppc_block->start_address + (addr&0xfff);
 	code_addr = NULL; // Just to make sure this isn't used here
@@ -241,6 +241,8 @@ void recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 	// Make sure it wil show up in the ICache
 	DCFlushRange(func->code, code_length*sizeof(PowerPC_instr));
 	ICInvalidateRange(func->code, code_length*sizeof(PowerPC_instr));
+
+	return func;
 }
 
 void init_block(MIPS_instr* mips_code, PowerPC_block* ppc_block){

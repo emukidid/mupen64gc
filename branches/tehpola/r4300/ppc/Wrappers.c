@@ -52,6 +52,8 @@ inline unsigned int dyna_run(unsigned int (*code)(void)){
 		   "r" (&last_addr), "r" (&next_interupt)
 		: "14", "15", "16", "17", "18", "19", "20", "21", "22");
 
+	end_section(TRAMP_SECTION);
+
 	// naddr = code();
 	__asm__ volatile(
 		// Save the lr so the recompiled code won't have to
@@ -74,6 +76,7 @@ inline unsigned int dyna_run(unsigned int (*code)(void)){
 
 void dynarec(unsigned int address){
 	while(!stop){
+		start_section(TRAMP_SECTION);
 		PowerPC_block* dst_block = blocks[address>>12];
 		unsigned long paddr = update_invalid_addr(address);
 		/*
@@ -109,9 +112,8 @@ void dynarec(unsigned int address){
 		if(!func || !func->code_addr[((address&0xFFFF)-func->start_addr)>>2]){
 			/*sprintf(txtbuffer, "code at %08x is not compiled\n", address);
 			DEBUG_print(txtbuffer, DBG_USBGECKO);*/
-			func = NULL;
 			start_section(COMPILER_SECTION);
-			recompile_block(dst_block, address);
+			func = recompile_block(dst_block, address);
 			end_section(COMPILER_SECTION);
 		} else {
 #ifdef USE_RECOMP_CACHE
@@ -119,16 +121,6 @@ void dynarec(unsigned int address){
 #endif
 		}
 
-		if(!func){
-#if 0
-			for(fn = dst_block->funcs; fn != NULL; fn = fn->next)
-				if((address&0xFFFF) >= fn->function->start_addr &&
-				   ((address&0xFFFF) < fn->function->end_addr ||
-					fn->function->end_addr == 0)) break;
-#else
-			func = find_func(&dst_block->funcs, address&0xFFFF);
-#endif
-		}
 		int index = ((address&0xFFFF) - func->start_addr)>>2;
 
 		// Recompute the block offset

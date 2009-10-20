@@ -69,7 +69,7 @@ void       set_jump_special(int which, int new_jump);
    init assumes that all pointers in the block fed it it are NULL or allocated
    memory. Deinit frees a block with the same preconditions.
  */
-void recompile_block(PowerPC_block* ppc_block, unsigned int addr);
+PowerPC_func* recompile_block(PowerPC_block* ppc_block, unsigned int addr);
 void init_block  (MIPS_instr* mips_code, PowerPC_block* ppc_block);
 void deinit_block(PowerPC_block* ppc_block);
 
