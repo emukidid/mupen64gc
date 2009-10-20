@@ -30,7 +30,8 @@ extern int   ROM_byte_swap;
 static char* ROMBlocks[64];
 static int   ROMBlocksLRU[64];
 static fileBrowser_file* ROMFile;
-
+extern int hasLoadedROM;
+extern int stop;
 void* memcpy(void* dst, void* src, int len);
 void showLoadProgress(float);
 
