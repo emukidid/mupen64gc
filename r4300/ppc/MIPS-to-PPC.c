@@ -2906,11 +2906,12 @@ static int SQRT_FP(MIPS_instr mips, int dbl){
 
 	genCheckFP();
 
+	flushRegisters();
 	mapFPR( MIPS_GET_FS(mips), dbl ); // maps to f1 (FP argument)
 	invalidateRegisters();
 
 	// call sqrt
-	GEN_B(ppc, add_jump(&sqrt, 1, 1), 0, 1);
+	GEN_B(ppc, add_jump(dbl ? &sqrt : &sqrtf, 1, 1), 0, 1);
 	set_next_dst(ppc);
 
 	mapFPRNew( MIPS_GET_FD(mips), dbl ); // maps to f1 (FP return)

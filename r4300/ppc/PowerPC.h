@@ -891,7 +891,7 @@ PowerPC_instr Instruction(int opcode, ...);
 
 #define GEN_FADD(ppc,fd,fa,fb,dbl) \
 	{ ppc = NEW_PPC_INSTR(); \
-	  PPC_SET_OPCODE(ppc, (dbl) ? PPC_OPCODE_FPD : PPC_OPCODE_FPS); \
+	  PPC_SET_OPCODE(ppc, ((dbl) ? PPC_OPCODE_FPD : PPC_OPCODE_FPS)); \
 	  PPC_SET_FUNC  (ppc, PPC_FUNC_FADD); \
 	  PPC_SET_RD    (ppc, (fd)); \
 	  PPC_SET_RA    (ppc, (fa)); \
@@ -899,7 +899,7 @@ PowerPC_instr Instruction(int opcode, ...);
 
 #define GEN_FSUB(ppc,fd,fa,fb,dbl) \
 	{ ppc = NEW_PPC_INSTR(); \
-	  PPC_SET_OPCODE(ppc, (dbl) ? PPC_OPCODE_FPD : PPC_OPCODE_FPS); \
+	  PPC_SET_OPCODE(ppc, ((dbl) ? PPC_OPCODE_FPD : PPC_OPCODE_FPS)); \
 	  PPC_SET_FUNC  (ppc, PPC_FUNC_FSUB); \
 	  PPC_SET_RD    (ppc, (fd)); \
 	  PPC_SET_RA    (ppc, (fa)); \
@@ -907,7 +907,7 @@ PowerPC_instr Instruction(int opcode, ...);
 
 #define GEN_FMUL(ppc,fd,fa,fb,dbl) \
 	{ ppc = NEW_PPC_INSTR(); \
-	  PPC_SET_OPCODE(ppc, (dbl) ? PPC_OPCODE_FPD : PPC_OPCODE_FPS); \
+	  PPC_SET_OPCODE(ppc, ((dbl) ? PPC_OPCODE_FPD : PPC_OPCODE_FPS)); \
 	  PPC_SET_FUNC  (ppc, PPC_FUNC_FMUL); \
 	  PPC_SET_RD    (ppc, (fd)); \
 	  PPC_SET_RA    (ppc, (fa)); \
@@ -915,7 +915,7 @@ PowerPC_instr Instruction(int opcode, ...);
 
 #define GEN_FDIV(ppc,fd,fa,fb,dbl) \
 	{ ppc = NEW_PPC_INSTR(); \
-	  PPC_SET_OPCODE(ppc, (dbl) ? PPC_OPCODE_FPD : PPC_OPCODE_FPS); \
+	  PPC_SET_OPCODE(ppc, ((dbl) ? PPC_OPCODE_FPD : PPC_OPCODE_FPS)); \
 	  PPC_SET_FUNC  (ppc, PPC_FUNC_FDIV); \
 	  PPC_SET_RD    (ppc, (fd)); \
 	  PPC_SET_RA    (ppc, (fa)); \
