@@ -3,6 +3,7 @@
 #include <ogc/lwp_heap.h>
 #include <stdlib.h>
 #include "r4300.h"
+#include "ppc/Recompile.h"
 #include "Invalid_Code.h"
 #include "Recomp-Cache.h"
 
@@ -104,6 +105,7 @@ static void free_func(PowerPC_func* func, unsigned int addr){
 	for(i=start; i<end; ++i)
 		block->code_addr[i] = NULL;
 	*/
+#if 0
 	// Remove the function from the linked list
 	PowerPC_func_node* fn = block->funcs;
 	if(fn && fn->function == func){
@@ -121,6 +123,9 @@ static void free_func(PowerPC_func* func, unsigned int addr){
 			}
 		}
 	}
+#endif
+	remove_func(&block->funcs, func);
+	free(func);
 }
 
 static inline void update_lru(PowerPC_func* func){
