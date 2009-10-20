@@ -97,7 +97,8 @@ void jump_to(unsigned int);
 #define TLB_SECTION 5
 #define FP_SECTION 6
 #define INTERP_SECTION 7
-#define NUM_SECTIONS 7
+#define TRAMP_SECTION 8
+#define NUM_SECTIONS 8
 
 //#define PROFILE
 

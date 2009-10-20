@@ -82,6 +82,7 @@ OBJ		=main/rom_gc.o \
 OBJ_PPC		=r4300/ppc/MIPS-to-PPC.o \
 		r4300/ppc/Recompile.o \
 		r4300/ppc/Wrappers.o \
+		r4300/ppc/FuncTree.o \
 		r4300/ppc/Register-Cache.o
 
 OBJ_X86         =r4300/x86/gr4300.o \
