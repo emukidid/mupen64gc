@@ -158,6 +158,19 @@ void RecompCache_Alloc(unsigned int size, unsigned int address, PowerPC_func* fu
 	update_lru(func);
 }
 
+void RecompCache_Realloc(PowerPC_func* func, unsigned int new_size){
+	// I'm not worrying about maintaining the cache size here for now
+	func->code = realloc(func->code, new_size);
+	int i;
+	for(i=heapSize-1; i>=0; --i){
+		if(func == cacheHeap[i]->func){
+			cacheSize +=  new_size - cacheHeap[i]->size;
+			cacheHeap[i]->size = new_size;
+			break;
+		}
+	}
+}
+
 void RecompCache_Free(unsigned int addr){
 	int i;
 	CacheMetaNode* n = NULL;
