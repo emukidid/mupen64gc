@@ -144,7 +144,7 @@ PowerPC_func* recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 			// func is a hole in fn->function
 			printf("Recompiling hole\n");
 			printf("%04x - %04x is in ", func->start_addr, func->end_addr);
-			printf("%04x - %04x\n", fn->function->start_addr, fn->function->end_addr);
+			printf("%04x - %04x\n", (*node)->function->start_addr, (*node)->function->end_addr);
 			PowerPC_func_hole_node* hole = malloc(sizeof(PowerPC_func_hole_node));
 			hole->addr = func->start_addr;
 			hole->next = (*node)->function->holes;
@@ -216,6 +216,9 @@ PowerPC_func* recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 #else
 		func->code = malloc(code_length * sizeof(PowerPC_instr));
 #endif
+	} else {
+		// We're recompiling from a hole, resize the code buffer as needed
+		RecompCache_Realloc(func, code_length * sizeof(PowerPC_instr));
 	}
 	memcpy(func->code, code_buffer, code_length * sizeof(PowerPC_instr));
 	memcpy(func->code_addr, code_addr_buffer, addr_last - addr_first);
