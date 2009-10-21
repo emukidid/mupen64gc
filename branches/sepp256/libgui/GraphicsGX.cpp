@@ -23,7 +23,8 @@ Graphics::Graphics(GXRModeObj *rmode)
 
 	CONF_Init();
 	VIDEO_Init();
-	vmode = VIDEO_GetPreferredMode(NULL);
+	//vmode = VIDEO_GetPreferredMode(NULL);
+	vmode = VIDEO_GetPreferredMode(&vmode_phys);
 #if 0
 	if(CONF_GetAspectRatio()) {
 		vmode->viWidth = 678;
@@ -113,10 +114,12 @@ void Graphics::drawInit()
 	GX_SetZTexture(GX_ZT_DISABLE,GX_TF_Z16,0);	//GX_ZT_DISABLE or GX_ZT_REPLACE; set in gDP.cpp
 	GX_SetZCompLoc(GX_TRUE);	// Do Z-compare before texturing.
 	GX_SetFog(GX_FOG_NONE,0,1,0,1,(GXColor){0,0,0,255});
-	GX_SetViewport(0,0,vmode->fbWidth,vmode->efbHeight,0,1);
+//	GX_SetViewport(0,0,vmode->fbWidth,vmode->efbHeight,0,1);
+	GX_SetViewport(0,0,640,480,0,1);
 	GX_SetCoPlanar(GX_DISABLE);
 	GX_SetClipMode(GX_CLIP_DISABLE);
-	GX_SetScissor(0,0,vmode->fbWidth,vmode->efbHeight);
+//	GX_SetScissor(0,0,vmode->fbWidth,vmode->efbHeight);
+	GX_SetScissor(0,0,640,480);
 	GX_SetAlphaCompare(GX_ALWAYS,0,GX_AOP_AND,GX_ALWAYS,0);
 
 	GX_SetZMode(GX_ENABLE,GX_ALWAYS,GX_TRUE);

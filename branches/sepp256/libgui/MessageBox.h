@@ -12,7 +12,6 @@ namespace menu {
 class MessageBox : public Frame
 {
 public:
-	void setGuiInstance(Gui* gui);
 	void setMessage(const char* text);
 	void deactivate();
 	bool getActive();
@@ -27,7 +26,6 @@ public:
 private:
 	MessageBox();
 	~MessageBox();
-	Gui *guiInstance;
 	Image *buttonImage;
 	Image *buttonFocusImage;
 	bool messageBoxActive;

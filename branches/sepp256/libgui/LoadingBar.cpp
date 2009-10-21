@@ -5,6 +5,7 @@
 #include "FocusManager.h"
 #include "IPLFont.h"
 #include <stdio.h>
+#include <debug.h>
 
 namespace menu {
 
@@ -12,8 +13,7 @@ namespace menu {
 char loadingBarText[LOADINGBAR_TEXT_WIDTH];
 
 LoadingBar::LoadingBar()
-		: guiInstance(0),
-		  buttonImage(0),
+		: buttonImage(0),
 		  buttonFocusImage(0),
 		  loadingBarActive(false),
 		  currentCursorFrame(0),
@@ -22,6 +22,8 @@ LoadingBar::LoadingBar()
 {
 	buttonImage = new menu::Image(ButtonTexture, 16, 16, GX_TF_I8, GX_CLAMP, GX_CLAMP, GX_FALSE);
 	buttonFocusImage = new menu::Image(ButtonFocusTexture, 16, 16, GX_TF_I8, GX_CLAMP, GX_CLAMP, GX_FALSE);
+
+	showFrame();
 
 	boxColor = (GXColor) {100, 100, 100, 200};
 	backColor = (GXColor) {0, 0, 0, 255};
@@ -36,11 +38,6 @@ LoadingBar::~LoadingBar()
 	delete buttonImage;
 }
 
-void LoadingBar::setGuiInstance(Gui* gui)
-{
-	guiInstance = gui;
-}
-
 void LoadingBar::showBar(float percent, const char* string)
 {
 	loadingBarActive = true;
@@ -52,7 +49,7 @@ void LoadingBar::showBar(float percent, const char* string)
 	memset(loadingBarText, 0, LOADINGBAR_TEXT_WIDTH);
 	strncpy(loadingBarText, string, LOADINGBAR_TEXT_WIDTH);
 
-	guiInstance->draw();
+	menu::Gui::getInstance().draw();
 
 	loadingBarActive = false;
 	if (currentCursorFrame) Cursor::getInstance().setCurrentFrame(currentCursorFrame);

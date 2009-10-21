@@ -45,6 +45,7 @@ private:
 	void applyCurrentColor();
 	float getCurrentTransparency(int index);
 	GXRModeObj *vmode;
+	GXRModeObj vmode_phys;
 	int which_fb;
 	bool first_frame;
 	void *xfb[2];

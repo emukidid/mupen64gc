@@ -5,8 +5,7 @@
 MenuContext *pMenuContext;
 
 MenuContext::MenuContext(GXRModeObj *vmode)
-		: guiInstance(new menu::Gui(vmode)),
-		  currentActiveFrame(0),
+		: currentActiveFrame(0),
 		  mainFrame(0),
 		  loadRomFrame(0),
 		  fileBrowserFrame(0),
@@ -16,6 +15,8 @@ MenuContext::MenuContext(GXRModeObj *vmode)
 {
 	pMenuContext = this;
 
+	menu::Gui::getInstance().setVmode(vmode);
+
 	mainFrame = new MainFrame();
 	loadRomFrame = new LoadRomFrame();
 	fileBrowserFrame = new FileBrowserFrame();
@@ -24,13 +25,13 @@ MenuContext::MenuContext(GXRModeObj *vmode)
 	selectCPUFrame = new SelectCPUFrame();
 	devFrame = new DevFrame();
 
-	guiInstance->addFrame(mainFrame);
-	guiInstance->addFrame(loadRomFrame);
-	guiInstance->addFrame(fileBrowserFrame);
-	guiInstance->addFrame(loadSaveFrame);
-	guiInstance->addFrame(saveGameFrame);
-	guiInstance->addFrame(selectCPUFrame);
-	guiInstance->addFrame(devFrame);
+	menu::Gui::getInstance().addFrame(mainFrame);
+	menu::Gui::getInstance().addFrame(loadRomFrame);
+	menu::Gui::getInstance().addFrame(fileBrowserFrame);
+	menu::Gui::getInstance().addFrame(loadSaveFrame);
+	menu::Gui::getInstance().addFrame(saveGameFrame);
+	menu::Gui::getInstance().addFrame(selectCPUFrame);
+	menu::Gui::getInstance().addFrame(devFrame);
 
 	setActiveFrame(FRAME_MAIN);
 	menu::Focus::getInstance().setFocusActive(true);
@@ -45,7 +46,6 @@ MenuContext::~MenuContext()
 	delete fileBrowserFrame;
 	delete loadRomFrame;
 	delete mainFrame;
-	delete guiInstance;
 	pMenuContext = NULL;
 }
 
@@ -101,5 +101,5 @@ void MenuContext::setActiveFrame(int frameIndex)
 
 void MenuContext::draw()
 {
-	guiInstance->draw();
+	menu::Gui::getInstance().draw();
 }

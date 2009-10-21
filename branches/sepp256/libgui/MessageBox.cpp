@@ -5,7 +5,6 @@
 #include "CursorManager.h"
 #include "FocusManager.h"
 #include "InputManager.h"
-//#include "Frame.h"
 #include "IPLFont.h"
 
 namespace menu {
@@ -42,8 +41,7 @@ struct ButtonInfo
 };
 
 MessageBox::MessageBox()
-		: guiInstance(0),
-		  buttonImage(0),
+		: buttonImage(0),
 		  buttonFocusImage(0),
 		  messageBoxActive(false),
 		  currentCursorFrame(0),
@@ -81,11 +79,6 @@ MessageBox::~MessageBox()
 	delete buttonImage;
 }
 
-void MessageBox::setGuiInstance(Gui* gui)
-{
-	guiInstance = gui;
-}
-
 void MessageBox::setMessage(const char* string)
 {
 	messageBoxActive = true;
@@ -97,7 +90,7 @@ void MessageBox::setMessage(const char* string)
 	strncpy(messageBoxText, string, MESSAGEBOX_TEXT_WIDTH);
 
 	while (messageBoxActive)
-		guiInstance->draw();
+		menu::Gui::getInstance().draw();
 //	Input::getInstance().clearInputData();
 }
 
