@@ -91,31 +91,8 @@ static void free_func(PowerPC_func* func, unsigned int addr){
 	
 	// Remove any pointers to this code
 	PowerPC_block* block = blocks[addr>>12];
-	// Null out the corresponding code_addr entries
-	int i;
-	int start = (func->start_addr&0xfff)>>2;
-	int end = (func->end_addr - func->start_addr)>>2;
-	if(end < 0) end = 1024;
-	else end += start;
-	//for(i=start; i<end; ++i)
-	//	block->code_addr[i] = NULL;
-	// Remove the function from the linked list
-	PowerPC_func_node* fn = block->funcs;
-	if(fn && fn->function == func){
-		block->funcs = fn->next;
-		free(fn->function);
-		free(fn);
-	} else {
-		for(; fn != NULL; fn = fn->next){
-			if(fn->next && fn->next->function == func){
-				PowerPC_func_node* t = fn->next;
-				fn->next = t->next;
-				free(t->function);
-				free(t);
-				break;
-			}
-		}
-	}
+	remove_func(&block->funcs, func);
+	free(func);
 }
 
 static inline void update_lru(PowerPC_func* func){
@@ -130,7 +107,7 @@ static inline void update_lru(PowerPC_func* func){
 		//   I have to create a new heap
 		CacheMetaNode** newHeap = malloc(maxHeapSize * sizeof(CacheMetaNode*));
 		int i, savedSize = heapSize;
-		for(i=0; i<heapSize; ++i){
+		for(i=0; heapSize > 0; ++i){
 			newHeap[i] = heapPop();
 			newHeap[i]->func->lru = i;
 		}
@@ -175,35 +152,10 @@ void RecompCache_Alloc(unsigned int size, unsigned int address, PowerPC_func* fu
 	cacheSize += size;
 	newBlock->func->code = malloc(size);
 	newBlock->func->code_addr = malloc(num_instrs * sizeof(void*));
-	memset(newBlock->func->code_addr, 0, num_instrs * sizeof(void*));
 	// Add it to the heap
 	heapPush(newBlock);
 	// Make this function the LRU
 	update_lru(func);
-}
-
-void RecompCache_Realloc(PowerPC_func* func, unsigned int size){
-	int i;
-	CacheMetaNode* n = NULL;
-	printf("RecompCache_Realloc(%04x, %d)\n", func->start_addr, size);
-	printf("(%dkB used of %dkB or %f\%)\n", cacheSize/1024, RECOMP_CACHE_SIZE/1024, ((float)cacheSize)/RECOMP_CACHE_SIZE*100);
-	// Find the corresponding node
-	for(i=heapSize-1; !n; --i)
-		if(cacheHeap[i]->func == func)
-			n = cacheHeap[i];
-	// Make this function the LRU
-	update_lru(func);
-	
-	int neededSpace = size - n->size;
-	
-	if(cacheSize + neededSpace > RECOMP_CACHE_SIZE)
-		// Free up at least enough space for it to fit
-		release(cacheSize + neededSpace - RECOMP_CACHE_SIZE);
-	
-	// We have the necessary space for this alloc, so just call malloc
-	cacheSize += neededSpace;
-	n->func->code = realloc(n->func->code, size);
-	n->size = size;
 }
 
 void RecompCache_Free(unsigned int addr){
@@ -225,24 +177,7 @@ void RecompCache_Free(unsigned int addr){
 	}
 }
 
-void RecompCache_Update(unsigned int addr){
-	PowerPC_func_node* n = blocks[addr>>12]->funcs;
-	addr &= 0xffff;
-	for(; n != NULL; n = n->next){
-		if(addr >= n->function->start_addr &&
-		   addr <  n->function->end_addr){
-			update_lru(n->function);
-			break;
-		}
-	}
-}
-
-unsigned int RecompCache_Size(PowerPC_func* func){
-	int i;
-	// Find the corresponding node
-	for(i=heapSize-1; i>=0; --i)
-		if(cacheHeap[i]->func == func)
-			return cacheHeap[i]->size;
-	return 0;
+void RecompCache_Update(PowerPC_func* func){
+	update_lru(func);
 }
 

@@ -6,6 +6,8 @@
 #include "../../memory/memory.h"
 #include "../interupt.h"
 #include "../r4300.h"
+#include "../Recomp-Cache.h"
+#include "Recompile.h"
 #include "Wrappers.h"
 
 #include <assert.h>
@@ -27,32 +29,45 @@ int noCheckInterrupt = 0;
  */
 
 inline unsigned int dyna_run(unsigned int (*code)(void)){
+	unsigned int naddr;
+
 	__asm__ volatile(
+		// Create the stack frame for code
 		"stwu	1, -16(1) \n"
 		"mfcr	14        \n"
 		"stw	14, 8(1)  \n"
+		// Setup saved registers for code
 		"mr	14, %0    \n"
-		"addi	15, 0, 0  \n"
-		"mr	16, %1    \n"
-		"mr	17, %2    \n"
-		"mr	18, %3    \n"
-		"mr	19, %4    \n"
-		"mr	20, %5    \n"
-		"mr	21, %6    \n"
-		"mr	22, %7    \n"
-		"mr	23, %8    \n"
-		"mr	24, %9    \n"
-		:: "r" (reg), "r" (decodeNInterpret),
-		   "r" (dyna_update_count), "r" (&last_addr),
-		   "r" (rdram), "r" (dyna_mem),
+		"mr	15, %1    \n"
+		"mr	16, %2    \n"
+		"mr	17, %3    \n"
+		"mr	18, %4    \n"
+		"mr	19, %5    \n"
+		"mr	20, %6    \n"
+		"mr	21, %7    \n"
+		"addi	22, 0, 0  \n"
+		:: "r" (reg), "r" (reg_cop0),
 		   "r" (reg_cop1_simple), "r" (reg_cop1_double),
-		   "r" (&FCR31), "r" (dyna_check_cop1_unusable)
-		: "14", "15", "16", "17", "18", "19", "20", "21",
-		  "22", "23", "24");
+		   "r" (&FCR31), "r" (rdram),
+		   "r" (&last_addr), "r" (&next_interupt)
+		: "14", "15", "16", "17", "18", "19", "20", "21", "22");
 
-	unsigned int naddr = code();
-
-	__asm__ volatile("lwz	1, 0(1)\n");
+	// naddr = code();
+	__asm__ volatile(
+		// Save the lr so the recompiled code won't have to
+		"bl	4         \n"
+		"mtctr	%1        \n"
+		"mflr	4         \n"
+		"addi	4, 4, 20  \n"
+		"stw	4, 20(1)  \n"
+		// Execute the code
+		"bctrl           \n"
+		"mr	%0, 3     \n"
+		// Pop the stack
+		"lwz	1, 0(1)   \n"
+		: "=r" (naddr)
+		: "r" (code)
+		: "3", "4", "5", "6", "7", "8", "9", "10", "11", "12");
 
 	return naddr;
 }
@@ -88,33 +103,24 @@ void dynarec(unsigned int address){
 			invalidate_block(dst_block);
 		}
 
-		PowerPC_func_node* fn;
-		for(fn = dst_block->funcs; fn != NULL; fn = fn->next)
-			if((address&0xFFFF) >= fn->function->start_addr &&
-			   ((address&0xFFFF) < fn->function->end_addr ||
-			    fn->function->end_addr == 0)) break;
-		if(!fn || !fn->function->code_addr[((address&0xFFFF) -
-		                                    fn->function->start_addr)>>2]){
+		PowerPC_func* func = find_func(&dst_block->funcs, address&0xFFFF);
+
+		if(!func || !func->code_addr[((address&0xFFFF)-func->start_addr)>>2]){
 			printf("code at %08x is not compiled\n", address);
 			start_section(COMPILER_SECTION);
-			recompile_block(dst_block, address);
+			func = recompile_block(dst_block, address);
 			end_section(COMPILER_SECTION);
 		} else {
 #ifdef USE_RECOMP_CACHE
-			RecompCache_Update(address);
+			RecompCache_Update(func);
 #endif
 		}
 
-		for(fn = dst_block->funcs; fn != NULL; fn = fn->next)
-			if((address&0xFFFF) >= fn->function->start_addr &&
-			   ((address&0xFFFF) < fn->function->end_addr ||
-			    fn->function->end_addr == 0)) break;
-		assert(fn);
-		int index = ((address&0xFFFF) - fn->function->start_addr)>>2;
+		int index = ((address&0xFFFF) - func->start_addr)>>2;
 
 		// Recompute the block offset
 		unsigned int (*code)(void);
-		code = (unsigned int (*)(void))fn->function->code_addr[index];
+		code = (unsigned int (*)(void))func->code_addr[index];
 		address = dyna_run(code);
 
 		if(!noCheckInterrupt){
@@ -169,8 +175,6 @@ int dyna_update_count(unsigned int pc){
 }
 
 unsigned int dyna_check_cop1_unusable(unsigned int pc, int isDelaySlot){
-	// Check if FP unusable bit is set
-	if(!(Status & 0x20000000)){
 		// Set state so it can be recovered after exception
 		delay_slot = isDelaySlot;
 		PC->addr = interp_addr = pc;
@@ -182,21 +186,13 @@ unsigned int dyna_check_cop1_unusable(unsigned int pc, int isDelaySlot){
 		noCheckInterrupt = 1;
 		// Return the address to trampoline to
 		return interp_addr;
-	} else
-		return 0;
 }
 
 static void invalidate_func(unsigned int addr){
-	PowerPC_block* block = blocks[address>>12];
-	PowerPC_func_node* fn;
-	for(fn = block->funcs; fn != NULL; fn = fn->next){
-		if((addr&0xffff) >= fn->function->start_addr &&
-		   (addr&0xffff) <  fn->function->end_addr){
-			RecompCache_Free(block->start_address |
-			                 fn->function->start_addr);
-			break;
-		}
-	}
+	PowerPC_block* block = blocks[addr>>12];
+	PowerPC_func* func = find_func(&block->funcs, addr&0xffff);
+	if(func)
+		RecompCache_Free(block->start_address | func->start_addr);
 }
 
 #define check_memory() \
@@ -246,6 +242,10 @@ unsigned int dyna_mem(unsigned int value, unsigned int addr,
 			read_word_in_memory();
 			*((long*)reg_cop1_simple[value]) = (long)dyna_rdword;
 			break;
+		case MEM_LDC1:
+			read_dword_in_memory();
+			*((long long*)reg_cop1_double[value]) = dyna_rdword;
+			break;
 		case MEM_SW:
 			word = value;
 			write_word_in_memory();
@@ -259,6 +259,21 @@ unsigned int dyna_mem(unsigned int value, unsigned int addr,
 		case MEM_SB:
 			byte = value;
 			write_byte_in_memory();
+			check_memory();
+			break;
+		case MEM_SD:
+			dword = reg[value];
+			write_dword_in_memory();
+			check_memory();
+			break;
+		case MEM_SWC1:
+			word = *((long*)reg_cop1_simple[value]);
+			write_word_in_memory();
+			check_memory();
+			break;
+		case MEM_SDC1:
+			dword = *((unsigned long long*)reg_cop1_double[value]);
+			write_dword_in_memory();
 			check_memory();
 			break;
 		default:

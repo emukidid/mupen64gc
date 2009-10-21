@@ -91,6 +91,7 @@ void (*code)();
 #define dyna_jump()
 #define dyna_start(addr)
 #define dyna_stop()
+void jump_to(unsigned int addr){ }
 
 void NI()
 {
@@ -1460,8 +1461,8 @@ inline void jump_to_func()
 	  }
 	blocks[addr>>12]->start = addr & ~0xFFF;
 	blocks[addr>>12]->end = (addr & ~0xFFF) + 0x1000;
-	init_block(rdram+(((paddr-(addr-blocks[addr>>12]->start)) & 0x1FFFFFFF)>>2),
-		   blocks[addr>>12]);
+	//init_block(rdram+(((paddr-(addr-blocks[addr>>12]->start)) & 0x1FFFFFFF)>>2),
+	//	   blocks[addr>>12]);
      }
 #ifdef USE_RECOMP_CACHE
 	else RecompCache_Update(addr>>12);
@@ -1543,7 +1544,7 @@ void init_blocks()
 #endif
    invalid_code[0xa4000000>>12] = 0;
    actual=blocks[0xa4000000>>12];
-   init_block(SP_DMEM, blocks[0xa4000000>>12]);
+   //init_block(SP_DMEM, blocks[0xa4000000>>12]);
 #ifdef PPC_DYNAREC
 	PC = malloc(sizeof(precomp_instr));
 #else
@@ -1856,7 +1857,7 @@ void go()
 	init_blocks();
 #ifdef PPC_DYNAREC
 	//jump_to(0xa4000040);
-	dynarec(0xa4000040);
+	//dynarec(0xa4000040);
 	//_break();
 #else
 	code = (void *)(actual->code+(actual->block[0x40/4].local_addr));
@@ -1888,7 +1889,7 @@ void go()
 		if (blocks[i])
 		  {
 #ifdef PPC_DYNAREC
-		     deinit_block(blocks[i]);
+		     //deinit_block(blocks[i]);
 #else
 		     if (blocks[i]->block) {
 #ifdef USE_RECOMP_CACHE
