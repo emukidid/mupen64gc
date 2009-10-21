@@ -30,14 +30,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "../r4300/r4300.h"
-#include "memory.h"
-#include "../main/guifuncs.h"
-
-
-#include <ogc/card.h>
-#include "Saves.h"
-
 #ifdef MENU_V2
 #define PRINT DUMMY_print
 extern void DUMMY_print(char* dummy);
@@ -49,6 +41,13 @@ extern void DUMMY_print(char* dummy);
 #define PRINT printf
 #endif
 #endif
+
+#include "../r4300/r4300.h"
+#include "memory.h"
+#include "../main/guifuncs.h"
+
+#include <ogc/card.h>
+#include "Saves.h"
 
 int use_flashram;
 

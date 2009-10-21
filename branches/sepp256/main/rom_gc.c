@@ -32,11 +32,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include "../gui/GUI.h"
 #include "rom.h"
 #include "ROM-Cache.h" 
 #include "../gc_memory/memory.h"
 #include "../fileBrowser/fileBrowser.h"
-#include "../gui/GUI.h"
 
 #define PRINT GUI_print
 

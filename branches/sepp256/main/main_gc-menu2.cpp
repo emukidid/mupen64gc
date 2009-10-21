@@ -13,6 +13,14 @@
 # include <debug.h>
 #endif
 
+#include <gccore.h>
+#include "../menu/MenuContext.h"
+//#include "../gui/gui_GX-menu.h"
+//#include "../gui/GUI.h"
+//#include "../gui/menu.h"
+#include "../gui/DEBUG.h"
+#include "timers.h"
+
 #include "winlnxdefs.h"
 extern "C" {
 #include "main.h"
@@ -28,13 +36,6 @@ extern "C" {
 #include "ROM-Cache.h"
 }
 
-#include <gccore.h>
-#include "../menu/MenuContext.h"
-//#include "../gui/gui_GX-menu.h"
-//#include "../gui/GUI.h"
-//#include "../gui/menu.h"
-#include "../gui/DEBUG.h"
-#include "timers.h"
 #ifdef WII
 #include <ogc/conf.h>
 #include <wiiuse/wpad.h>
