@@ -37,17 +37,6 @@
 #include <windows.h>
 #endif
 
-#include <ogc/card.h>
-
-#include "memory.h"
-#include "pif.h"
-#include "pif2.h"
-#include "../r4300/r4300.h"
-#include "../r4300/interupt.h"
-#include "../main/plugin.h"
-#include "../main/guifuncs.h"
-#include "Saves.h"
-
 #ifdef MENU_V2
 #define PRINT DUMMY_print
 extern void DUMMY_print(char* dummy);
@@ -59,6 +48,18 @@ extern void DUMMY_print(char* dummy);
 #define PRINT printf
 #endif
 #endif
+
+#include <ogc/card.h>
+
+#include "memory.h"
+#include "pif.h"
+#include "pif2.h"
+#include "../r4300/r4300.h"
+#include "../r4300/interupt.h"
+#include "../main/plugin.h"
+#include "../main/guifuncs.h"
+#include "Saves.h"
+
 //todo: use one buffer for flashram+eeprom+sram cause they're never together at once
 static unsigned char eeprom[0x800] __attribute__((aligned(32)));
 static unsigned char mempack[4][0x8000] __attribute__((aligned(32)));
