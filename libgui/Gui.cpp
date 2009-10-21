@@ -8,12 +8,19 @@
 
 namespace menu {
 
-Gui::Gui(GXRModeObj *vmode)
-		: gfx(vmode)
+Gui::Gui()
 {
+}
+
+Gui::~Gui()
+{
+	delete gfx;
+}
+
+void Gui::setVmode(GXRModeObj *vmode)
+{
+	gfx = new Graphics(vmode);
 	IplFont::getInstance().setVmode(vmode);
-	MessageBox::getInstance().setGuiInstance(this);
-	LoadingBar::getInstance().setGuiInstance(this);
 }
 
 void Gui::addFrame(Frame *frame)
@@ -34,17 +41,17 @@ void Gui::draw()
 	Focus::getInstance().updateFocus();
 	//Update time??
 	//Get graphics framework and pass to Frame draw fns?
-	gfx.drawInit();
+	gfx->drawInit();
 	FrameList::const_iterator iteration;
 	for (iteration = frameList.begin(); iteration != frameList.end(); iteration++)
 	{
-		(*iteration)->drawChildren(gfx);
+		(*iteration)->drawChildren(*gfx);
 	}
-	if (MessageBox::getInstance().getActive()) MessageBox::getInstance().drawMessageBox(gfx);
-	if (LoadingBar::getInstance().getActive()) LoadingBar::getInstance().drawLoadingBar(gfx);
-	Cursor::getInstance().drawCursor(gfx);
+	if (MessageBox::getInstance().getActive()) MessageBox::getInstance().drawMessageBox(*gfx);
+	if (LoadingBar::getInstance().getActive()) LoadingBar::getInstance().drawLoadingBar(*gfx);
+	Cursor::getInstance().drawCursor(*gfx);
 
-	gfx.swapBuffers();
+	gfx->swapBuffers();
 }
 
 } //namespace menu 

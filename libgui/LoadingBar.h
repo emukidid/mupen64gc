@@ -9,10 +9,9 @@
 
 namespace menu {
 
-class LoadingBar
+class LoadingBar : public Frame
 {
 public:
-	void setGuiInstance(Gui* gui);
 	void showBar(float percent, const char* text);
 	bool getActive();
 	void drawLoadingBar(Graphics& gfx);
@@ -26,7 +25,6 @@ public:
 private:
 	LoadingBar();
 	~LoadingBar();
-	Gui *guiInstance;
 	Image *buttonImage;
 	Image *buttonFocusImage;
 	bool loadingBarActive;

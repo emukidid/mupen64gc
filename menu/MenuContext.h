@@ -36,7 +36,6 @@ public:
 
 private:
 	void draw();
-	menu::Gui *guiInstance;
 	menu::Frame *currentActiveFrame;
 	MainFrame *mainFrame;
 	LoadRomFrame *loadRomFrame;
