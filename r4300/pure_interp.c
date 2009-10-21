@@ -44,16 +44,10 @@ extern void update_debugger();
 #ifdef PPC_DYNAREC
 
 static void invalidate_func(unsigned int addr){
-	PowerPC_block* block = blocks[address>>12];
-	PowerPC_func_node* fn;
-	for(fn = block->funcs; fn != NULL; fn = fn->next){
-		if((addr&0xffff) >= fn->function->start_addr &&
-		   (addr&0xffff) <  fn->function->end_addr){
-			RecompCache_Free(block->start_address |
-			                 fn->function->start_addr);
-			break;
-		}
-	}
+	PowerPC_block* block = blocks[addr>>12];
+	PowerPC_func* func = find_func(&block->funcs, addr&0xffff);
+	if(func)
+		RecompCache_Free(block->start_address | func->start_addr);
 }
 
 #define check_memory() \

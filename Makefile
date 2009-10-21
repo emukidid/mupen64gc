@@ -4,7 +4,8 @@ CC		=gcc
 CXX		=g++
 
 #CFLAGS		=-DX86 -O3 -mpentium -Wall -DEMU64_DEBUG
-CFLAGS		=-g -fPIC -ffast-math -fno-strict-aliasing -Wall -pipe -DPPC_DYNAREC -DUSE_RECOMP_CACHE #-DCOMPARE_CORE
+CFLAGS		=-g -fPIC -ffast-math -fno-strict-aliasing -Wall -pipe \
+	-DPPC_DYNAREC -DUSE_RECOMP_CACHE -DFASTMEM #-DCOMPARE_CORE
 #CFLAGS		=-DX86 -O3 -mcpu=pentium -Wall -g -pg
 #CFLAGS		=-DX86 -Wall -pipe -g3 -DEMU64_DEBUG
 #CFLAGS		=-DX86 -Wall -pipe -g -DEMU64_DEBUG -DCOMPARE_CORE
@@ -46,7 +47,8 @@ OBJ		=main/rom.o \
 		r4300/profile.o \
 		main/adler32.o \
 		r4300/compare_core.o \
-		r4300/Recomp-Cache-Heap.o
+		r4300/Recomp-Cache-Heap.o \
+		r4300/ppc/FuncTree.o
 
 OBJ_PPC		=r4300/ppc/MIPS-to-PPC.o \
 		r4300/ppc/Recompile.o \
@@ -348,7 +350,7 @@ glN64/F3DDKR.o:			glN64/F3DDKR.cpp
 glN64/F3DWRUS.o:		glN64/F3DWRUS.cpp
 				$(CXX) $(CFLAGS) -D__LINUX__  `sdl-config --cflags` -c -o $@ $<
 
-mupen64_nogui:	$(OBJ) $(OBJ_PPC) main/main.o main/gui_gtk/config.o
+mupen64_nogui:	$(OBJ) main/main.o main/gui_gtk/config.o
 		$(CC) $^ $(LIB_DIR) $(LIB) -Wl -L/usr/X11R6/lib `sdl-config --libs` -lpthread -ldl -o $@
 		#strip --#strip-all $@
 
@@ -411,7 +413,7 @@ install:
 	cp -rv doc "$(SHARE)"
 	
 clean:
-	find . -name '*.o' -print0 | xargs -0r rm -f
+	find . -name '*.o' -print | xargs rm -f
 	rm mupen64 mupen64_nogui mupen64_dbg plugins/mupen64_input.so blight_input/arial.ttf.c blight_input/ttftoh plugins/blight_input.so plugins/mupen64_hle_rsp_azimer.so plugins/dummyaudio.so plugins/mupen64_audio.so plugins/jttl_audio.so plugins/mupen64_soft_gfx.so plugins/glN64.so
 
 clean_o:
