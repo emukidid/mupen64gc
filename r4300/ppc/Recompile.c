@@ -205,7 +205,7 @@ PowerPC_func* recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 
 	// Allocate the func buffers and copy the code
 	if(!func->code){
-		// We aren't simply recompiling from a hole
+		// We aren't recompiling from a hole
 #ifdef USE_RECOMP_CACHE
 		RecompCache_Alloc(code_length * sizeof(PowerPC_instr), addr, func);
 #else
