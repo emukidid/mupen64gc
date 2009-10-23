@@ -30,6 +30,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifdef USE_GUI
+#include "../gui/GUI.h"
+#define PRINT GUI_print
+#else
+#define PRINT printf
+#endif
+
 #include "../r4300/r4300.h"
 #include "memory.h"
 #include "../main/guifuncs.h"
@@ -37,13 +44,6 @@
 
 #include <ogc/card.h>
 #include "Saves.h"
-
-#ifdef USE_GUI
-#include "../gui/GUI.h"
-#define PRINT GUI_print
-#else
-#define PRINT printf
-#endif
 
 int use_flashram;
 
