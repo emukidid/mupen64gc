@@ -4,7 +4,7 @@
  *
  * Mupen64 homepage: http://mupen64.emulation64.com
  * email address: hacktarux@yahoo.fr
- * 
+ *
  * If you want to contribute to the project please contact
  * me first (maybe someone is already making what you are
  * planning to do).
@@ -57,25 +57,31 @@ void refresh_stat()
    if(diff_sec(last_refresh, this_tick) >= 1)
      {
 	time_in_section[0] = this_tick - last_start[0];
-	
+
 	sprintf(txtbuffer, "gfx=%f%%", 100.0f * (float)time_in_section[GFX_SECTION] / (float)time_in_section[0]);
 	DEBUG_print(txtbuffer, DBG_PROFILE_GFX);
-	
+
 	sprintf(txtbuffer, "audio=%f%%", 100.0f * (float)time_in_section[AUDIO_SECTION] / (float)time_in_section[0]);
 	DEBUG_print(txtbuffer, DBG_PROFILE_AUDIO);
-	
+
 	sprintf(txtbuffer, "tlb=%f%%", 100.0f * (float)time_in_section[TLB_SECTION] / (float)time_in_section[0]);
 	DEBUG_print(txtbuffer, DBG_PROFILE_TLB);
-	
+
 	sprintf(txtbuffer, "fp=%f%%", 100.0f * (float)time_in_section[FP_SECTION] / (float)time_in_section[0]);
 	DEBUG_print(txtbuffer, DBG_PROFILE_FP);
-	
+
 	sprintf(txtbuffer, "comp=%f%%", 100.0f * (float)time_in_section[COMPILER_SECTION] / (float)time_in_section[0]);
 	DEBUG_print(txtbuffer, DBG_PROFILE_COMP);
-	
+
 	sprintf(txtbuffer, "interp=%f%%", 100.0f * (float)time_in_section[INTERP_SECTION] / (float)time_in_section[0]);
 	DEBUG_print(txtbuffer, DBG_PROFILE_INTERP);
-	
+
+	sprintf(txtbuffer, "funcs=%f%%", 100.0f * (float)time_in_section[FUNCS_SECTION] / (float)time_in_section[0]);
+	DEBUG_print(txtbuffer, DBG_PROFILE_FUNCS);
+
+	sprintf(txtbuffer, "tramp=%f%%", 100.0f * (float)time_in_section[TRAMP_SECTION] / (float)time_in_section[0]);
+	DEBUG_print(txtbuffer, DBG_PROFILE_TRAMP);
+
 	sprintf(txtbuffer, "tramp=%f%%", 100.0f * (float)time_in_section[TRAMP_SECTION] / (float)time_in_section[0]);
 	DEBUG_print(txtbuffer, DBG_PROFILE_TRAMP);
 	
