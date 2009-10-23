@@ -18,6 +18,13 @@
 #include "rom.h"
 #include "plugin.h"
 
+#include <gccore.h>
+#include "../gui/gui_GX-menu.h"
+#include "../gui/GUI.h"
+#include "../gui/menu.h"
+#include "../gui/DEBUG.h"
+#include "timers.h"
+
 #include "../r4300/r4300.h"
 #include "../gc_memory/memory.h"
 #include "../gc_memory/ARAM.h"
@@ -25,12 +32,6 @@
 #include "../gc_memory/tlb.h"
 #include "ROM-Cache.h"
 
-#include <gccore.h>
-#include "../gui/gui_GX-menu.h"
-#include "../gui/GUI.h"
-#include "../gui/menu.h"
-#include "../gui/DEBUG.h"
-#include "timers.h"
 #ifdef WII
 #include <ogc/conf.h>
 #include <wiiuse/wpad.h>

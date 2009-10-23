@@ -38,14 +38,6 @@
 #include <string.h>
 #include <ctype.h>
 
-#include "rom.h"
-#include "gc_dvd.h"
-#include "ROM-Cache.h" 
-#include "../gc_memory/memory.h"
-#include "md5.h"
-
-#include "../fileBrowser/fileBrowser.h"
-
 #ifdef USE_GUI
 #include "../gui/GUI.h"
 #define PRINT GUI_print
@@ -54,6 +46,14 @@
 #define PRINT printf
 #define CLEAR() GUI_clear()
 #endif
+
+#include "rom.h"
+#include "gc_dvd.h"
+#include "ROM-Cache.h" 
+#include "../gc_memory/memory.h"
+#include "md5.h"
+
+#include "../fileBrowser/fileBrowser.h"
 
 static fileBrowser_file* rom_file;
 //static int i, tmp, z;
