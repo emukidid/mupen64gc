@@ -25,7 +25,8 @@
 #define DBG_PROFILE_FP 15
 #define DBG_PROFILE_COMP 16
 #define DBG_PROFILE_INTERP 17
-#define DBG_PROFILE_TRAMP 18
+#define DBG_PROFILE_FUNCS 18
+#define DBG_PROFILE_TRAMP 19
 #define DBG_STATSBASE 12 // ALL stats print from this line onwards
 #define DBG_SDGECKOOPEN 0xFC
 #define DBG_SDGECKOCLOSE 0xFD
