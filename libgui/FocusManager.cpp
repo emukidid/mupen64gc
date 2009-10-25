@@ -36,6 +36,7 @@ void Focus::updateFocus()
 
 	if (frameSwitch)
 	{
+		if(primaryFocusOwner) primaryFocusOwner->setFocus(false);
 		primaryFocusOwner = NULL;
 		frameSwitch = false;
 	}
@@ -74,12 +75,12 @@ void Focus::updateFocus()
 			}
 			if (currentButtonsDownGC & PAD_BUTTON_A) buttonsDown |= ACTION_SELECT;
 			if (currentButtonsDownGC & PAD_BUTTON_B) buttonsDown |= ACTION_BACK;
-			if (primaryFocusOwner == NULL && currentFrame) primaryFocusOwner = currentFrame->getDefaultFocus();
 			if (primaryFocusOwner) primaryFocusOwner = primaryFocusOwner->updateFocus(focusDirection,buttonsDown);
+			if (primaryFocusOwner == NULL && currentFrame) primaryFocusOwner = currentFrame->getDefaultFocus();
 			previousButtonsGC[i] = currentButtonsGC;
 			break;
 		}
-		if (wiiPad[i].btns_h ^ previousButtonsWii[i])
+		else if (wiiPad[i].btns_h ^ previousButtonsWii[i])
 		{
 			u32 currentButtonsDownWii = (wiiPad[i].btns_h ^ previousButtonsWii[i]) & wiiPad[i].btns_h;
 			switch (currentButtonsDownWii & 0xf00) {
@@ -100,8 +101,8 @@ void Focus::updateFocus()
 			}
 			if (currentButtonsDownWii & WPAD_BUTTON_A) buttonsDown |= ACTION_SELECT;
 			if (currentButtonsDownWii & WPAD_BUTTON_B) buttonsDown |= ACTION_BACK;
-			if (primaryFocusOwner == NULL && currentFrame) primaryFocusOwner = currentFrame->getDefaultFocus();
 			if (primaryFocusOwner) primaryFocusOwner = primaryFocusOwner->updateFocus(focusDirection,buttonsDown);
+			if (primaryFocusOwner == NULL && currentFrame) primaryFocusOwner = currentFrame->getDefaultFocus();
 			previousButtonsWii[i] = wiiPad[i].btns_h;
 			break;
 		}
@@ -133,6 +134,8 @@ void Focus::setCurrentFrame(Frame* frame)
 //	setFocusActive(false);
 	primaryFocusOwner = NULL;
 	currentFrame = frame;
+	if (currentFrame) primaryFocusOwner = currentFrame->getDefaultFocus();
+	if (primaryFocusOwner) primaryFocusOwner->setFocus(focusActive);
 	frameSwitch = true;
 	Input::getInstance().clearInputData();
 }
@@ -140,7 +143,7 @@ void Focus::setCurrentFrame(Frame* frame)
 void Focus::setFocusActive(bool focusActiveBool)
 {
 	focusActive = focusActiveBool;
-	if (!focusActive && primaryFocusOwner) primaryFocusOwner->setFocus(false);
+	if (primaryFocusOwner) primaryFocusOwner->setFocus(focusActive);
 }
 
 void Focus::clearInputData()
