@@ -33,8 +33,8 @@ MenuContext::MenuContext(GXRModeObj *vmode)
 	menu::Gui::getInstance().addFrame(selectCPUFrame);
 	menu::Gui::getInstance().addFrame(devFrame);
 
-	setActiveFrame(FRAME_MAIN);
 	menu::Focus::getInstance().setFocusActive(true);
+	setActiveFrame(FRAME_MAIN);
 }
 
 MenuContext::~MenuContext()
