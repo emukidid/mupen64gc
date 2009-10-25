@@ -37,7 +37,8 @@ void Focus::updateFocus()
 	if (frameSwitch)
 	{
 		if(primaryFocusOwner) primaryFocusOwner->setFocus(false);
-		primaryFocusOwner = NULL;
+		if (currentFrame) primaryFocusOwner = currentFrame->getDefaultFocus();
+		else primaryFocusOwner = NULL;
 		frameSwitch = false;
 	}
 
@@ -76,7 +77,6 @@ void Focus::updateFocus()
 			if (currentButtonsDownGC & PAD_BUTTON_A) buttonsDown |= ACTION_SELECT;
 			if (currentButtonsDownGC & PAD_BUTTON_B) buttonsDown |= ACTION_BACK;
 			if (primaryFocusOwner) primaryFocusOwner = primaryFocusOwner->updateFocus(focusDirection,buttonsDown);
-			if (primaryFocusOwner == NULL && currentFrame) primaryFocusOwner = currentFrame->getDefaultFocus();
 			previousButtonsGC[i] = currentButtonsGC;
 			break;
 		}
@@ -102,7 +102,6 @@ void Focus::updateFocus()
 			if (currentButtonsDownWii & WPAD_BUTTON_A) buttonsDown |= ACTION_SELECT;
 			if (currentButtonsDownWii & WPAD_BUTTON_B) buttonsDown |= ACTION_BACK;
 			if (primaryFocusOwner) primaryFocusOwner = primaryFocusOwner->updateFocus(focusDirection,buttonsDown);
-			if (primaryFocusOwner == NULL && currentFrame) primaryFocusOwner = currentFrame->getDefaultFocus();
 			previousButtonsWii[i] = wiiPad[i].btns_h;
 			break;
 		}
@@ -130,12 +129,7 @@ Frame* Focus::getCurrentFrame()
 
 void Focus::setCurrentFrame(Frame* frame)
 {
-	if(primaryFocusOwner) primaryFocusOwner->setFocus(false);
-//	setFocusActive(false);
-	primaryFocusOwner = NULL;
 	currentFrame = frame;
-	if (currentFrame) primaryFocusOwner = currentFrame->getDefaultFocus();
-	if (primaryFocusOwner) primaryFocusOwner->setFocus(focusActive);
 	frameSwitch = true;
 	Input::getInstance().clearInputData();
 }
