@@ -40,6 +40,7 @@ void Cursor::updateCursor()
 	if (hoverOverComponent) hoverOverComponent->setFocus(false);
 	if(frameSwitch) 
 	{
+		setCursorFocus(NULL);
 		clearInput = true;
 		frameSwitch = false;
 	}
@@ -65,7 +66,6 @@ void Cursor::updateCursor()
 				if(clearInput) 
 				{
 					previousButtonsPressed[i] = wiiPad[i].btns_h;
-					printf("clearCursorFocus\nclearCursorFocus\nclearCursorFocus\nclearCursorFocus\nclearCursorFocus\n");
 				}
 				clearInput = false;
 			}
@@ -74,7 +74,7 @@ void Cursor::updateCursor()
 			cursorRot = wiiPad[i].ir.angle;
 			buttonsPressed = (wiiPad[i].btns_h ^ previousButtonsPressed[i]) & wiiPad[i].btns_h;
 			previousButtonsPressed[i] = wiiPad[i].btns_h;
-			pressed = (buttonsPressed & (WPAD_BUTTON_A | WPAD_BUTTON_B)) ? true : false;
+			pressed = (wiiPad[i].btns_h & (WPAD_BUTTON_A | WPAD_BUTTON_B)) ? true : false;
 			Focus::getInstance().setFocusActive(false);
 			if (hoverOverComponent) 
 			{
