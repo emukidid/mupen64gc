@@ -8,8 +8,9 @@
 
 #include "../main/winlnxdefs.h"
 #include <stdio.h>
-#include <gccore.h>
 #include <string.h>
+#include <math.h>
+#include <gccore.h>
 #include <ogc/audio.h>
 #include <ogc/cache.h>
 #ifdef THREADED_AUDIO
@@ -128,7 +129,10 @@ static void inline play_buffer(void){
 #endif
 
 	// Start playing the buffer
-	AUDIO_StartDMA();
+	if(audio_paused){
+		AUDIO_StartDMA();
+		audio_paused = 0;
+	}
 
 #ifdef THREADED_AUDIO
 	// Move the index to the next buffer
@@ -319,7 +323,7 @@ void resumeAudio(void){
 	if(audio_paused){
 		// When we're want the audio to resume, release the 'lock'
 		LWP_SemPost(audio_free);
-		audio_paused = 0;
+		//audio_paused = 0;
 	}
 #endif
 }
