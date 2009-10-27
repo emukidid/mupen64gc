@@ -363,9 +363,9 @@ glN64_GX/F3DWRUS.o:		glN64_GX/F3DWRUS.cpp
 mupen64gc-glN64.elf:	$(OBJ) $(OBJ_INPUT) $(OBJ_GLN64_GX) $(OBJ_AUDIO) $(OBJ_RSPHLE) $(OBJ_PPC)
 		$(LD) $^ $(LDFLAGS) $(LIBPATHS) $(LIB) -Wl -o $@
 		#strip --strip-all $@
-		powerpc-gekko-objcopy -O binary $@ mupen64gc-glN64.dol
+#		powerpc-gekko-objcopy -O binary $@ mupen64gc-glN64.dol
 #		dollz3 wii64-glN64.dol wii64z.dol
-
+		DolTool -d mupen64gc-glN64.elf
 
 
 
