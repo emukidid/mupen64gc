@@ -23,7 +23,11 @@ void Func_SaveGameSD();
 void Func_SaveGameWiiFS();
 void Func_ReturnFromSaveGameFrame();
 
+#ifdef HW_RVL
 #define NUM_FRAME_BUTTONS 4
+#else
+#define NUM_FRAME_BUTTONS 3
+#endif
 #define FRAME_BUTTONS saveGameFrameButtons
 #define FRAME_STRINGS saveGameFrameStrings
 
@@ -52,7 +56,9 @@ struct ButtonInfo
 	{	NULL,	FRAME_STRINGS[0],	150.0,	 50.0,	340.0,	40.0,	 3,	 1,	-1,	-1,	Func_SaveGameCardA,	Func_ReturnFromSaveGameFrame }, // Save To Card A
 	{	NULL,	FRAME_STRINGS[1],	150.0,	150.0,	340.0,	40.0,	 0,	 2,	-1,	-1,	Func_SaveGameCardB,	Func_ReturnFromSaveGameFrame }, // Save To Card B
 	{	NULL,	FRAME_STRINGS[2],	150.0,	250.0,	340.0,	40.0,	 1,	 3,	-1,	-1,	Func_SaveGameSD,	Func_ReturnFromSaveGameFrame }, // Save To SD
+#ifdef HW_RVL
 	{	NULL,	FRAME_STRINGS[3],	150.0,	350.0,	340.0,	40.0,	 2,	 0,	-1,	-1,	Func_SaveGameWiiFS,	Func_ReturnFromSaveGameFrame }, // Save To Wii FS
+#endif
 };
 
 SaveGameFrame::SaveGameFrame()
@@ -163,6 +169,7 @@ void Func_SaveGameSD()
 	else		menu::MessageBox::getInstance().setMessage("Nothing to save");
 }
 
+#ifdef HW_RVL
 void Func_SaveGameWiiFS()
 {
 	// Adjust saveFile pointers
@@ -184,6 +191,7 @@ void Func_SaveGameWiiFS()
 	if (result)	menu::MessageBox::getInstance().setMessage("Saved game to Wii filesystem");
 	else		menu::MessageBox::getInstance().setMessage("Nothing to save");
 }
+#endif
 
 extern MenuContext *pMenuContext;
 

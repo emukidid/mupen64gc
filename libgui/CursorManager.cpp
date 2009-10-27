@@ -44,6 +44,7 @@ void Cursor::updateCursor()
 		frameSwitch = false;
 	}
 
+#ifdef HW_RVL
 	WPADData* wiiPad = Input::getInstance().getWpad();
 	for (int i = 0; i < 4; i++)
 	{
@@ -92,6 +93,7 @@ void Cursor::updateCursor()
 			return;
 		}
 	}
+#endif
 	//if not: clear cursorX, cursorY, cursorRot, set focusActive
 	cursorX = cursorY = cursorRot = 0.0f;
 	setCursorFocus(NULL);
@@ -104,8 +106,10 @@ void Cursor::setCursorFocus(Component* component)
 	int buttonsDown = 0;
 	int focusDirection = 0;
 
+#ifdef HW_RVL
 	if (buttonsPressed & WPAD_BUTTON_A) buttonsDown |= Focus::ACTION_SELECT;
 	if (buttonsPressed & WPAD_BUTTON_B) buttonsDown |= Focus::ACTION_BACK;
+#endif
 	if (component) hoverOverComponent = component->updateFocus(focusDirection,buttonsDown);
 
 }
