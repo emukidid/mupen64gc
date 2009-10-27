@@ -4,6 +4,8 @@
 #include "GuiTypes.h"
 #include "Component.h"
 
+typedef void (*FrameFunc)( void );
+
 namespace menu {
 
 class Frame : public Component
@@ -21,9 +23,14 @@ public:
 	void updateTime(float deltaTime);
 	void setDefaultFocus(Component* comp);
 	Component* getDefaultFocus();
+	void setBackFunc(FrameFunc backFn);
+	void setSelectFunc(FrameFunc selectFn);
+	Component* updateFocus(int direction, int buttonsPressed);
 
 private:
 	Component* defaultFocus;
+	FrameFunc backFunc, selectFunc;
+
 };
 
 } //namespace menu 

@@ -80,6 +80,7 @@ SaveGameFrame::SaveGameFrame()
 												FRAME_BUTTONS[i].y+FRAME_BUTTONS[i].height);
 	}
 	setDefaultFocus(FRAME_BUTTONS[0].button);
+	setBackFunc(Func_ReturnFromSaveGameFrame);
 	setEnabled(true);
 
 }

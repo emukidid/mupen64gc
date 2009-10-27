@@ -75,6 +75,7 @@ LoadRomFrame::LoadRomFrame()
 												FRAME_BUTTONS[i].y+FRAME_BUTTONS[i].height);
 	}
 	setDefaultFocus(FRAME_BUTTONS[0].button);
+	setBackFunc(Func_ReturnFromLoadRomFrame);
 	setEnabled(true);
 
 }

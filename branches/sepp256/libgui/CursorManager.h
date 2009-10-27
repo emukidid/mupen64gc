@@ -16,6 +16,7 @@ public:
 	void setCurrentFrame(Frame* frame);
 	Frame* getCurrentFrame();
 	void clearInputData();
+	void clearCursorFocus();
 	static Cursor& getInstance()
 	{
 		static Cursor obj;
@@ -39,9 +40,8 @@ private:
 	Image *pointerImage, *grabImage;
 	float cursorX, cursorY, cursorRot, imageCenterX, imageCenterY;
 	Component *foundComponent, *hoverOverComponent;
-	bool pressed, clearInput;
+	bool pressed, frameSwitch, clearInput;
 	int buttonsPressed, previousButtonsPressed[4], activeChan;
-
 };
 
 } //namespace menu 

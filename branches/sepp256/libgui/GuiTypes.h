@@ -2,7 +2,9 @@
 #define GUIDEFS_H
 
 #include <gccore.h>
+#ifdef HW_RVL
 #include <wiiuse/wpad.h>
+#endif
 #include <vector>
 #include <stack>
 #include <string>
@@ -15,7 +17,9 @@ class Component;
 class Frame;
 class Button;
 class Input;
+#ifdef HW_RVL
 class Cursor;
+#endif
 class Focus;
 class Image;
 class IplFont;

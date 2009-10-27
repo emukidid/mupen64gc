@@ -270,4 +270,6 @@ void Func_PlayGame()
 #endif
 	pauseInput();
 	pauseAudio();
+
+	menu::Cursor::getInstance().clearCursorFocus();
 }
