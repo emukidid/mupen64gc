@@ -93,6 +93,7 @@ FileBrowserFrame::FileBrowserFrame()
 												FRAME_BUTTONS[i].y+FRAME_BUTTONS[i].height);
 	}
 	setDefaultFocus(FRAME_BUTTONS[2].button);
+	setBackFunc(Func_ReturnFromFileBrowserFrame);
 	setEnabled(true);
 
 }

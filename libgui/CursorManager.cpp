@@ -20,6 +20,7 @@ Cursor::Cursor()
 		  foundComponent(0),
 		  hoverOverComponent(0),
 		  pressed(false),
+		  frameSwitch(true),
 		  clearInput(true),
 		  buttonsPressed(0),
 		  activeChan(-1)
@@ -36,6 +37,13 @@ Cursor::~Cursor()
 
 void Cursor::updateCursor()
 {
+	if (hoverOverComponent) hoverOverComponent->setFocus(false);
+	if(frameSwitch) 
+	{
+		clearInput = true;
+		frameSwitch = false;
+	}
+
 	WPADData* wiiPad = Input::getInstance().getWpad();
 	for (int i = 0; i < 4; i++)
 	{
@@ -53,7 +61,11 @@ void Cursor::updateCursor()
 			}
 			else
 			{
-				if(clearInput) previousButtonsPressed[i] = wiiPad[i].btns_h;
+				if(clearInput) 
+				{
+					previousButtonsPressed[i] = wiiPad[i].btns_h;
+					printf("clearCursorFocus\nclearCursorFocus\nclearCursorFocus\nclearCursorFocus\nclearCursorFocus\n");
+				}
 				clearInput = false;
 			}
 			cursorX = wiiPad[i].ir.x;
@@ -63,7 +75,11 @@ void Cursor::updateCursor()
 			previousButtonsPressed[i] = wiiPad[i].btns_h;
 			pressed = (buttonsPressed & (WPAD_BUTTON_A | WPAD_BUTTON_B)) ? true : false;
 			Focus::getInstance().setFocusActive(false);
-			if (hoverOverComponent) hoverOverComponent->setFocus(false);
+			if (hoverOverComponent) 
+			{
+				hoverOverComponent->setFocus(false);
+				hoverOverComponent = NULL;
+			}
 			std::vector<CursorEntry>::iterator iteration;
 			for (iteration = cursorList.begin(); iteration != cursorList.end(); iteration++)
 			{
@@ -72,6 +88,7 @@ void Cursor::updateCursor()
 					(cursorY > (*iteration).yRange[0]) && (cursorY < (*iteration).yRange[1]))
 					setCursorFocus((*iteration).comp);
 			}
+			if (!hoverOverComponent) setCursorFocus(currentFrame);
 			return;
 		}
 	}
@@ -87,10 +104,8 @@ void Cursor::setCursorFocus(Component* component)
 	int buttonsDown = 0;
 	int focusDirection = 0;
 
-//	hoverOverComponent = component;
 	if (buttonsPressed & WPAD_BUTTON_A) buttonsDown |= Focus::ACTION_SELECT;
 	if (buttonsPressed & WPAD_BUTTON_B) buttonsDown |= Focus::ACTION_BACK;
-//	if (hoverOverComponent) hoverOverComponent = hoverOverComponent->updateFocus(focusDirection,buttonsDown);
 	if (component) hoverOverComponent = component->updateFocus(focusDirection,buttonsDown);
 
 }
@@ -162,6 +177,7 @@ void Cursor::removeComponent(Frame* parentFrame, Component* component)
 void Cursor::setCurrentFrame(Frame* frame)
 {
 	currentFrame = frame;
+	frameSwitch = true;
 }
 
 Frame* Cursor::getCurrentFrame()
@@ -172,6 +188,12 @@ Frame* Cursor::getCurrentFrame()
 void Cursor::clearInputData()
 {
 	clearInput = true;
+}
+
+void Cursor::clearCursorFocus()
+{
+	if (hoverOverComponent) hoverOverComponent->setFocus(false);
+	cursorX = cursorY = 0.0f;
 }
 
 } //namespace menu 

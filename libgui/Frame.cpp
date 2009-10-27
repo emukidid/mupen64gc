@@ -1,9 +1,12 @@
 #include "Frame.h"
+#include "FocusManager.h"
 
 namespace menu {
 
 Frame::Frame()
-		: defaultFocus(0)
+		: defaultFocus(0),
+		  backFunc(0),
+		  selectFunc(0)
 {
 }
 
@@ -43,7 +46,6 @@ void Frame::drawChildren(Graphics &gfx) const
 			(*iteration)->draw(gfx);
 		}
 	}
-
 }
 
 void Frame::setEnabled(bool enable)
@@ -86,6 +88,27 @@ void Frame::setDefaultFocus(Component* component)
 Component* Frame::getDefaultFocus()
 {
 	return defaultFocus;
+}
+
+void Frame::setBackFunc(FrameFunc backFn)
+{
+	backFunc = backFn;
+}
+
+void Frame::setSelectFunc(FrameFunc selectFn)
+{
+	selectFunc = selectFn;
+}
+
+Component* Frame::updateFocus(int direction, int buttonsPressed)
+{
+	//This function only called from CursorManager when wii-mote is not pointing to a button.
+	Component* newFocus = NULL;
+
+	if(buttonsPressed & Focus::ACTION_BACK && backFunc) backFunc();
+	else if (buttonsPressed & Focus::ACTION_SELECT && selectFunc) selectFunc();
+
+	return newFocus;
 }
 
 } //namespace menu 
