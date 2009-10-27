@@ -29,7 +29,9 @@ void Focus::updateFocus()
 {
 	int focusDirection = 0;
 	int buttonsDown = 0;
+#ifdef HW_RVL
 	WPADData* wiiPad = Input::getInstance().getWpad();
+#endif
 //	PADStatus* gcPad = Input::getInstance().getPad();
 
 	if (!focusActive) return;
@@ -47,7 +49,9 @@ void Focus::updateFocus()
 		for (int i=0; i<4; i++)
 		{
 			previousButtonsGC[i] = PAD_ButtonsHeld(i);
+#ifdef HW_RVL
 			previousButtonsWii[i] = wiiPad[i].btns_h;
+#endif
 		}
 		clearInput = false;
 	}
@@ -80,6 +84,7 @@ void Focus::updateFocus()
 			previousButtonsGC[i] = currentButtonsGC;
 			break;
 		}
+#ifdef HW_RVL
 		else if (wiiPad[i].btns_h ^ previousButtonsWii[i])
 		{
 			u32 currentButtonsDownWii = (wiiPad[i].btns_h ^ previousButtonsWii[i]) & wiiPad[i].btns_h;
@@ -105,6 +110,7 @@ void Focus::updateFocus()
 			previousButtonsWii[i] = wiiPad[i].btns_h;
 			break;
 		}
+#endif
 	}
 }
 

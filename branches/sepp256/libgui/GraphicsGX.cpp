@@ -21,7 +21,9 @@ Graphics::Graphics(GXRModeObj *rmode)
 
 	setColor((GXColor) {0,0,0,0});
 
+#ifdef HW_RVL
 	CONF_Init();
+#endif
 	VIDEO_Init();
 	//vmode = VIDEO_GetPreferredMode(NULL);
 	vmode = VIDEO_GetPreferredMode(&vmode_phys);

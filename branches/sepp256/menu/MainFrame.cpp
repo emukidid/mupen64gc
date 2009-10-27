@@ -8,11 +8,13 @@
 #ifdef DEBUGON
 # include <debug.h>
 #endif
-#ifdef WII
 extern "C" {
+#ifdef WII
 #include <di/di.h>
-}
 #endif 
+#include "../main/gc_dvd.h"
+}
+#include <ogc/dvd.h>
 
 void Func_LoadROM();
 void Func_LoadSave();

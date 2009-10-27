@@ -47,9 +47,7 @@ PADStatus* Input::getPad()
 void Input::clearInputData()
 {
 	Focus::getInstance().clearInputData();
-#ifdef HW_RVL
 	Cursor::getInstance().clearInputData();
-#endif
 }
 
 } //namespace menu 
