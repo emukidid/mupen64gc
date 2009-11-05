@@ -369,12 +369,12 @@ static void MIXER2 () { // Needs accuracy verification...
 	u16 dmemin  = (u16)(inst2 >> 0x10);
 	u16 dmemout = (u16)(inst2 & 0xFFFF);
 	u32 count   = ((inst1 >> 12) & 0xFF0);
-	s32 gain    = (s16)(inst1 & 0xFFFF)*2;
+	s32 gain    = (s16)(inst1 & 0xFFFF);
 	s32 temp;
 
 	for (unsigned int x=0; x < count; x+=2) { // I think I can do this a lot easier
 
-		temp = (*(s16 *)(BufferSpace+dmemin+x) * gain) >> 16;
+		temp = (*(s16 *)(BufferSpace+dmemin+x) * gain) >> 15;
 		temp += *(s16 *)(BufferSpace+dmemout+x);
 
 		if ((s32)temp > 32767)

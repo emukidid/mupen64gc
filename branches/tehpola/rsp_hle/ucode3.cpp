@@ -485,11 +485,11 @@ static void MIXER3 () { // Needs accuracy verification...
 	u16 dmemin  = (u16)(inst2 >> 0x10)  + 0x4f0;
 	u16 dmemout = (u16)(inst2 & 0xFFFF) + 0x4f0;
 	//u8  flags   = (u8)((inst1 >> 16) & 0xff);
-	s32 gain    = (s16)(inst1 & 0xFFFF)*2;
+	s32 gain    = (s16)(inst1 & 0xFFFF);
 	s32 temp;
 
 	for (int x=0; x < 0x170; x+=2) { // I think I can do this a lot easier
-		temp = (*(s16 *)(BufferSpace+dmemin+x) * gain) >> 16;
+		temp = (*(s16 *)(BufferSpace+dmemin+x) * gain) >> 15;
 		temp += *(s16 *)(BufferSpace+dmemout+x);
 
 		if ((s32)temp > 32767)
