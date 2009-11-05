@@ -42,22 +42,17 @@ extern virtualControllers_t virtualControllers[4];
 // List of all the defined controller_t's
 #if defined(WII) && !defined(NO_BT)
 
-#define num_controller_t 2
+#define num_controller_t 3
 extern controller_t controller_GC;
 extern controller_t controller_Classic;
-controller_t* controller_ts[num_controller_t] =
-	{ &controller_GC, &controller_Classic,
-	 };
-int num_assigned[num_controller_t] = { 0, 0 };
+extern controller_t controller_WiimoteNunchuk;
+extern controller_t* controller_ts[num_controller_t];
 
 #else // WII && !NO_BT
 
 #define num_controller_t 1
 extern controller_t controller_GC;
-controller_t* controller_ts[num_controller_t] =
-	{ &controller_GC,
-	 };
-int num_assigned[num_controller_t] = { 0 };
+controller_t* controller_ts[num_controller_t];
 
 #endif // WII && !NO_BT
 
