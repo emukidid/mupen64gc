@@ -918,7 +918,7 @@ static void INTERLEAVE3 () { // Needs accuracy verification...
 	u16 *outbuff = (u16 *)(BufferSpace + 0x4f0);//(u16 *)(AudioOutBuffer+dmem);
 	u16 *inSrcR;
 	u16 *inSrcL;
-	u16 Left, Right;
+	u16 Left, Right, Left2, Right2;
 
 	//inR = inst2 & 0xFFFF;
 	//inL = (inst2 >> 16) & 0xFFFF;
@@ -929,11 +929,20 @@ static void INTERLEAVE3 () { // Needs accuracy verification...
 	for (int x = 0; x < (0x170/4); x++) {
 		Left=*(inSrcL++);
 		Right=*(inSrcR++);
+		Left2=*(inSrcL++);
+		Right2=*(inSrcR++);
 
-		*(outbuff++)=*(inSrcR++);
-		*(outbuff++)=*(inSrcL++);
-		*(outbuff++)=(u16)Right;
-		*(outbuff++)=(u16)Left;
+#ifdef _BIG_ENDIAN
+		*(outbuff++)=Right;
+		*(outbuff++)=Left;
+		*(outbuff++)=Right2;
+		*(outbuff++)=Left2;
+#else
+		*(outbuff++)=Right2;
+		*(outbuff++)=Left2;
+		*(outbuff++)=Right;
+		*(outbuff++)=Left;
+#endif
 /*
 		Left=*(inSrcL++);
 		Right=*(inSrcR++);
