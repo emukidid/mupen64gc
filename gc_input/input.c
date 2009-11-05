@@ -20,6 +20,16 @@ static BOOL lastData[4];
 
 virtualControllers_t virtualControllers[4];
 
+controller_t* controller_ts[num_controller_t] =
+#if defined(WII) && !defined(NO_BT)
+	{ &controller_GC, &controller_Classic,
+	  &controller_WiimoteNunchuk,
+	 };
+#else
+	{ &controller_GC,
+	 };
+#endif
+
 // Use to invoke func on the mapped controller with args
 #define DO_CONTROL(Control,func,args...) \
 	virtualControllers[Control].control->func( \
@@ -175,6 +185,9 @@ EXPORT void CALL InitiateControllers (CONTROL_INFO ControlInfo)
 
 	init_controller_ts();
 
+	int num_assigned[num_controller_t];
+	memset(num_assigned, 0, sizeof(num_assigned));
+
 	// Map controllers in the priority given
 	// Outer loop: virtual controllers
 	for(i=0; i<4; ++i){
@@ -191,6 +204,8 @@ EXPORT void CALL InitiateControllers (CONTROL_INFO ControlInfo)
 			++num_assigned[t];
 			break;
 		}
+		if(t == num_controller_t)
+			break;
 	}
 	// 'Initialize' the unmapped virtual controllers
 	for(; i<4; ++i){
