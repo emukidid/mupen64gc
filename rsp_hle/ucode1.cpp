@@ -537,8 +537,9 @@ static void RESAMPLE () {
 
 	for(int i=0;i < ((AudioCount+0xf)&0xFFF0)/2;i++)	{
 		//location = (((Accum * 0x40) >> 0x10) * 8);
-		location = (Accum >> 0xa) << 0x3;
-		lut = (s16 *)(((u8 *)ResampleLUT) + location);
+		// location is the fractional position between two samples
+		location = (Accum >> 0xa) * 4;
+		lut = (s16*)ResampleLUT + location;
 
 		// mov eax, dword ptr [src+srcPtr];
 		// movsx edx, word ptr [lut];
@@ -606,17 +607,17 @@ static void SETVOL () {
 //u16 VolRamp_Left;	// 0x0012(T8)
 	if(flags & A_LEFT) { // Set the Ramping values Target, Ramp
 		//loopval = (((u32)vol << 0x10) | (u32)voltarg);
-		VolTrg_Left  = *(s16 *)&inst1;		// m_LeftVol
+		VolTrg_Left  = (s16)inst1;		// m_LeftVol
 		//VolRamp_Left = (s32)inst2;
-		VolRamp_Left = *(s32 *)&inst2;//(u16)(inst2) | (s32)(s16)(inst2 << 0x10);
+		VolRamp_Left = (s32)inst2;//(u16)(inst2) | (s32)(s16)(inst2 << 0x10);
 		//fprintf (dfile, "Ramp Left: %f\n", (float)VolRamp_Left/65536.0);
 		//fprintf (dfile, "Ramp Left: %08X\n", inst2);
 		//VolRamp_Left = (s16)voltarg;	// m_LeftVolTarget
 		//VolRate_Left = (s16)volrate;	// m_LeftVolRate
 	} else { // A_RIGHT
-		VolTrg_Right  = *(s16 *)&inst1;		// m_RightVol
+		VolTrg_Right  = (s16)inst1;		// m_RightVol
 		//VolRamp_Right = (s32)inst2;
-		VolRamp_Right = *(s32 *)&inst2;//(u16)(inst2 >> 0x10) | (s32)(s16)(inst2 << 0x10);
+		VolRamp_Right = (s32)inst2;//(u16)(inst2 >> 0x10) | (s32)(s16)(inst2 << 0x10);
 		//fprintf (dfile, "Ramp Right: %f\n", (float)VolRamp_Right/65536.0);
 		//fprintf (dfile, "Ramp Right: %08X\n", inst2);
 		//VolRamp_Right = (s16)voltarg;	// m_RightVolTarget
@@ -674,8 +675,8 @@ static void ADPCM () { // Work in progress! :)
 		}
 	}
 
-	int l1=out[15];
-	int l2=out[14];
+	int l1=out[14^S];
+	int l2=out[15^S];
 	int inp1[8];
 	int inp2[8];
 	out+=16;
@@ -953,17 +954,17 @@ static void LOADADPCM () { // Loads an ADPCM table - Works 100% Now 03-13-01
 	//assert ((inst1&0xffff) <= 0x80);
 	u16 *table = (u16 *)(rsp.RDRAM+v0);
 	for (u32 x = 0; x < ((inst1&0xffff)>>0x4); x++) {
-		adpcmtable[0x1+(x<<3)] = table[0];
-		adpcmtable[0x0+(x<<3)] = table[1];
+		adpcmtable[0x0+(x<<3)^S] = table[0];
+		adpcmtable[0x1+(x<<3)^S] = table[1];
 
-		adpcmtable[0x3+(x<<3)] = table[2];
-		adpcmtable[0x2+(x<<3)] = table[3];
+		adpcmtable[0x2+(x<<3)^S] = table[2];
+		adpcmtable[0x3+(x<<3)^S] = table[3];
 
-		adpcmtable[0x5+(x<<3)] = table[4];
-		adpcmtable[0x4+(x<<3)] = table[5];
+		adpcmtable[0x4+(x<<3)^S] = table[4];
+		adpcmtable[0x5+(x<<3)^S] = table[5];
 
-		adpcmtable[0x7+(x<<3)] = table[6];
-		adpcmtable[0x6+(x<<3)] = table[7];
+		adpcmtable[0x6+(x<<3)^S] = table[6];
+		adpcmtable[0x7+(x<<3)^S] = table[7];
 		table += 8;
 	}
 }
@@ -974,7 +975,7 @@ static void INTERLEAVE () { // Works... - 3-11-01
 	u16 *outbuff = (u16 *)(AudioOutBuffer+BufferSpace);
 	u16 *inSrcR;
 	u16 *inSrcL;
-	u16 Left, Right;
+	u16 Left, Right, Left2, Right2;
 
 	inL = inst2 & 0xFFFF;
 	inR = (inst2 >> 16) & 0xFFFF;
@@ -985,11 +986,20 @@ static void INTERLEAVE () { // Works... - 3-11-01
 	for (int x = 0; x < (AudioCount/4); x++) {
 		Left=*(inSrcL++);
 		Right=*(inSrcR++);
+		Left2=*(inSrcL++);
+		Right2=*(inSrcR++);
 
-		*(outbuff++)=*(inSrcR++);
-		*(outbuff++)=*(inSrcL++);
-		*(outbuff++)=(u16)Right;
-		*(outbuff++)=(u16)Left;
+#ifdef _BIG_ENDIAN
+		*(outbuff++)=Left;
+		*(outbuff++)=Right;
+		*(outbuff++)=Left2;
+		*(outbuff++)=Right2;
+#else
+		*(outbuff++)=Right2;
+		*(outbuff++)=Left2;
+		*(outbuff++)=Right;
+		*(outbuff++)=Left;
+#endif
 	}
 }
 
