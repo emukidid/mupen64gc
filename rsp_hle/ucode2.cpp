@@ -676,7 +676,7 @@ static void INTERLEAVE2 () { // Needs accuracy verification...
 	u16 *outbuff;
 	u16 *inSrcR;
 	u16 *inSrcL;
-	u16 Left, Right;
+	u16 Left, Right, Left2, Right2;
 	u32 count;
 	count   = ((inst1 >> 12) & 0xFF0);
 	if (count == 0) {
@@ -695,11 +695,20 @@ static void INTERLEAVE2 () { // Needs accuracy verification...
 	for (u32 x = 0; x < (count/4); x++) {
 		Left=*(inSrcL++);
 		Right=*(inSrcR++);
+		Left2=*(inSrcL++);
+		Right2=*(inSrcR++);
 
-		*(outbuff++)=*(inSrcR++);
-		*(outbuff++)=*(inSrcL++);
-		*(outbuff++)=(u16)Right;
-		*(outbuff++)=(u16)Left;
+#ifdef _BIG_ENDIAN
+		*(outbuff++)=Right;
+		*(outbuff++)=Left;
+		*(outbuff++)=Right2;
+		*(outbuff++)=Left2;
+#else
+		*(outbuff++)=Right2;
+		*(outbuff++)=Left2;
+		*(outbuff++)=Right;
+		*(outbuff++)=Left;
+#endif
 	}
 }
 
@@ -715,7 +724,8 @@ static void ADDMIXER () {
 	for (int cntr = 0; cntr < Count; cntr+=2) {
 		temp = *outp + *inp;
 		if (temp > 32767)  temp = 32767; if (temp < -32768) temp = -32768;
-		outp++;	inp++;
+		*(outp++) = temp;
+		inp++;
 	}
 }
 

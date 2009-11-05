@@ -990,10 +990,10 @@ static void INTERLEAVE () { // Works... - 3-11-01
 		Right2=*(inSrcR++);
 
 #ifdef _BIG_ENDIAN
-		*(outbuff++)=Left;
 		*(outbuff++)=Right;
-		*(outbuff++)=Left2;
+		*(outbuff++)=Left;
 		*(outbuff++)=Right2;
+		*(outbuff++)=Left2;
 #else
 		*(outbuff++)=Right2;
 		*(outbuff++)=Left2;
