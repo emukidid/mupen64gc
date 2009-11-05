@@ -31,4 +31,38 @@ typedef struct {
 	char available[4];
 } controller_t;
 
+typedef struct _virtualControllers_t {
+	BOOL          inUse;   // This virtual controller is being controlled
+	controller_t* control; // The type of controller being used
+	int           number;  // The physical controller number
+} virtualControllers_t;
+
+extern virtualControllers_t virtualControllers[4];
+
+// List of all the defined controller_t's
+#if defined(WII) && !defined(NO_BT)
+
+#define num_controller_t 2
+extern controller_t controller_GC;
+extern controller_t controller_Classic;
+controller_t* controller_ts[num_controller_t] =
+	{ &controller_GC, &controller_Classic,
+	 };
+int num_assigned[num_controller_t] = { 0, 0 };
+
+#else // WII && !NO_BT
+
+#define num_controller_t 1
+extern controller_t controller_GC;
+controller_t* controller_ts[num_controller_t] =
+	{ &controller_GC,
+	 };
+int num_assigned[num_controller_t] = { 0 };
+
+#endif // WII && !NO_BT
+
+void init_controller_ts(void);
+void assign_controller(int whichVirtual, controller_t*, int whichPhysical);
+void unassign_controller(int whichVirtual);
+
 #endif
