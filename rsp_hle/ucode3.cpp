@@ -62,17 +62,17 @@ static void SETVOL3 () {
 	u8 Flags = (u8)(inst1 >> 0x10);
 	if (Flags & 0x4) { // 288
 		if (Flags & 0x2) { // 290
-			Vol_Left  = *(s16*)&inst1; // 0x50
-			Env_Dry		= (s16)(*(s32*)&inst2 >> 0x10); // 0x4E
-			Env_Wet		= *(s16*)&inst2; // 0x4C
+			Vol_Left  = (s16)inst1; // 0x50
+			Env_Dry		= (s16)(inst2 >> 0x10); // 0x4E
+			Env_Wet		= (s16)inst2; // 0x4C
 		} else {
-			VolTrg_Right  = *(s16*)&inst1; // 0x46
+			VolTrg_Right  = (s16)inst1; // 0x46
 			//VolRamp_Right = (u16)(inst2 >> 0x10) | (s32)(s16)(inst2 << 0x10);
-			VolRamp_Right = *(s32*)&inst2; // 0x48/0x4A
+			VolRamp_Right = (s32)inst2; // 0x48/0x4A
 		}
 	} else {
-		VolTrg_Left  = *(s16*)&inst1; // 0x40
-		VolRamp_Left = *(s32*)&inst2; // 0x42/0x44
+		VolTrg_Left  = (s16)inst1; // 0x40
+		VolRamp_Left = (s32)inst2; // 0x42/0x44
 	}
 }
 
@@ -100,7 +100,7 @@ static void ENVMIXER3 () {
 	s16 Wet, Dry;
 	s16 LTrg, RTrg;
 
-	Vol_Right = (*(s16 *)&inst1);
+	Vol_Right = (s16)inst1;
 
 	if (flags & A_INIT) {
 		LAdder = VolRamp_Left / 8;
@@ -524,17 +524,17 @@ static void LOADADPCM3 () { // Loads an ADPCM table - Works 100% Now 03-13-01
 	//assert ((inst1&0xffff) <= 0x80);
 	u16 *table = (u16 *)(rsp.RDRAM+v0);
 	for (u32 x = 0; x < ((inst1&0xffff)>>0x4); x++) {
-		adpcmtable[0x1+(x<<3)] = table[0];
-		adpcmtable[0x0+(x<<3)] = table[1];
+		adpcmtable[0x0+(x<<3)^S] = table[0];
+		adpcmtable[0x1+(x<<3)^S] = table[1];
 
-		adpcmtable[0x3+(x<<3)] = table[2];
-		adpcmtable[0x2+(x<<3)] = table[3];
+		adpcmtable[0x2+(x<<3)^S] = table[2];
+		adpcmtable[0x3+(x<<3)^S] = table[3];
 
-		adpcmtable[0x5+(x<<3)] = table[4];
-		adpcmtable[0x4+(x<<3)] = table[5];
+		adpcmtable[0x4+(x<<3)^S] = table[4];
+		adpcmtable[0x5+(x<<3)^S] = table[5];
 
-		adpcmtable[0x7+(x<<3)] = table[6];
-		adpcmtable[0x6+(x<<3)] = table[7];
+		adpcmtable[0x6+(x<<3)^S] = table[6];
+		adpcmtable[0x7+(x<<3)^S] = table[7];
 		table += 8;
 	}
 }
@@ -595,8 +595,8 @@ static void ADPCM3 () { // Verified to be 100% Accurate...
 		}
 	}
 
-	int l1=out[15];
-	int l2=out[14];
+	int l1=out[14^S];
+	int l2=out[15^S];
 	int inp1[8];
 	int inp2[8];
 	out+=16;
