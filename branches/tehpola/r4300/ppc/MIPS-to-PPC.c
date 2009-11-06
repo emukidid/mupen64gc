@@ -2186,7 +2186,7 @@ static int DSRL(MIPS_instr mips){
 		GEN_RLWINM(ppc, 0, rt.hi, 32-sa, 0, sa-1);
 		set_next_dst(ppc);
 		// Insert those bits into the LSW
-		GEN_OR(ppc, rd.lo, rt.lo, 0);
+		GEN_OR(ppc, rd.lo, rd.lo, 0);
 		set_next_dst(ppc);
 		// Shift MSW right by SA
 		GEN_SRWI(ppc, rd.hi, rt.hi, sa);
@@ -2222,7 +2222,7 @@ static int DSRA(MIPS_instr mips){
 		GEN_RLWINM(ppc, 0, rt.hi, 32-sa, 0, sa-1);
 		set_next_dst(ppc);
 		// Insert those bits into the LSW
-		GEN_OR(ppc, rd.lo, rt.lo, 0);
+		GEN_OR(ppc, rd.lo, rd.lo, 0);
 		set_next_dst(ppc);
 		// Shift (arithmetically) MSW right by SA
 		GEN_SRAWI(ppc, rd.hi, rt.hi, sa);
