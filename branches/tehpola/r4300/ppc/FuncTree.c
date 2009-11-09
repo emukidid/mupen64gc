@@ -28,6 +28,8 @@ PowerPC_func* find_func(PowerPC_func_node** root, unsigned short addr){
 
 void insert_func(PowerPC_func_node** root, PowerPC_func* func){
 	PowerPC_func_node** node = _find(root, func->start_addr);
+	if(*node) return; // Avoid a memory leak if this function exists
+
 	*node = malloc(sizeof(PowerPC_func_node));
 	(*node)->function = func;
 	(*node)->left = (*node)->right = NULL;
@@ -35,6 +37,8 @@ void insert_func(PowerPC_func_node** root, PowerPC_func* func){
 
 void remove_func(PowerPC_func_node** root, PowerPC_func* func){
 	PowerPC_func_node** node = _find(root, func->start_addr);
+	if(!*node) return; // Avoid a memory error if the function doesn't exist
+
 	PowerPC_func_node* old = *node;
 	if(!(*node)->left)
 		*node = (*node)->right;

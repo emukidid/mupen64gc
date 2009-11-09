@@ -36,6 +36,8 @@ static unsigned char isJmpDst[1024];
 static PowerPC_instr code_buffer[1024*32];
 static PowerPC_instr* code_addr_buffer[1024];
 
+PowerPC_func* current_func;
+
 static int pass0(PowerPC_block* ppc_block);
 static void pass2(PowerPC_block* ppc_block);
 //static void genRecompileBlock(PowerPC_block*);
@@ -105,6 +107,8 @@ PowerPC_func* recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 	func->end_addr = addr_last&0xffff;
 	func->code = NULL;
 	func->holes = NULL;
+	func->links_in = NULL;
+	func->links_out = NULL;
 	func->code_addr = NULL;
 	// We'll need to insert this func into the block
 	int needInsert = 1;
@@ -171,6 +175,7 @@ PowerPC_func* recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 	}
 	func = handle_overlap(&ppc_block->funcs, func);
 	if(needInsert) insert_func(&ppc_block->funcs, func);
+	current_func = func;
 
 	PowerPC_func_hole_node* hole;
 	for(hole = func->holes; hole != NULL; hole = hole->next){
