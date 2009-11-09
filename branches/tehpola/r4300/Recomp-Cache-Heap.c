@@ -103,7 +103,11 @@ static void free_func(PowerPC_func* func, unsigned int addr,
 	PowerPC_func_link_node* link, * next_link;
 	for(link = func->links_in; link != NULL; link = next_link){
 		next_link = link->next;
+		
 		GEN_BLR(*link->branch, 1); // Set the linking branch to blrl
+		DCFlushRange(link->branch, sizeof(PowerPC_instr));
+		ICInvalidateRange(link->branch, sizeof(PowerPC_instr));
+		
 		remove_func(&link->func->links_out, func);
 		free(link);
 	}
