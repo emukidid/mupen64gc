@@ -14,20 +14,30 @@ typedef struct hole_node {
 	struct hole_node* next;
 } PowerPC_func_hole_node;
 
-typedef struct {
+struct func;
+
+typedef struct func_node {
+	struct func* function;
+	struct func_node* left;
+	struct func_node* right;
+} PowerPC_func_node;
+
+typedef struct link_node {
+	PowerPC_instr*    branch;
+	struct func*      func;
+	struct link_node* next;
+} PowerPC_func_link_node;
+
+typedef struct func {
 	unsigned short start_addr;
 	unsigned short end_addr;
 	PowerPC_instr* code;
 	unsigned int   lru;
 	PowerPC_func_hole_node* holes;
+	PowerPC_func_link_node* links_in;
+	PowerPC_func_node*      links_out;
 	PowerPC_instr** code_addr;
 } PowerPC_func;
-
-typedef struct func_node {
-	PowerPC_func* function;
-	struct func_node* left;
-	struct func_node* right;
-} PowerPC_func_node;
 
 PowerPC_func* find_func(PowerPC_func_node** root, unsigned short addr);
 void insert_func(PowerPC_func_node** root, PowerPC_func* func);

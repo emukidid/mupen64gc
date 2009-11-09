@@ -83,20 +83,51 @@ static CacheMetaNode* heapPop(void){
 	return cacheHeap[heapSize];
 }
 
-static void free_func(PowerPC_func* func, unsigned int addr){
+static void free_func(PowerPC_func* func, unsigned int addr,
+                      unsigned int code_size){
 	// Free the code associated with the func
 	__lwp_heap_free(cache, func->code);
 	__lwp_heap_free(meta_cache, func->code_addr);
 	// Remove any holes into this func
-	PowerPC_func_hole_node* hole, * next;
-	for(hole = func->holes; hole != NULL; hole = next){
-		next = hole->next;
+	PowerPC_func_hole_node* hole, * next_hole;
+	for(hole = func->holes; hole != NULL; hole = next_hole){
+		next_hole = hole->next;
 		free(hole);
 	}
 
 	// Remove any pointers to this code
+	// Remove the func from the block
 	PowerPC_block* block = blocks[addr>>12];
 	remove_func(&block->funcs, func);
+	// Remove any incoming links to this func
+	PowerPC_func_link_node* link, * next_link;
+	for(link = func->links_in; link != NULL; link = next_link){
+		next_link = link->next;
+		GEN_BLR(*link->branch, 1); // Set the linking branch to blrl
+		remove_func(&link->func->links_out, func);
+		free(link);
+	}
+	// Remove any references to outgoing links from this func
+	void remove_incoming_links(PowerPC_func_node** node){
+		if(!*node) return;
+		if((*node)->left) remove_incoming_links(&(*node)->left);
+		if((*node)->right) remove_incoming_links(&(*node)->right);
+
+		// Remove any links this function has which point in the code
+		PowerPC_func_link_node** link, ** next;
+		for(link = &(*node)->function->links_in; *link != NULL; link = next){
+			next = &(*link)->next;
+			if((*link)->branch >= func->code &&
+			   (*link)->branch < func->code + code_size/sizeof(PowerPC_instr)){
+				free(*link);
+				*link = (*link)->next;
+				next = link;
+			}
+		}
+		free(*node); // Free the PowerPC_func_node*
+	}
+	remove_incoming_links(&func->links_out);
+
 	free(func);
 }
 
@@ -133,7 +164,7 @@ static void release(int minNeeded){
 		// Pop the LRU to be freed
 		CacheMetaNode* n = heapPop();
 		// Free the function it contains
-		free_func(n->func, n->addr);
+		free_func(n->func, n->addr, n->size);
 		toFree    -= n->size;
 		cacheSize -= n->size;
 		// And the cache node itself
@@ -200,7 +231,7 @@ void RecompCache_Free(unsigned int addr){
 			// Remove from the heap
 			heapSwap(i, --heapSize);
 			// Free n's func
-			free_func(n->func, addr);
+			free_func(n->func, addr, n->size);
 			cacheSize -= n->size;
 			// Free the cache node
 			free(n);

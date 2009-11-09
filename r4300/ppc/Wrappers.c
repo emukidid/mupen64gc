@@ -21,6 +21,9 @@ unsigned int dyna_mem(unsigned int, unsigned int, memType, unsigned int, int);
 
 int noCheckInterrupt = 0;
 
+static PowerPC_instr* link_branch = NULL;
+static PowerPC_func* last_func;
+
 /* Recompiled code stack frame:
  *  $sp+12  |
  *  $sp+8   | old cr
@@ -30,6 +33,7 @@ int noCheckInterrupt = 0;
 
 inline unsigned int dyna_run(unsigned int (*code)(void)){
 	unsigned int naddr;
+	PowerPC_instr* return_addr;
 
 	__asm__ volatile(
 		// Create the stack frame for code
@@ -58,20 +62,54 @@ inline unsigned int dyna_run(unsigned int (*code)(void)){
 	__asm__ volatile(
 		// Save the lr so the recompiled code won't have to
 		"bl	4         \n"
-		"mtctr	%1        \n"
+		"mtctr	%4        \n"
 		"mflr	4         \n"
 		"addi	4, 4, 20  \n"
 		"stw	4, 20(1)  \n"
 		// Execute the code
 		"bctrl           \n"
 		"mr	%0, 3     \n"
+		"lwz	%2, 20(1) \n"
+		"mflr	%1        \n"
+		"mr	%3, 4     \n"
 		// Pop the stack
 		"lwz	1, 0(1)   \n"
-		: "=r" (naddr)
+		: "=r" (naddr), "=r" (link_branch), "=r" (return_addr),
+		  "=r" (last_func)
 		: "r" (code)
 		: "3", "4", "5", "6", "7", "8", "9", "10", "11", "12");
 
+	link_branch = link_branch == return_addr ? NULL : link_branch - 1;
+	
 	return naddr;
+}
+
+unsigned int (*lookup_func(void))(unsigned int address){
+	// TODO: Use in recompiled code like so:
+	/*
+	 * load desination address in r3
+	 * bl    lookup_func
+	 * mtctr r3
+	 * cmpi  cr0, r3, 0
+	 * bnectr
+	 * lwz   r0, lr(r1)
+	 * mtlr  r0
+	 * load destination address in r3
+	 * blr
+	 */
+
+	PowerPC_block* dst_block = blocks[address>>12];
+	unsigned long paddr = update_invalid_addr(address);
+
+	if(!paddr){ stop=1; return 0; }
+
+	if(!dst_block || invalid_code_get(address>>12))
+		return 0;
+
+	PowerPC_func* func = find_func(&dst_block->funcs, address&0xFFFF);
+	if(!func) return 0;
+
+	return func->code_addr[((address&0xFFFF)-func->start_addr)>>2];
 }
 
 void dynarec(unsigned int address){
@@ -118,6 +156,20 @@ void dynarec(unsigned int address){
 		// Recompute the block offset
 		unsigned int (*code)(void);
 		code = (unsigned int (*)(void))func->code_addr[index];
+		
+		if(link_branch){
+			// Setup book-keeping
+			PowerPC_func_link_node* fln = 
+				malloc(sizeof(PowerPC_func_link_node));
+			fln->branch = link_branch;
+			fln->func = last_func;
+			fln->next = func->links_in;
+			func->links_in = fln;
+			insert_func(&last_func->links_out, func);
+			// Actually link the funcs
+			GEN_B(*link_branch, (PowerPC_instr*)code-link_branch, 0, 0);
+		}
+		
 		address = dyna_run(code);
 
 		if(!noCheckInterrupt){
