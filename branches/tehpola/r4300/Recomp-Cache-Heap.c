@@ -108,10 +108,10 @@ static void free_func(PowerPC_func* func, unsigned int addr,
 		free(link);
 	}
 	// Remove any references to outgoing links from this func
-	void remove_incoming_links(PowerPC_func_node** node){
+	void remove_outgoing_links(PowerPC_func_node** node){
 		if(!*node) return;
-		if((*node)->left) remove_incoming_links(&(*node)->left);
-		if((*node)->right) remove_incoming_links(&(*node)->right);
+		if((*node)->left) remove_outgoing_links(&(*node)->left);
+		if((*node)->right) remove_outgoing_links(&(*node)->right);
 
 		// Remove any links this function has which point in the code
 		PowerPC_func_link_node** link, ** next;
@@ -119,14 +119,15 @@ static void free_func(PowerPC_func* func, unsigned int addr,
 			next = &(*link)->next;
 			if((*link)->branch >= func->code &&
 			   (*link)->branch < func->code + code_size/sizeof(PowerPC_instr)){
+				PowerPC_func_link_node* tmp = (*link)->next;
 				free(*link);
-				*link = (*link)->next;
+				*link = tmp;
 				next = link;
 			}
 		}
 		free(*node); // Free the PowerPC_func_node*
 	}
-	remove_incoming_links(&func->links_out);
+	remove_outgoing_links(&func->links_out);
 
 	free(func);
 }
