@@ -154,7 +154,20 @@ static int branch(int offset, condition cond, int link, int likely){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 
+#ifdef COMPARE_CORE
+	GEN_LI(ppc, 4, 0, 1);
+	set_next_dst(ppc);
+	if(likely){
+		GEN_B(ppc, 2, 0, 0);
+		set_next_dst(ppc);
+		GEN_LI(ppc, 4, 0, 0);
+		set_next_dst(ppc);
+		
+		set_jump_special(likely_id, delaySlot+2+1);
+	}
+#else
 	if(likely) set_jump_special(likely_id, delaySlot+1);
+#endif
 
 	genUpdateCount(1); // Sets cr2 to (next_interupt ? Count)
 
@@ -281,6 +294,10 @@ static int J(MIPS_instr mips){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 
+#ifdef COMPARE_CORE
+	GEN_LI(ppc, 4, 0, 1);
+	set_next_dst(ppc);
+#endif
 	// Sets cr2 to (next_interupt ? Count) if we're not jumping out
 	genUpdateCount(!is_j_out(MIPS_GET_LI(mips), 1));
 
@@ -338,6 +355,10 @@ static int JAL(MIPS_instr mips){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 
+#ifdef COMPARE_CORE
+	GEN_LI(ppc, 4, 0, 1);
+	set_next_dst(ppc);
+#endif
 	// Sets cr2 to (next_interupt ? Count) if we're not jumping out
 	genUpdateCount(!is_j_out(MIPS_GET_LI(mips), 1));
 
@@ -1591,6 +1612,10 @@ static int JR(MIPS_instr mips){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 
+#ifdef COMPARE_CORE
+	GEN_LI(ppc, 4, 0, 1);
+	set_next_dst(ppc);
+#endif
 	genUpdateCount(0);
 
 #ifdef INTERPRET_JR
@@ -1626,6 +1651,10 @@ static int JALR(MIPS_instr mips){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 
+#ifdef COMPARE_CORE
+	GEN_LI(ppc, 4, 0, 1);
+	set_next_dst(ppc);
+#endif
 	genUpdateCount(0);
 
 	// Set LR to next instruction
@@ -4019,7 +4048,7 @@ static void genJumpTo(unsigned int loc, unsigned int type){
 // Updates Count, and sets cr2 to (next_interupt ? Count)
 static void genUpdateCount(int checkCount){
 	PowerPC_instr ppc = NEW_PPC_INSTR();
-#if 1
+#ifndef COMPARE_CORE
 	// Dynarec inlined code equivalent:
 	int tmp = mapRegisterTemp();
 	// lis    tmp, pc >> 16
@@ -4062,16 +4091,13 @@ static void genUpdateCount(int checkCount){
 	// Free tmp register
 	unmapRegisterTemp(tmp);
 #else
-	// Move &dyna_update_count to ctr for call
-	GEN_MTCTR(ppc, DYNAREG_UCOUNT);
-	set_next_dst(ppc);
 	// Load the current PC as the argument
 	GEN_LIS(ppc, 3, (get_src_pc()+4)>>16);
 	set_next_dst(ppc);
 	GEN_ORI(ppc, 3, 3, get_src_pc()+4);
 	set_next_dst(ppc);
 	// Call dyna_update_count
-	GEN_BCTRL(ppc);
+	GEN_B(ppc, add_jump(&dyna_update_count, 1, 1), 0, 1);
 	set_next_dst(ppc);
 	// Load the lr
 	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
@@ -4135,9 +4161,6 @@ static void genCheckFP(void){
 void genCallDynaMem(memType type, int base, short immed){
 	PowerPC_instr ppc;
 	// PRE: value to store, or register # to load into should be in r3
-	// mtctr DYNAREG_RWMEM
-	//GEN_MTCTR(ppc, DYNAREG_RWMEM);
-	//set_next_dst(ppc);
 	// Pass PC as arg 4 (upper half)
 	GEN_LIS(ppc, 6, (get_src_pc()+4)>>16);
 	set_next_dst(ppc);
@@ -4154,7 +4177,6 @@ void genCallDynaMem(memType type, int base, short immed){
 	GEN_LI(ppc, 7, 0, isDelaySlot ? 1 : 0);
 	set_next_dst(ppc);
 	// call dyna_mem
-	//GEN_BCTRL(ppc);
 	GEN_B(ppc, add_jump(&dyna_mem, 1, 1), 0, 1);
 	set_next_dst(ppc);
 	// Load old LR

@@ -148,9 +148,20 @@ unsigned int decodeNInterpret(MIPS_instr mips, unsigned int pc,
 	return interp_addr != pc + 4 ? interp_addr : 0;
 }
 
+#ifdef COMPARE_CORE
+int dyna_update_count(unsigned int pc, int isDelaySlot){
+#else
 int dyna_update_count(unsigned int pc){
+#endif
 	Count += (pc - last_addr)/2;
 	last_addr = pc;
+
+#ifdef COMPARE_CORE
+	if(isDelaySlot){
+		interp_addr = pc;
+		compare_core();
+	}
+#endif
 
 	return next_interupt - Count;
 }
