@@ -168,6 +168,8 @@ void dynarec(unsigned int address){
 			insert_func(&last_func->links_out, func);
 			// Actually link the funcs
 			GEN_B(*link_branch, (PowerPC_instr*)code-link_branch, 0, 0);
+			DCFlushRange(link_branch, sizeof(PowerPC_instr));
+			ICInvalidateRange(link_branch, sizeof(PowerPC_instr));
 		}
 		
 		address = dyna_run(code);
