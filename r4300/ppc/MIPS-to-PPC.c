@@ -22,8 +22,8 @@ static void genCallInterp(MIPS_instr);
 #define JUMPTO_OFF  1
 #define JUMPTO_ADDR 2
 #define JUMPTO_REG_SIZE  2
-#define JUMPTO_OFF_SIZE  6
-#define JUMPTO_ADDR_SIZE 6
+#define JUMPTO_OFF_SIZE  7
+#define JUMPTO_ADDR_SIZE 7
 static void genJumpTo(unsigned int loc, unsigned int type);
 static void genUpdateCount(int checkCount);
 static void genCheckFP(void);
@@ -4042,9 +4042,11 @@ static void genJumpTo(unsigned int loc, unsigned int type){
 		// Since we could be linking, return on interrupt
 		GEN_BLELR(ppc, 2, 0);
 		set_next_dst(ppc);
-		// Load the PowerPC_func for linking
+		// Load the PowerPC_func for linking and store last_addr
 		extern PowerPC_func* current_func;
 		GEN_LIS(ppc, 4, (unsigned int)current_func >> 16);
+		set_next_dst(ppc);
+		GEN_STW(ppc, 3, 0, DYNAREG_LADDR);
 		set_next_dst(ppc);
 		GEN_ORI(ppc, 4, 4, (unsigned int)current_func);
 		set_next_dst(ppc);
