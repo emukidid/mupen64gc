@@ -3088,8 +3088,14 @@ static int ROUND_L_FP(MIPS_instr mips, int dbl){
 	// addr = reg_cop1_double[fd]
 	GEN_LWZ(ppc, addr, fd*4, DYNAREG_FPR_64);
 	set_next_dst(ppc);
+	// Load old LR
+	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
 	// stw r3, 0(addr)
 	GEN_STW(ppc, 3, 0, addr);
+	set_next_dst(ppc);
+	// Restore LR
+	GEN_MTLR(ppc, 0);
 	set_next_dst(ppc);
 	// stw r4, 4(addr)
 	GEN_STW(ppc, 4, 4, addr);
@@ -3121,8 +3127,14 @@ static int TRUNC_L_FP(MIPS_instr mips, int dbl){
 	// addr = reg_cop1_double[fd]
 	GEN_LWZ(ppc, addr, fd*4, DYNAREG_FPR_64);
 	set_next_dst(ppc);
+	// Load old LR
+	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
 	// stw r3, 0(addr)
 	GEN_STW(ppc, 3, 0, addr);
+	set_next_dst(ppc);
+	// Restore LR
+	GEN_MTLR(ppc, 0);
 	set_next_dst(ppc);
 	// stw r4, 4(addr)
 	GEN_STW(ppc, 4, 4, addr);
@@ -3157,8 +3169,14 @@ static int CEIL_L_FP(MIPS_instr mips, int dbl){
 	// addr = reg_cop1_double[fd]
 	GEN_LWZ(ppc, addr, fd*4, DYNAREG_FPR_64);
 	set_next_dst(ppc);
+	// Load old LR
+	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
 	// stw r3, 0(addr)
 	GEN_STW(ppc, 3, 0, addr);
+	set_next_dst(ppc);
+	// Restore LR
+	GEN_MTLR(ppc, 0);
 	set_next_dst(ppc);
 	// stw r4, 4(addr)
 	GEN_STW(ppc, 4, 4, addr);
@@ -3193,8 +3211,14 @@ static int FLOOR_L_FP(MIPS_instr mips, int dbl){
 	// addr = reg_cop1_double[fd]
 	GEN_LWZ(ppc, addr, fd*4, DYNAREG_FPR_64);
 	set_next_dst(ppc);
+	// Load old LR
+	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
 	// stw r3, 0(addr)
 	GEN_STW(ppc, 3, 0, addr);
+	set_next_dst(ppc);
+	// Restore LR
+	GEN_MTLR(ppc, 0);
 	set_next_dst(ppc);
 	// stw r4, 4(addr)
 	GEN_STW(ppc, 4, 4, addr);
@@ -3428,8 +3452,14 @@ static int CVT_L_FP(MIPS_instr mips, int dbl){
 	// addr = reg_cop1_double[fd]
 	GEN_LWZ(ppc, addr, fd*4, DYNAREG_FPR_64);
 	set_next_dst(ppc);
+	// Load old LR
+	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
 	// stw r3, 0(addr)
 	GEN_STW(ppc, 3, 0, addr);
+	set_next_dst(ppc);
+	// Restore LR
+	GEN_MTLR(ppc, 0);
 	set_next_dst(ppc);
 	// stw r4, 4(addr)
 	GEN_STW(ppc, 4, 4, addr);
@@ -4092,6 +4122,13 @@ static int CVT_FP_L(MIPS_instr mips, int dbl){
 
 	// convert
 	GEN_B(ppc, add_jump(dbl ? &__floatdidf : &__floatdisf, 1, 1), 0, 1);
+	set_next_dst(ppc);
+	
+	// Load old LR
+	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
+	set_next_dst(ppc);
+	// Restore LR
+	GEN_MTLR(ppc, 0);
 	set_next_dst(ppc);
 	
 	unmapRegisterTemp(hi);
