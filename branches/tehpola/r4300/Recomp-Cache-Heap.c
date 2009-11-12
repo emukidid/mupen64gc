@@ -96,7 +96,7 @@ static void unlink_func(PowerPC_func* func, unsigned int code_size){
 		ICInvalidateRange(link->branch, sizeof(PowerPC_instr));
 		
 		remove_func(&link->func->links_out, func);
-		free(link);
+		__lwp_heap_free(meta_cache, link);
 	}
 	func->links_in = NULL;
 	
@@ -113,7 +113,7 @@ static void unlink_func(PowerPC_func* func, unsigned int code_size){
 			if((*link)->branch >= func->code &&
 			   (*link)->branch < func->code + code_size/sizeof(PowerPC_instr)){
 				PowerPC_func_link_node* tmp = (*link)->next;
-				free(*link);
+				__lwp_heap_free(meta_cache, *link);
 				*link = tmp;
 				next = link;
 			}
@@ -265,6 +265,34 @@ void RecompCache_Free(unsigned int addr){
 
 void RecompCache_Update(PowerPC_func* func){
 	update_lru(func);
+}
+
+void RecompCache_Link(PowerPC_func* src_func, PowerPC_instr* src_instr,
+                      PowerPC_func* dst_func, PowerPC_instr* dst_instr){
+	start_section(LINK_SECTION);
+	
+	// Setup book-keeping
+	// Create the incoming link info
+	PowerPC_func_link_node* fln =
+		__lwp_heap_allocate(meta_cache, sizeof(PowerPC_func_link_node));
+	while(!fln){
+		release(sizeof(PowerPC_func_link_node));
+		fln = 
+			__lwp_heap_allocate(meta_cache, sizeof(PowerPC_func_link_node));
+	}
+	fln->branch = src_instr;
+	fln->func = src_func;
+	fln->next = dst_func->links_in;
+	dst_func->links_in = fln;
+	// Create the outgoing link info
+	insert_func(&src_func->links_out, dst_func);
+	
+	// Actually link the funcs
+	GEN_B(*src_instr, (PowerPC_instr*)dst_instr-src_instr, 0, 0);
+	DCFlushRange(src_instr, sizeof(PowerPC_instr));
+	ICInvalidateRange(src_instr, sizeof(PowerPC_instr));
+	
+	end_section(LINK_SECTION);
 }
 
 void RecompCache_Init(void){

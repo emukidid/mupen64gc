@@ -114,6 +114,8 @@ unsigned int (*lookup_func(void))(unsigned int address){
 
 void dynarec(unsigned int address){
 	while(!stop){
+		refresh_stat();
+		
 		start_section(TRAMP_SECTION);
 		PowerPC_block* dst_block = blocks[address>>12];
 		unsigned long paddr = update_invalid_addr(address);
@@ -157,20 +159,9 @@ void dynarec(unsigned int address){
 		unsigned int (*code)(void);
 		code = (unsigned int (*)(void))func->code_addr[index];
 		
-		if(link_branch){
-			// Setup book-keeping
-			PowerPC_func_link_node* fln = 
-				malloc(sizeof(PowerPC_func_link_node));
-			fln->branch = link_branch;
-			fln->func = last_func;
-			fln->next = func->links_in;
-			func->links_in = fln;
-			insert_func(&last_func->links_out, func);
-			// Actually link the funcs
-			GEN_B(*link_branch, (PowerPC_instr*)code-link_branch, 0, 0);
-			DCFlushRange(link_branch, sizeof(PowerPC_instr));
-			ICInvalidateRange(link_branch, sizeof(PowerPC_instr));
-		}
+		// Create a link if possible
+		if(link_branch)
+			RecompCache_Link(last_func, link_branch, func, code);
 		
 		address = dyna_run(code);
 
