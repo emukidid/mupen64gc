@@ -3075,6 +3075,7 @@ static int ROUND_L_FP(MIPS_instr mips, int dbl){
 	flushRegisters();
 	int fd = MIPS_GET_FD(mips);
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	invalidateFPR(fs);
 
 	// round
 	GEN_B(ppc, add_jump(dbl ? &round : &roundf, 1, 1), 0, 1);
@@ -3110,6 +3111,7 @@ static int TRUNC_L_FP(MIPS_instr mips, int dbl){
 	flushRegisters();
 	int fd = MIPS_GET_FD(mips);
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	invalidateFPR(fs);
 
 	// convert
 	GEN_B(ppc, add_jump(dbl ? &__fixdfdi : &__fixsfdi, 1, 1), 0, 1);
@@ -3142,6 +3144,7 @@ static int CEIL_L_FP(MIPS_instr mips, int dbl){
 	flushRegisters();
 	int fd = MIPS_GET_FD(mips);
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	invalidateFPR(fs);
 
 	// ceil
 	GEN_B(ppc, add_jump(dbl ? &ceil : &ceilf, 1, 1), 0, 1);
@@ -3177,6 +3180,7 @@ static int FLOOR_L_FP(MIPS_instr mips, int dbl){
 	flushRegisters();
 	int fd = MIPS_GET_FD(mips);
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	invalidateFPR(fs);
 
 	// round
 	GEN_B(ppc, add_jump(dbl ? &floor : &floorf, 1, 1), 0, 1);
@@ -3414,6 +3418,7 @@ static int CVT_L_FP(MIPS_instr mips, int dbl){
 	flushRegisters();
 	int fd = MIPS_GET_FD(mips);
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+	invalidateFPR(fs);
 
 	// convert
 	GEN_B(ppc, add_jump(dbl ? &__fixdfdi : &__fixsfdi, 1, 1), 0, 1);
