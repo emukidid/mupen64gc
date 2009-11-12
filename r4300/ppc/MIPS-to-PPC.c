@@ -33,6 +33,11 @@ void jump_to(unsigned int);
 void check_interupt();
 extern int llbit;
 
+double __floatdidf(long long);
+float __floatdisf(long long);
+long long __fixdfdi(double);
+long long __fixsfdi(float);
+
 #define CANT_COMPILE_DELAY() \
 	((get_src_pc()&0xFFF) == 0xFFC && \
 	 (get_src_pc() <  0x80000000 || \
@@ -3064,8 +3069,32 @@ static int ROUND_L_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_ROUND_L
-	// TODO: ROUND_L
-	return CONVERT_ERROR;
+	
+	genCheckFP();
+
+	flushRegisters();
+	int fd = MIPS_GET_FD(mips);
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+
+	// round
+	GEN_B(ppc, add_jump(dbl ? &round : &roundf, 1, 1), 0, 1);
+	set_next_dst(ppc);
+	// convert
+	GEN_B(ppc, add_jump(dbl ? &__fixdfdi : &__fixsfdi, 1, 1), 0, 1);
+	set_next_dst(ppc);
+	
+	int addr = 5; // Use r5 for the addr (to not clobber r3/r4)
+	// addr = reg_cop1_double[fd]
+	GEN_LWZ(ppc, addr, fd*4, DYNAREG_FPR_64);
+	set_next_dst(ppc);
+	// stw r3, 0(addr)
+	GEN_STW(ppc, 3, 0, addr);
+	set_next_dst(ppc);
+	// stw r4, 4(addr)
+	GEN_STW(ppc, 4, 4, addr);
+	set_next_dst(ppc);
+
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -3075,8 +3104,29 @@ static int TRUNC_L_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_TRUNC_L
-	// TODO: TRUNC_L
-	return CONVERT_ERROR;
+
+	genCheckFP();
+
+	flushRegisters();
+	int fd = MIPS_GET_FD(mips);
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+
+	// convert
+	GEN_B(ppc, add_jump(dbl ? &__fixdfdi : &__fixsfdi, 1, 1), 0, 1);
+	set_next_dst(ppc);
+	
+	int addr = 5; // Use r5 for the addr (to not clobber r3/r4)
+	// addr = reg_cop1_double[fd]
+	GEN_LWZ(ppc, addr, fd*4, DYNAREG_FPR_64);
+	set_next_dst(ppc);
+	// stw r3, 0(addr)
+	GEN_STW(ppc, 3, 0, addr);
+	set_next_dst(ppc);
+	// stw r4, 4(addr)
+	GEN_STW(ppc, 4, 4, addr);
+	set_next_dst(ppc);
+
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -3086,8 +3136,32 @@ static int CEIL_L_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_CEIL_L
-	// TODO: CEIL_L
-	return CONVERT_ERROR;
+
+	genCheckFP();
+
+	flushRegisters();
+	int fd = MIPS_GET_FD(mips);
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+
+	// ceil
+	GEN_B(ppc, add_jump(dbl ? &ceil : &ceilf, 1, 1), 0, 1);
+	set_next_dst(ppc);
+	// convert
+	GEN_B(ppc, add_jump(dbl ? &__fixdfdi : &__fixsfdi, 1, 1), 0, 1);
+	set_next_dst(ppc);
+	
+	int addr = 5; // Use r5 for the addr (to not clobber r3/r4)
+	// addr = reg_cop1_double[fd]
+	GEN_LWZ(ppc, addr, fd*4, DYNAREG_FPR_64);
+	set_next_dst(ppc);
+	// stw r3, 0(addr)
+	GEN_STW(ppc, 3, 0, addr);
+	set_next_dst(ppc);
+	// stw r4, 4(addr)
+	GEN_STW(ppc, 4, 4, addr);
+	set_next_dst(ppc);
+
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -3097,8 +3171,32 @@ static int FLOOR_L_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_FLOOR_L
-	// TODO: FLOOR_L
-	return CONVERT_ERROR;
+
+	genCheckFP();
+
+	flushRegisters();
+	int fd = MIPS_GET_FD(mips);
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+
+	// round
+	GEN_B(ppc, add_jump(dbl ? &floor : &floorf, 1, 1), 0, 1);
+	set_next_dst(ppc);
+	// convert
+	GEN_B(ppc, add_jump(dbl ? &__fixdfdi : &__fixsfdi, 1, 1), 0, 1);
+	set_next_dst(ppc);
+	
+	int addr = 5; // Use r5 for the addr (to not clobber r3/r4)
+	// addr = reg_cop1_double[fd]
+	GEN_LWZ(ppc, addr, fd*4, DYNAREG_FPR_64);
+	set_next_dst(ppc);
+	// stw r3, 0(addr)
+	GEN_STW(ppc, 3, 0, addr);
+	set_next_dst(ppc);
+	// stw r4, 4(addr)
+	GEN_STW(ppc, 4, 4, addr);
+	set_next_dst(ppc);
+
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -3310,8 +3408,29 @@ static int CVT_L_FP(MIPS_instr mips, int dbl){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_CVT_L
-	// TODO: CVT_L
-	return CONVERT_ERROR;
+
+	genCheckFP();
+
+	flushRegisters();
+	int fd = MIPS_GET_FD(mips);
+	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
+
+	// convert
+	GEN_B(ppc, add_jump(dbl ? &__fixdfdi : &__fixsfdi, 1, 1), 0, 1);
+	set_next_dst(ppc);
+	
+	int addr = 5; // Use r5 for the addr (to not clobber r3/r4)
+	// addr = reg_cop1_double[fd]
+	GEN_LWZ(ppc, addr, fd*4, DYNAREG_FPR_64);
+	set_next_dst(ppc);
+	// stw r3, 0(addr)
+	GEN_STW(ppc, 3, 0, addr);
+	set_next_dst(ppc);
+	// stw r4, 4(addr)
+	GEN_STW(ppc, 4, 4, addr);
+	set_next_dst(ppc);
+
+	return CONVERT_SUCCESS;
 #endif
 }
 
@@ -3944,13 +4063,49 @@ static int W(MIPS_instr mips){
 #endif
 }
 
+static int CVT_FP_L(MIPS_instr mips, int dbl){
+	PowerPC_instr ppc;
+	
+	genCheckFP();
+
+	flushRegisters();
+	int fs = MIPS_GET_FS(mips);
+	int fd = mapFPRNew( MIPS_GET_FD(mips), dbl ); // f1
+	int hi = mapRegisterTemp(); // r3
+	int lo = mapRegisterTemp(); // r4
+
+	// Get the long value into GPRs
+	// lo = fpr64[fs]
+	GEN_LWZ(ppc, lo, fs*4, DYNAREG_FPR_64);
+	set_next_dst(ppc);
+	// hi = *lo (hi word)
+	GEN_LWZ(ppc, hi, 0, lo);
+	set_next_dst(ppc);
+	// lo = *(lo+4) (lo word)
+	GEN_LWZ(ppc, lo, 4, lo);
+	set_next_dst(ppc);
+
+	// convert
+	GEN_B(ppc, add_jump(dbl ? &__floatdidf : &__floatdisf, 1, 1), 0, 1);
+	set_next_dst(ppc);
+	
+	unmapRegisterTemp(hi);
+	unmapRegisterTemp(lo);
+
+	return CONVERT_SUCCESS;
+}
+
 static int L(MIPS_instr mips){
 #if defined(INTERPRET_FP) || defined(INTERPRET_FP_L)
 	genCallInterp(mips);
 	return INTERPRETED;
 #else // INTERPRET_FP || INTERPRET_FP_L
-	// TODO: long-integer FP
-	return CONVERT_ERROR;
+
+	int func = MIPS_GET_FUNC(mips);
+
+	if(func == MIPS_FUNC_CVT_S_) return CVT_FP_L(mips, 0);
+	if(func == MIPS_FUNC_CVT_D_) return CVT_FP_L(mips, 1);
+	else return CONVERT_ERROR;
 #endif
 }
 
