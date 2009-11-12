@@ -83,22 +83,9 @@ static CacheMetaNode* heapPop(void){
 	return cacheHeap[heapSize];
 }
 
-static void free_func(PowerPC_func* func, unsigned int addr,
-                      unsigned int code_size){
-	// Free the code associated with the func
-	__lwp_heap_free(cache, func->code);
-	__lwp_heap_free(meta_cache, func->code_addr);
-	// Remove any holes into this func
-	PowerPC_func_hole_node* hole, * next_hole;
-	for(hole = func->holes; hole != NULL; hole = next_hole){
-		next_hole = hole->next;
-		free(hole);
-	}
-
-	// Remove any pointers to this code
-	// Remove the func from the block
-	PowerPC_block* block = blocks[addr>>12];
-	remove_func(&block->funcs, func);
+static void unlink_func(PowerPC_func* func, unsigned int code_size){
+	start_section(UNLINK_SECTION);
+	
 	// Remove any incoming links to this func
 	PowerPC_func_link_node* link, * next_link;
 	for(link = func->links_in; link != NULL; link = next_link){
@@ -111,6 +98,8 @@ static void free_func(PowerPC_func* func, unsigned int addr,
 		remove_func(&link->func->links_out, func);
 		free(link);
 	}
+	func->links_in = NULL;
+	
 	// Remove any references to outgoing links from this func
 	void remove_outgoing_links(PowerPC_func_node** node){
 		if(!*node) return;
@@ -132,6 +121,29 @@ static void free_func(PowerPC_func* func, unsigned int addr,
 		free(*node); // Free the PowerPC_func_node*
 	}
 	remove_outgoing_links(&func->links_out);
+	func->links_out = NULL;
+	
+	end_section(UNLINK_SECTION);
+}
+
+static void free_func(PowerPC_func* func, unsigned int addr,
+                      unsigned int code_size){
+	// Free the code associated with the func
+	__lwp_heap_free(cache, func->code);
+	__lwp_heap_free(meta_cache, func->code_addr);
+	// Remove any holes into this func
+	PowerPC_func_hole_node* hole, * next_hole;
+	for(hole = func->holes; hole != NULL; hole = next_hole){
+		next_hole = hole->next;
+		free(hole);
+	}
+
+	// Remove any pointers to this code
+	// Remove the func from the block
+	PowerPC_block* block = blocks[addr>>12];
+	remove_func(&block->funcs, func);
+	// Remove func links
+	unlink_func(func, code_size);
 
 	free(func);
 }
@@ -215,15 +227,21 @@ void RecompCache_Realloc(PowerPC_func* func, unsigned int new_size){
 		func->code = __lwp_heap_allocate(cache, new_size);
 	}
 
+	unsigned int old_size;
+	
 	// Update the size for the cache
 	int i;
 	for(i=heapSize-1; i>=0; --i){
 		if(cacheHeap[i]->func == func){
-			cacheSize += new_size - cacheHeap[i]->size;
+			old_size = cacheHeap[i]->size;
+			cacheSize += new_size - old_size;
 			cacheHeap[i]->size = new_size;
 			break;
 		}
 	}
+	
+	// Remove any func links since the code has changed
+	unlink_func(func, old_size);
 }
 
 void RecompCache_Free(unsigned int addr){
