@@ -2,15 +2,15 @@
 #labels Phase-Requirements
 
 Listed in order of importance:
-  * *Hardware Accelerated Graphics* _glN64 with GX_
-  * *Dynamic Recompilation* _It's coming_
-  * *Sound* _Interpolated - WIP_
-  * *8mb Expansion Pak Games* _4Mb for now_
-  * *512mbit ROMS* _done_
-  * *Input (Gamecube & Classic Controller)* _done_
+  * *Hardware Accelerated Graphics* _Achieved (glN64) - Optimizations/Bug-fix phase_
+  * *Dynamic Recompilation* _Achieved - Optimizations/Bug-fix phase_
+  * *Sound* _Achieved - Optimizations/Bug-fix phase_
+  * *8mb Expansion Pak Games* _Achieved (Wii)_
+  * *512mbit ROMS* _Achieved - Optimizations/Bug-fix phase_
+  * *Input (GC, Classic & Wiimote+nunchuck )* _Achieved - Optimizations/Bug-fix phase_
   * *Configurable input methods* _todo_
-  * *DVD/SD/SDHC/Front-SD Loading* _done_
-  * *Native Saves (to SD or MC)* _done_
-  * *Save States (to SD)* _done_
-  * *Rumble/Controller Pak Support* _done_
-  * *Progressive/Widescreen Resolution* _done_
+  * *DVD/SD/SDHC/Front-SD Loading* _Achieved - Optimizations/Bug-fix phase_
+  * *Native Saves (to SD or MC)* _Achieved_
+  * *Save States (to SD)* _Achieved - Optimizations/Bug-fix phase_
+  * *Rumble/Controller Pak Support* _Achieved_
+  * *Progressive/Widescreen Resolution* _Achieved_
