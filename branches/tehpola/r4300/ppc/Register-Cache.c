@@ -257,15 +257,15 @@ int mapConstantNew(int reg, int isConstant){
 	return mapping;
 }
 
-int isConstant(int reg){
+int isRegisterConstant(int reg){
 	return regMap[reg].constant;
 }
 
-unsigned int getConstant(int reg){
+unsigned int getRegisterConstant(int reg){
 	return regMap[reg].value;
 }
 
-void setConstant(int reg, unsigned int constant){
+void setRegisterConstant(int reg, unsigned int constant){
 	regMap[reg].value = constant;
 }
 
