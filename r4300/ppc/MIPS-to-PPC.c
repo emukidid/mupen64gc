@@ -486,12 +486,17 @@ static int BGTZ(MIPS_instr mips){
 
 static int ADDIU(MIPS_instr mips){
 	PowerPC_instr ppc;
-	int rs = mapRegister( MIPS_GET_RS(mips) );
-	GEN_ADDI(ppc,
-	         mapRegisterNew( MIPS_GET_RT(mips) ),
-	         rs,
-	         MIPS_GET_IMMED(mips));
+	int _rs = MIPS_GET_RS(mips), _rt = MIPS_GET_RT(mips);
+	int rs = mapRegister(_rs);
+	int rt = mapConstantNew(_rt, isRegisterConstant(_rs));
+	
+	int immediate = MIPS_GET_IMMED(mips);
+	immediate |= (immediate&0x8000) ? 0xffff0000 : 0;
+	setRegisterConstant(_rt, getRegisterConstant(_rs) + immediate);
+	
+	GEN_ADDI(ppc, rt, rs, MIPS_GET_IMMED(mips));
 	set_next_dst(ppc);
+	
 	return CONVERT_SUCCESS;
 }
 
