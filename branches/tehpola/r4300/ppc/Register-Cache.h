@@ -23,6 +23,16 @@ RegMapping mapRegister64New(int reg);
 void invalidateRegister(int reg);
 // Unmap a register (reg), storing if dirty
 void flushRegister(int reg);
+// Constant Propagation
+// Create a mapping for a 32-bit register (reg) to a HW register (returned)
+// The value mapped may have a constant value (isConstant) to be set later
+int mapConstantNew(int reg, int isConstant);
+// Return whether a register (reg) has a constant value mapped to it
+int isConstant(int reg);
+// Get the constant value held by a register (reg)
+unsigned int getConstant(int reg);
+// Set the constant value (constant) held by a register (reg)
+void setConstant(int reg, unsigned int constant);
 
 
 // -- FPRs --
