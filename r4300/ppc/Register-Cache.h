@@ -28,11 +28,11 @@ void flushRegister(int reg);
 // The value mapped may have a constant value (isConstant) to be set later
 int mapConstantNew(int reg, int isConstant);
 // Return whether a register (reg) has a constant value mapped to it
-int isConstant(int reg);
+int isRegisterConstant(int reg);
 // Get the constant value held by a register (reg)
-unsigned int getConstant(int reg);
+unsigned int getRegisterConstant(int reg);
 // Set the constant value (constant) held by a register (reg)
-void setConstant(int reg, unsigned int constant);
+void setRegisterConstant(int reg, unsigned int constant);
 
 
 // -- FPRs --
