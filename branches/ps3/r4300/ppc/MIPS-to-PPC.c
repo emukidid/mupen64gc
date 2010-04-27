@@ -22,8 +22,8 @@ static void genCallInterp(MIPS_instr);
 #define JUMPTO_OFF  1
 #define JUMPTO_ADDR 2
 #define JUMPTO_REG_SIZE  2
-#define JUMPTO_OFF_SIZE  3
-#define JUMPTO_ADDR_SIZE 3
+#define JUMPTO_OFF_SIZE  7
+#define JUMPTO_ADDR_SIZE 7
 static void genJumpTo(unsigned int loc, unsigned int type);
 static void genUpdateCount(int checkCount);
 static void genCheckFP(void);
@@ -162,7 +162,7 @@ static int branch(int offset, condition cond, int link, int likely){
 		set_next_dst(ppc);
 		GEN_LI(ppc, 4, 0, 0);
 		set_next_dst(ppc);
-		
+
 		set_jump_special(likely_id, delaySlot+2+1);
 	}
 #else
@@ -298,8 +298,8 @@ static int J(MIPS_instr mips){
 	GEN_LI(ppc, 4, 0, 1);
 	set_next_dst(ppc);
 #endif
-	// Sets cr2 to (next_interupt ? Count) if we're not jumping out
-	genUpdateCount(!is_j_out(MIPS_GET_LI(mips), 1));
+	// Sets cr2 to (next_interupt ? Count)
+	genUpdateCount(1);
 	
 #ifdef INTERPRET_J
 	genJumpTo(MIPS_GET_LI(mips), JUMPTO_ADDR);
@@ -359,8 +359,8 @@ static int JAL(MIPS_instr mips){
 	GEN_LI(ppc, 4, 0, 1);
 	set_next_dst(ppc);
 #endif
-	// Sets cr2 to (next_interupt ? Count) if we're not jumping out
-	genUpdateCount(!is_j_out(MIPS_GET_LI(mips), 1));
+	// Sets cr2 to (next_interupt ? Count)
+	genUpdateCount(1);
 	
 	// Set LR to next instruction
 	int lr = mapRegisterNew(MIPS_REG_LR);
@@ -4041,9 +4041,20 @@ static void genJumpTo(unsigned int loc, unsigned int type){
 		set_next_dst(ppc);
 		GEN_ORI(ppc, 3, 3, loc);
 		set_next_dst(ppc);
+		// Since we could be linking, return on interrupt
+		GEN_BLELR(ppc, 2, 0);
+		set_next_dst(ppc);
+		// Load the PowerPC_func for linking and store last_addr
+		extern PowerPC_func* current_func;
+		GEN_LIS(ppc, 4, (unsigned int)current_func >> 16);
+		set_next_dst(ppc);
+		GEN_STW(ppc, 3, 0, DYNAREG_LADDR);
+		set_next_dst(ppc);
+		GEN_ORI(ppc, 4, 4, (unsigned int)current_func);
+		set_next_dst(ppc);
 	}
 	
-	GEN_BLR(ppc, 0);
+	GEN_BLR(ppc, (type != JUMPTO_REG));
 	set_next_dst(ppc);
 }
 
