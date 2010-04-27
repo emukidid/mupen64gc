@@ -21,6 +21,9 @@ unsigned int dyna_mem(unsigned int, unsigned int, memType, unsigned int, int);
 
 int noCheckInterrupt = 0;
 
+static PowerPC_instr* link_branch = NULL;
+static PowerPC_func* last_func;
+
 /* Recompiled code stack frame:
  *  $sp+12  |
  *  $sp+8   | old cr
@@ -30,6 +33,7 @@ int noCheckInterrupt = 0;
 
 inline unsigned int dyna_run(unsigned int (*code)(void)){
 	unsigned int naddr;
+	PowerPC_instr* return_addr;
 
 	__asm__ volatile(
 		// Create the stack frame for code
@@ -56,19 +60,25 @@ inline unsigned int dyna_run(unsigned int (*code)(void)){
 	__asm__ volatile(
 		// Save the lr so the recompiled code won't have to
 		"bl	4         \n"
-		"mtctr	%1        \n"
+		"mtctr	%4        \n"
 		"mflr	4         \n"
 		"addi	4, 4, 20  \n"
 		"stw	4, 20(1)  \n"
 		// Execute the code
 		"bctrl           \n"
 		"mr	%0, 3     \n"
+		"lwz	%2, 20(1) \n"
+		"mflr	%1        \n"
+		"mr	%3, 4     \n"
 		// Pop the stack
 		"lwz	1, 0(1)   \n"
-		: "=r" (naddr)
+		: "=r" (naddr), "=r" (link_branch), "=r" (return_addr),
+		  "=r" (last_func)
 		: "r" (code)
 		: "3", "4", "5", "6", "7", "8", "9", "10", "11", "12");
 
+	link_branch = link_branch == return_addr ? NULL : link_branch - 1;
+	
 	return naddr;
 }
 
@@ -121,6 +131,11 @@ void dynarec(unsigned int address){
 		// Recompute the block offset
 		unsigned int (*code)(void);
 		code = (unsigned int (*)(void))func->code_addr[index];
+		
+		// Create a link if possible
+		if(link_branch)
+			RecompCache_Link(last_func, link_branch, func, code);
+		
 		address = dyna_run(code);
 
 		if(!noCheckInterrupt){
