@@ -56,7 +56,7 @@ inline unsigned int dyna_run(PowerPC_func* func, unsigned int (*code)(void)){
 		   "r" (&FCR31), "r" (rdram),
 		   "r" (&last_addr), "r" (&next_interupt),
 		   "r" (func)
-		: "14", "15", "16", "17", "18", "19", "20", "21", "22");
+		: "14", "15", "16", "17", "18", "19", "20", "21", "22", "23");
 
 	end_section(TRAMP_SECTION);
 

@@ -22,8 +22,8 @@ static void genCallInterp(MIPS_instr);
 #define JUMPTO_OFF  1
 #define JUMPTO_ADDR 2
 #define JUMPTO_REG_SIZE  2
-#define JUMPTO_OFF_SIZE  7
-#define JUMPTO_ADDR_SIZE 7
+#define JUMPTO_OFF_SIZE  11
+#define JUMPTO_ADDR_SIZE 11
 static void genJumpTo(unsigned int loc, unsigned int type);
 static void genUpdateCount(int checkCount);
 static void genCheckFP(void);
