@@ -69,6 +69,7 @@ inline unsigned int dyna_run(unsigned int (*code)(void)){
 		// Execute the code
 		"bctrl           \n"
 		"mr	%0, 3     \n"
+		// Get return_addr, link_branch, and last_func
 		"lwz	%2, 20(1) \n"
 		"mflr	%1        \n"
 		"mr	%3, 4     \n"
@@ -124,7 +125,7 @@ void dynarec(unsigned int address){
 		DEBUG_print(txtbuffer, DBG_USBGECKO);
 		*/
 		if(!paddr){ stop=1; return; }
-
+		
 		if(!dst_block){
 			/*sprintf(txtbuffer, "block at %08x doesn't exist\n", address&~0xFFF);
 			DEBUG_print(txtbuffer, DBG_USBGECKO);*/
@@ -133,8 +134,13 @@ void dynarec(unsigned int address){
 			dst_block->funcs         = NULL;
 			dst_block->start_address = address & ~0xFFF;
 			dst_block->end_address   = (address & ~0xFFF) + 0x1000;
-			init_block(rdram+(((paddr-(address-dst_block->start_address)) & 0x1FFFFFFF)>>2),
-				   dst_block);
+			if((paddr >= 0xb0000000 && paddr < 0xc0000000) ||
+			   (paddr >= 0x90000000 && paddr < 0xa0000000)){
+				init_block(NULL, dst_block);
+			} else {
+				init_block(rdram+(((paddr-(address-dst_block->start_address)) & 0x1FFFFFFF)>>2),
+						   dst_block);
+			}
 		} else if(invalid_code_get(address>>12)){
 			invalidate_block(dst_block);
 		}
@@ -144,6 +150,10 @@ void dynarec(unsigned int address){
 		if(!func || !func->code_addr[((address&0xFFFF)-func->start_addr)>>2]){
 			/*sprintf(txtbuffer, "code at %08x is not compiled\n", address);
 			DEBUG_print(txtbuffer, DBG_USBGECKO);*/
+			if((paddr >= 0xb0000000 && paddr < 0xc0000000) ||
+			   (paddr >= 0x90000000 && paddr < 0xa0000000))
+				dst_block->mips_code =
+					ROMCache_pointer((paddr-(address-dst_block->start_address))&0x0FFFFFFF);
 			start_section(COMPILER_SECTION);
 			func = recompile_block(dst_block, address);
 			end_section(COMPILER_SECTION);
@@ -160,8 +170,9 @@ void dynarec(unsigned int address){
 		code = (unsigned int (*)(void))func->code_addr[index];
 		
 		// Create a link if possible
-		if(link_branch)
+		if(link_branch && !func_was_freed(last_func))
 			RecompCache_Link(last_func, link_branch, func, code);
+		clear_freed_funcs();
 		
 		address = dyna_run(code);
 
