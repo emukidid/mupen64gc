@@ -35,23 +35,30 @@ extern int stop;
 void* memcpy(void* dst, void* src, int len);
 void showLoadProgress(float);
 
-#ifdef USE_ROM_CACHE_L1
-static u8  L1[256*1024];
-static u32 L1tag;
-#endif
+static void ensure_block(u32 block);
 
 void ROMCache_init(u32 size){
 	ROMSize = size;
 	ROMTooBig = size > ROMCACHE_SIZE;
-#ifdef USE_ROM_CACHE_L1
-	L1tag = -1;
-#endif
 	
 	//romFile_init( romFile_topLevel );
 }
 
 void ROMCache_deinit(){
 	//romFile_deinit( romFile_topLevel );
+}
+
+void* ROMCache_pointer(u32 rom_offset){
+	if(ROMTooBig){
+		u32 block = rom_offset >> 20;
+		u32 block_offset = rom_offset & 0xFFFFF;
+		
+		ensure_block(block);
+		
+		return ROMBlocks[block] + block_offset;
+	} else {
+		return ROMCACHE_LO + rom_offset;
+	}
 }
 
 void ROMCache_load_block(char* dst, u32 rom_offset){
@@ -75,6 +82,20 @@ void ROMCache_load_block(char* dst, u32 rom_offset){
 	  resumeAudio();
 }
 
+static void ensure_block(u32 block){
+	if(!ROMBlocks[block]){
+		// The block we're trying to read isn't in the cache
+		// Find the Least Recently Used Block
+		int i, max_i = 0, max_lru = 0;
+		for(i=0; i<64; ++i)
+			if(ROMBlocks[i] && ROMBlocksLRU[i] > max_lru)
+				max_i = i, max_lru = ROMBlocksLRU[i];
+		ROMBlocks[block] = ROMBlocks[max_i]; // Take its place
+		ROMCache_load_block(ROMBlocks[block], (block<<20)&0xFFF00000);
+		ROMBlocks[max_i] = 0; // Evict the LRU block
+	}
+}
+
 void ROMCache_read(u32* dest, u32 offset, u32 length){
 	// Display stats for reads
 	static int last_block = -1;
@@ -91,17 +112,7 @@ void ROMCache_read(u32* dest, u32 offset, u32 length){
 		u32 offset2 = offset&0xFFFFF;
 		
 		while(length2){
-			if(!ROMBlocks[block]){
-				// The block we're trying to read isn't in the cache
-				// Find the Least Recently Used Block
-				int i, max_i = 0, max_lru = 0;
-				for(i=0; i<64; ++i)
-					if(ROMBlocks[i] && ROMBlocksLRU[i] > max_lru)
-						max_i = i, max_lru = ROMBlocksLRU[i];
-				ROMBlocks[block] = ROMBlocks[max_i]; // Take its place
-				ROMCache_load_block(ROMBlocks[block], offset&0xFFF00000);
-				ROMBlocks[max_i] = 0; // Evict the LRU block
-			}
+			ensure_block(block);
 			
 			// Set length to the length for this block
 			if(length2 > BLOCK_SIZE - offset2)
@@ -120,22 +131,7 @@ void ROMCache_read(u32* dest, u32 offset, u32 length){
 			++block; length2 -= length; offset2 = 0; dest += length/4; offset += length;
 		}
 	} else {
-#ifdef USE_ROM_CACHE_L1
-		if(offset >> 18 == (offset+length-1) >> 18){
-			// Only worry about using L1 cache if the read falls
-			//   within only one block for the L1 for now
-			if(offset >> 18 != L1tag){
-				DEBUG_stats(6, "ROMCache L1 misses", STAT_TYPE_ACCUM, 1);
-				memcpy(L1, ROMCACHE_LO + (offset&(~0x3FFFF)), 256*1024);
-				L1tag = offset >> 18;
-			}
-			DEBUG_stats(7, "ROMCache L1 transfers", STAT_TYPE_ACCUM, 1);
-			memcpy(dest, L1 + (offset&0x3FFFF), length);
-		} else
-#endif
-		{
-			memcpy(dest, ROMCACHE_LO + offset, length);
-		}
+		memcpy(dest, ROMCACHE_LO + offset, length);
 	}
 }
 
