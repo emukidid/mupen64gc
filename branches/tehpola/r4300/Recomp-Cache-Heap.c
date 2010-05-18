@@ -5,6 +5,7 @@
 #include "../gc_memory/MEM2.h"
 #include "r4300.h"
 #include "ppc/Recompile.h"
+#include "ppc/Wrappers.h"
 #include "Invalid_Code.h"
 #include "Recomp-Cache.h"
 
@@ -91,9 +92,11 @@ static void unlink_func(PowerPC_func* func){
 	for(link = func->links_in; link != NULL; link = next_link){
 		next_link = link->next;
 		
+		GEN_ORI(*(link->branch-10), 0, 0, 0);
+		GEN_ORI(*(link->branch-9), 0, 0, 0);
 		GEN_BLR(*link->branch, 1); // Set the linking branch to blrl
-		DCFlushRange(link->branch, sizeof(PowerPC_instr));
-		ICInvalidateRange(link->branch, sizeof(PowerPC_instr));
+		DCFlushRange(link->branch-10, 11*sizeof(PowerPC_instr));
+		ICInvalidateRange(link->branch-10, 11*sizeof(PowerPC_instr));
 		
 		remove_func(&link->func->links_out, func);
 		__lwp_heap_free(meta_cache, link);
@@ -283,9 +286,11 @@ void RecompCache_Link(PowerPC_func* src_func, PowerPC_instr* src_instr,
 	insert_func(&src_func->links_out, dst_func);
 	
 	// Actually link the funcs
+	GEN_LIS(*(src_instr-10), DYNAREG_FUNC, (unsigned int)dst_func>>16);
+	GEN_ORI(*(src_instr-9), DYNAREG_FUNC,DYNAREG_FUNC, (unsigned int)dst_func);
 	GEN_B(*src_instr, (PowerPC_instr*)dst_instr-src_instr, 0, 0);
-	DCFlushRange(src_instr, sizeof(PowerPC_instr));
-	ICInvalidateRange(src_instr, sizeof(PowerPC_instr));
+	DCFlushRange(src_instr-10, 11*sizeof(PowerPC_instr));
+	ICInvalidateRange(src_instr-10, 11*sizeof(PowerPC_instr));
 	
 	end_section(LINK_SECTION);
 }

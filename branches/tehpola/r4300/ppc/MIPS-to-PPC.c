@@ -28,6 +28,7 @@ static void genJumpTo(unsigned int loc, unsigned int type);
 static void genUpdateCount(int checkCount);
 static void genCheckFP(void);
 void genCallDynaMem(memType type, int base, short immed);
+void RecompCache_Update(PowerPC_func*);
 static int inline mips_is_jump(MIPS_instr);
 void jump_to(unsigned int);
 void check_interupt();
@@ -4371,6 +4372,21 @@ static void genJumpTo(unsigned int loc, unsigned int type){
 		loc <<= 2;
 		if(type == JUMPTO_OFF) loc += get_src_pc();
 		else loc |= get_src_pc() & 0xf0000000;
+		// Create space to load destination func*
+		GEN_ORI(ppc, 0, 0, 0);
+		set_next_dst(ppc);
+		set_next_dst(ppc);
+		// Move func* into r3 as argument
+		GEN_ADDI(ppc, 3, DYNAREG_FUNC, 0);
+		set_next_dst(ppc);
+		// Call RecompCache_Update(func)
+		GEN_B(ppc, add_jump(&RecompCache_Update, 1, 1), 0, 1);
+		set_next_dst(ppc);
+		// Restore LR
+		GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
+		set_next_dst(ppc);
+		GEN_MTLR(ppc, 0);
+		set_next_dst(ppc);
 		// Load the address as the return value
 		GEN_LIS(ppc, 3, loc >> 16);
 		set_next_dst(ppc);
@@ -4379,13 +4395,8 @@ static void genJumpTo(unsigned int loc, unsigned int type){
 		// Since we could be linking, return on interrupt
 		GEN_BLELR(ppc, 2, 0);
 		set_next_dst(ppc);
-		// Load the PowerPC_func for linking and store last_addr
-		extern PowerPC_func* current_func;
-		GEN_LIS(ppc, 4, (unsigned int)current_func >> 16);
-		set_next_dst(ppc);
+		// Store last_addr for linking
 		GEN_STW(ppc, 3, 0, DYNAREG_LADDR);
-		set_next_dst(ppc);
-		GEN_ORI(ppc, 4, 4, (unsigned int)current_func);
 		set_next_dst(ppc);
 	}
 
