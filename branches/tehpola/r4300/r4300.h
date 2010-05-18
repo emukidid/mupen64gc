@@ -99,7 +99,9 @@ void jump_to(unsigned int);
 #define INTERP_SECTION 7
 #define TRAMP_SECTION 8
 #define FUNCS_SECTION 9
-#define NUM_SECTIONS 9
+#define LINK_SECTION 10
+#define UNLINK_SECTION 11
+#define NUM_SECTIONS 11
 
 //#define PROFILE
 
