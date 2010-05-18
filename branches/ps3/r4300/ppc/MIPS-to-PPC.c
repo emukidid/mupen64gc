@@ -2610,8 +2610,19 @@ static int ERET(MIPS_instr mips){
 	GEN_STW(ppc, 3, 12*4, DYNAREG_COP0);
 	set_next_dst(ppc);
 	// check_interupt()
+#if 0
 	GEN_B(ppc, add_jump(&check_interupt, 1, 1), 0, 1);
 	set_next_dst(ppc);
+#else
+	GEN_LIS(ppc, 12, ((unsigned int)&check_interrupt)>>16);
+	set_next_dst(ppc);
+	GEN_ORI(ppc, 12, 12, (unsigned int)&check_interrupt);
+	set_next_dst(ppc);
+	GEN_MTCTR(ppc, 12);
+	set_next_dst(ppc);
+	GEN_BTCTRL(ppc);
+	set_next_dst(ppc);
+#endif
 	// Load the old LR
 	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
 	set_next_dst(ppc);
@@ -2972,8 +2983,19 @@ static int SQRT_FP(MIPS_instr mips, int dbl){
 	invalidateRegisters();
 	
 	// call sqrt
+#if 0
 	GEN_B(ppc, add_jump(dbl ? &sqrt : &sqrtf, 1, 1), 0, 1);
 	set_next_dst(ppc);
+#else
+	GEN_LIS(ppc, 12, ((unsigned int)(dbl ? &sqrt : &sqrtf))>>16);
+	set_next_dst(ppc);
+	GEN_ORI(ppc, 12, 12, (unsigned int)(dbl ? &sqrt : &sqrtf));
+	set_next_dst(ppc);
+	GEN_MTCTR(ppc, 12);
+	set_next_dst(ppc);
+	GEN_BTCTRL(ppc);
+	set_next_dst(ppc);
+#endif
 	
 	mapFPRNew( MIPS_GET_FD(mips), dbl ); // maps to f1 (FP return)
 
@@ -4005,8 +4027,19 @@ static void genCallInterp(MIPS_instr mips){
 	GEN_ORI(ppc, 4, 4, get_src_pc());
 	set_next_dst(ppc);
 	// Branch to decodeNInterpret
+#if 0
 	GEN_B(ppc, add_jump(&decodeNInterpret, 1, 1), 0, 1);
 	set_next_dst(ppc);
+#else
+	GEN_LIS(ppc, 12, ((unsigned int)&decodeNInterpret)>>16);
+	set_next_dst(ppc);
+	GEN_ORI(ppc, 12, 12, (unsigned int)&decodeNInterpret);
+	set_next_dst(ppc);
+	GEN_MTCTR(ppc, 12);
+	set_next_dst(ppc);
+	GEN_BTCTRL(ppc);
+	set_next_dst(ppc);
+#endif
 	// Load the old LR
 	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
 	set_next_dst(ppc);
@@ -4110,8 +4143,19 @@ static void genUpdateCount(int checkCount){
 	GEN_ORI(ppc, 3, 3, get_src_pc()+4);
 	set_next_dst(ppc);
 	// Call dyna_update_count
+#if 0
 	GEN_B(ppc, add_jump(&dyna_update_count, 1, 1), 0, 1);
 	set_next_dst(ppc);
+#else
+	GEN_LIS(ppc, 12, ((unsigned int)&dyna_update_count)>>16);
+	set_next_dst(ppc);
+	GEN_ORI(ppc, 12, 12, (unsigned int)&dyna_update_count);
+	set_next_dst(ppc);
+	GEN_MTCTR(ppc, 12);
+	set_next_dst(ppc);
+	GEN_BTCTRL(ppc);
+	set_next_dst(ppc);
+#endif
 	// Load the lr
 	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
 	set_next_dst(ppc);
@@ -4138,7 +4182,8 @@ static void genCheckFP(void){
 		GEN_ANDIS(ppc, 0, 0, 0x2000);
 		set_next_dst(ppc);
 		// bne cr0, end
-		GEN_BNE(ppc, 0, 8, 0, 0);
+		//GEN_BNE(ppc, 0, 8, 0, 0);
+		GEN_BNE(ppc, 0, 11, 0, 0);
 		set_next_dst(ppc);
 		// Load the current PC as arg 1 (upper half)
 		GEN_LIS(ppc, 3, get_src_pc()>>16);
@@ -4150,8 +4195,19 @@ static void genCheckFP(void){
 		GEN_ORI(ppc, 3, 3, get_src_pc());
 		set_next_dst(ppc);
 		// Call dyna_check_cop1_unusable
+#if 0
 		GEN_B(ppc, add_jump(&dyna_check_cop1_unusable, 1, 1), 0, 1);
 		set_next_dst(ppc);
+#else
+		GEN_LIS(ppc, 12, ((unsigned int)&dyna_check_cop1_unusable)>>16);
+		set_next_dst(ppc);
+		GEN_ORI(ppc, 12, 12, (unsigned int)&dyna_check_cop1_unusable);
+		set_next_dst(ppc);
+		GEN_MTCTR(ppc, 12);
+		set_next_dst(ppc);
+		GEN_BTCTRL(ppc);
+		set_next_dst(ppc);
+#endif
 		// Load the old LR
 		GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
 		set_next_dst(ppc);
@@ -4186,8 +4242,19 @@ void genCallDynaMem(memType type, int base, short immed){
 	GEN_LI(ppc, 7, 0, isDelaySlot ? 1 : 0);
 	set_next_dst(ppc);
 	// call dyna_mem
+#if 0
 	GEN_B(ppc, add_jump(&dyna_mem, 1, 1), 0, 1);
 	set_next_dst(ppc);
+#else
+	GEN_LIS(ppc, 12, ((unsigned int)&dyna_mem)>>16);
+	set_next_dst(ppc);
+	GEN_ORI(ppc, 12, 12, (unsigned int)&dyna_mem);
+	set_next_dst(ppc);
+	GEN_MTCTR(ppc, 12);
+	set_next_dst(ppc);
+	GEN_BTCTRL(ppc);
+	set_next_dst(ppc);
+#endif
 	// Load old LR
 	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
 	set_next_dst(ppc);
