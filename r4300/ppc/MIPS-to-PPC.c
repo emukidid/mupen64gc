@@ -2614,13 +2614,13 @@ static int ERET(MIPS_instr mips){
 	GEN_B(ppc, add_jump(&check_interupt, 1, 1), 0, 1);
 	set_next_dst(ppc);
 #else
-	GEN_LIS(ppc, 12, ((unsigned int)&check_interrupt)>>16);
+	GEN_LIS(ppc, 12, ((unsigned int)&check_interupt)>>16);
 	set_next_dst(ppc);
-	GEN_ORI(ppc, 12, 12, (unsigned int)&check_interrupt);
+	GEN_ORI(ppc, 12, 12, (unsigned int)&check_interupt);
 	set_next_dst(ppc);
 	GEN_MTCTR(ppc, 12);
 	set_next_dst(ppc);
-	GEN_BTCTRL(ppc);
+	GEN_BCTRL(ppc);
 	set_next_dst(ppc);
 #endif
 	// Load the old LR
@@ -2993,7 +2993,7 @@ static int SQRT_FP(MIPS_instr mips, int dbl){
 	set_next_dst(ppc);
 	GEN_MTCTR(ppc, 12);
 	set_next_dst(ppc);
-	GEN_BTCTRL(ppc);
+	GEN_BCTRL(ppc);
 	set_next_dst(ppc);
 #endif
 	
@@ -4037,7 +4037,7 @@ static void genCallInterp(MIPS_instr mips){
 	set_next_dst(ppc);
 	GEN_MTCTR(ppc, 12);
 	set_next_dst(ppc);
-	GEN_BTCTRL(ppc);
+	GEN_BCTRL(ppc);
 	set_next_dst(ppc);
 #endif
 	// Load the old LR
@@ -4153,7 +4153,7 @@ static void genUpdateCount(int checkCount){
 	set_next_dst(ppc);
 	GEN_MTCTR(ppc, 12);
 	set_next_dst(ppc);
-	GEN_BTCTRL(ppc);
+	GEN_BCTRL(ppc);
 	set_next_dst(ppc);
 #endif
 	// Load the lr
@@ -4205,7 +4205,7 @@ static void genCheckFP(void){
 		set_next_dst(ppc);
 		GEN_MTCTR(ppc, 12);
 		set_next_dst(ppc);
-		GEN_BTCTRL(ppc);
+		GEN_BCTRL(ppc);
 		set_next_dst(ppc);
 #endif
 		// Load the old LR
@@ -4252,7 +4252,7 @@ void genCallDynaMem(memType type, int base, short immed){
 	set_next_dst(ppc);
 	GEN_MTCTR(ppc, 12);
 	set_next_dst(ppc);
-	GEN_BTCTRL(ppc);
+	GEN_BCTRL(ppc);
 	set_next_dst(ppc);
 #endif
 	// Load old LR
