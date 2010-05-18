@@ -15,7 +15,8 @@
 #define DYNAREG_RDRAM  19
 #define DYNAREG_LADDR  20
 #define DYNAREG_NINTR  21
-#define DYNAREG_ZERO   22
+#define DYNAREG_FUNC   22
+#define DYNAREG_ZERO   23
 
 #define DYNAOFF_LR     20
 

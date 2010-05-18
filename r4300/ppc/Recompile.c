@@ -37,7 +37,10 @@ static PowerPC_instr code_buffer[1024*32];
 static PowerPC_instr* code_addr_buffer[1024];
 
 PowerPC_func* current_func;
-static PowerPC_func_node* freed_funcs = NULL;
+static struct func_list {
+	PowerPC_func*     func;
+	struct func_list* next;
+} *freed_funcs = NULL;
 
 static int pass0(PowerPC_block* ppc_block);
 static void pass2(PowerPC_block* ppc_block);
@@ -140,8 +143,10 @@ PowerPC_func* recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 			fhn->next = (*node)->function->holes;
 			// Make sure those holes aren't freed
 			(*node)->function->holes = NULL;
-			// Add it to the freed_funcs tree
-			insert_func(&freed_funcs, (*node)->function);
+			// Add it to the freed_funcs list
+			struct func_list* freed = malloc(sizeof(struct func_list));
+			freed->func = (*node)->function, freed->next = freed_funcs;
+			freed_funcs = freed;
 			// Free the hole
 			RecompCache_Free(ppc_block->start_address |
 			                 (*node)->function->start_addr);
@@ -174,8 +179,10 @@ PowerPC_func* recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 				   func->start_addr < (*node)->function->end_addr) &&
 		          (!func->end_addr || // Function runs to the end of a 0xfxxx
 				   func->end_addr   > (*node)->function->start_addr)){
-			// Add it to the freed_funcs tree
-			insert_func(&freed_funcs, (*node)->function);
+			// Add it to the freed_funcs list
+			struct func_list* freed = malloc(sizeof(struct func_list));
+			freed->func = (*node)->function, freed->next = freed_funcs;
+			freed_funcs = freed;
 			// We have some other non-containment overlap
 			RecompCache_Free(ppc_block->start_address |
 							 (*node)->function->start_addr);
@@ -565,18 +572,18 @@ void invalidate_block(PowerPC_block* ppc_block){
 	init_block(ppc_block->mips_code, ppc_block);
 }
 
-int  func_was_freed(PowerPC_func* func){
-	return find_func(&freed_funcs, func->start_addr) != NULL;
-}
-
-static void clear_freed_func(PowerPC_func_node* node){
-	if(!node) return;
-	clear_freed_func(node->left);
-	clear_freed_func(node->right);
-	free(node);
+int func_was_freed(PowerPC_func* func){
+	struct func_list* node;
+	for(node = freed_funcs; node != NULL; node = node->next)
+		if(node->func == func) return 1;
+	return 0;
 }
 
 void clear_freed_funcs(void){
-	clear_freed_func(freed_funcs);
+	struct func_list* node, * next;
+	for(node = freed_funcs; node != NULL; node = next){
+		next = node->next;
+		free(node);
+	}
 	freed_funcs = NULL;
 }
