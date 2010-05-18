@@ -67,6 +67,7 @@ inline unsigned int dyna_run(unsigned int (*code)(void)){
 		// Execute the code
 		"bctrl           \n"
 		"mr	%0, 3     \n"
+		// Get return_addr, link_branch, and last_func
 		"lwz	%2, 20(1) \n"
 		"mflr	%1        \n"
 		"mr	%3, 4     \n"
@@ -93,7 +94,7 @@ void dynarec(unsigned int address){
 			printf("Caught you at last fucker!\nStay away from %08x\n", address);
 			return;
 		}
-
+		
 		if(!dst_block){
 			printf("block at %08x doesn't exist\n", address&~0xFFF);
 			blocks[address>>12] = malloc(sizeof(PowerPC_block));
@@ -102,7 +103,7 @@ void dynarec(unsigned int address){
 			dst_block->funcs         = NULL;
 			dst_block->start_address = address & ~0xFFF;
 			dst_block->end_address   = (address & ~0xFFF) + 0x1000;
-
+			
 			unsigned int offset = ((paddr-(address-dst_block->start_address))&0x0FFFFFFF)>>2;
 			unsigned int* base;
 			if(paddr > 0xb0000000) base = rom;
@@ -133,8 +134,9 @@ void dynarec(unsigned int address){
 		code = (unsigned int (*)(void))func->code_addr[index];
 		
 		// Create a link if possible
-		if(link_branch)
+		if(link_branch && !func_was_freed(last_func))
 			RecompCache_Link(last_func, link_branch, func, code);
+		clear_freed_funcs();
 		
 		address = dyna_run(code);
 
