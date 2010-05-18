@@ -31,7 +31,7 @@ static PowerPC_func* last_func;
  *  $sp	    | old sp
  */
 
-inline unsigned int dyna_run(unsigned int (*code)(void)){
+inline unsigned int dyna_run(PowerPC_func* func, unsigned int (*code)(void)){
 	unsigned int naddr;
 	PowerPC_instr* return_addr;
 
@@ -49,12 +49,14 @@ inline unsigned int dyna_run(unsigned int (*code)(void)){
 		"mr	19, %5    \n"
 		"mr	20, %6    \n"
 		"mr	21, %7    \n"
-		"addi	22, 0, 0  \n"
+		"mr	22, %8    \n"
+		"addi	23, 0, 0  \n"
 		:: "r" (reg), "r" (reg_cop0),
 		   "r" (reg_cop1_simple), "r" (reg_cop1_double),
 		   "r" (&FCR31), "r" (rdram),
-		   "r" (&last_addr), "r" (&next_interupt)
-		: "14", "15", "16", "17", "18", "19", "20", "21", "22");
+		   "r" (&last_addr), "r" (&next_interupt),
+		   "r" (func)
+		: "14", "15", "16", "17", "18", "19", "20", "21", "22", "23");
 
 	// naddr = code();
 	__asm__ volatile(
@@ -70,13 +72,13 @@ inline unsigned int dyna_run(unsigned int (*code)(void)){
 		// Get return_addr, link_branch, and last_func
 		"lwz	%2, 20(1) \n"
 		"mflr	%1        \n"
-		"mr	%3, 4     \n"
+		"mr	%3, 22    \n"
 		// Pop the stack
 		"lwz	1, 0(1)   \n"
 		: "=r" (naddr), "=r" (link_branch), "=r" (return_addr),
 		  "=r" (last_func)
 		: "r" (code)
-		: "3", "4", "5", "6", "7", "8", "9", "10", "11", "12");
+		: "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "22");
 
 	link_branch = link_branch == return_addr ? NULL : link_branch - 1;
 	
@@ -138,7 +140,7 @@ void dynarec(unsigned int address){
 			RecompCache_Link(last_func, link_branch, func, code);
 		clear_freed_funcs();
 		
-		address = dyna_run(code);
+		address = dyna_run(func, code);
 
 		if(!noCheckInterrupt){
 			last_addr = interp_addr = address;
