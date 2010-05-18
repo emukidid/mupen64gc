@@ -37,6 +37,7 @@ static PowerPC_instr code_buffer[1024*32];
 static PowerPC_instr* code_addr_buffer[1024];
 
 PowerPC_func* current_func;
+static PowerPC_func_node* freed_funcs = NULL;
 
 static int pass0(PowerPC_block* ppc_block);
 static void pass2(PowerPC_block* ppc_block);
@@ -139,6 +140,8 @@ PowerPC_func* recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 			fhn->next = (*node)->function->holes;
 			// Make sure those holes aren't freed
 			(*node)->function->holes = NULL;
+			// Add it to the freed_funcs tree
+			insert_func(&freed_funcs, (*node)->function);
 			// Free the hole
 			RecompCache_Free(ppc_block->start_address |
 			                 (*node)->function->start_addr);
@@ -170,10 +173,13 @@ PowerPC_func* recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 		} else if((!(*node)->function->end_addr || // Runs to end
 				   func->start_addr < (*node)->function->end_addr) &&
 		          (!func->end_addr || // Function runs to the end of a 0xfxxx
-				   func->end_addr   > (*node)->function->start_addr))
+				   func->end_addr   > (*node)->function->start_addr)){
+			// Add it to the freed_funcs tree
+			insert_func(&freed_funcs, (*node)->function);
 			// We have some other non-containment overlap
 			RecompCache_Free(ppc_block->start_address |
 							 (*node)->function->start_addr);
+		}
 		return func;
 	}
 	func = handle_overlap(&ppc_block->funcs, func);
@@ -559,3 +565,18 @@ void invalidate_block(PowerPC_block* ppc_block){
 	init_block(ppc_block->mips_code, ppc_block);
 }
 
+int  func_was_freed(PowerPC_func* func){
+	return find_func(&freed_funcs, func->start_addr) != NULL;
+}
+
+static void clear_freed_func(PowerPC_func_node* node){
+	if(!node) return;
+	clear_freed_func(node->left);
+	clear_freed_func(node->right);
+	free(node);
+}
+
+void clear_freed_funcs(void){
+	clear_freed_func(freed_funcs);
+	freed_funcs = NULL;
+}
