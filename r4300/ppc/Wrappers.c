@@ -109,6 +109,7 @@ void dynarec(unsigned int address){
 			unsigned int offset = ((paddr-(address-dst_block->start_address))&0x0FFFFFFF)>>2;
 			unsigned int* base;
 			if(paddr > 0xb0000000) base = rom;
+			else if(paddr >= 0xa4000000) base = SP_DMEM;
 			else base = rdram;
 			init_block(base+offset, dst_block);
 
@@ -142,7 +143,7 @@ void dynarec(unsigned int address){
 		
 		address = dyna_run(func, code);
 
-		if(!noCheckInterrupt){
+		if(!noCheckInterrupt || skip_jump){
 			last_addr = interp_addr = address;
 			// Check for interrupts
 			if(next_interupt <= Count){

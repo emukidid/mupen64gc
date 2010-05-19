@@ -148,7 +148,8 @@ OBJ_GLN64	=glN64/glN64.o \
 		glN64/S2DEX2.o \
 		glN64/F3DPD.o \
 		glN64/F3DDKR.o \
-		glN64/F3DWRUS.o
+		glN64/F3DWRUS.o \
+		glN64/2xSAI.o
 
 HEADER		=main/rom.h \
 		r4300/r4300.h \

@@ -22,8 +22,8 @@ static void genCallInterp(MIPS_instr);
 #define JUMPTO_OFF  1
 #define JUMPTO_ADDR 2
 #define JUMPTO_REG_SIZE  2
-#define JUMPTO_OFF_SIZE  11
-#define JUMPTO_ADDR_SIZE 11
+#define JUMPTO_OFF_SIZE  14
+#define JUMPTO_ADDR_SIZE 14
 static void genJumpTo(unsigned int loc, unsigned int type);
 static void genUpdateCount(int checkCount);
 static void genCheckFP(void);
@@ -76,9 +76,11 @@ void start_new_block(void){
 	invalidateRegisters();
 	// Check if the previous instruction was a branch
 	//   and thus whether this block begins with a delay slot
-	unget_last_src();
-	if(mips_is_jump(get_next_src())) delaySlotNext = 2;
-	else delaySlotNext = 0;
+	if(get_src_pc() > 0x80000000 && get_src_pc < 0xC0000000){
+		unget_last_src();
+		if(mips_is_jump(get_next_src())) delaySlotNext = 2;
+		else delaySlotNext = 0;
+	} else delaySlotNext = 0;
 }
 void start_new_mapping(void){
 	flushRegisters();
@@ -4078,8 +4080,19 @@ static void genJumpTo(unsigned int loc, unsigned int type){
 		GEN_ADDI(ppc, 3, DYNAREG_FUNC, 0);
 		set_next_dst(ppc);
 		// Call RecompCache_Update(func)
+#if 0
 		GEN_B(ppc, add_jump(&RecompCache_Update, 1, 1), 0, 1);
 		set_next_dst(ppc);
+#else
+		GEN_LIS(ppc, 12, ((unsigned int)&RecompCache_Update)>>16);
+		set_next_dst(ppc);
+		GEN_ORI(ppc, 12, 12, (unsigned int)&RecompCache_Update);
+		set_next_dst(ppc);
+		GEN_MTCTR(ppc, 12);
+		set_next_dst(ppc);
+		GEN_BCTRL(ppc);
+		set_next_dst(ppc);
+#endif
 		// Restore LR
 		GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
 		set_next_dst(ppc);
