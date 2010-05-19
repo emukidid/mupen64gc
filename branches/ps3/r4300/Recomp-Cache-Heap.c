@@ -80,7 +80,7 @@ static CacheMetaNode* heapPop(void){
 	return cacheHeap[heapSize];
 }
 
-static void unlink_func(PowerPC_func* func, unsigned int code_size){
+static void unlink_func(PowerPC_func* func){
 	//start_section(UNLINK_SECTION);
 	
 	// Remove any incoming links to this func
@@ -88,11 +88,11 @@ static void unlink_func(PowerPC_func* func, unsigned int code_size){
 	for(link = func->links_in; link != NULL; link = next_link){
 		next_link = link->next;
 		
-		GEN_ORI(*(link->branch-10), 0, 0, 0);
-		GEN_ORI(*(link->branch-9), 0, 0, 0);
+		GEN_ORI(*(link->branch-13), 0, 0, 0);
+		GEN_ORI(*(link->branch-12), 0, 0, 0);
 		GEN_BLR(*link->branch, 1); // Set the linking branch to blrl
-		//DCFlushRange(link->branch-10, 11*sizeof(PowerPC_instr));
-		//ICInvalidateRange(link->branch-10, 11*sizeof(PowerPC_instr));
+		//DCFlushRange(link->branch-13, 14*sizeof(PowerPC_instr));
+		//ICInvalidateRange(link->branch-13, 14*sizeof(PowerPC_instr));
 		
 		remove_func(&link->func->links_out, func);
 		free(link);
@@ -109,8 +109,7 @@ static void unlink_func(PowerPC_func* func, unsigned int code_size){
 		PowerPC_func_link_node** link, ** next;
 		for(link = &(*node)->function->links_in; *link != NULL; link = next){
 			next = &(*link)->next;
-			if((*link)->branch >= func->code &&
-			   (*link)->branch < func->code + code_size/sizeof(PowerPC_instr)){
+			if((*link)->func == func){
 				PowerPC_func_link_node* tmp = (*link)->next;
 				free(*link);
 				*link = tmp;
@@ -125,11 +124,11 @@ static void unlink_func(PowerPC_func* func, unsigned int code_size){
 	//end_section(UNLINK_SECTION);
 }
 
-static void free_func(PowerPC_func* func, unsigned int addr,
-                      unsigned int code_size){
+static void free_func(PowerPC_func* func, unsigned int addr){
 	// Free the code associated with the func
 	free(func->code);
 	free(func->code_addr);
+
 	// Remove any holes into this func
 	PowerPC_func_hole_node* hole, * next;
 	for(hole = func->holes; hole != NULL; hole = next){
@@ -141,7 +140,7 @@ static void free_func(PowerPC_func* func, unsigned int addr,
 	PowerPC_block* block = blocks[addr>>12];
 	remove_func(&block->funcs, func);
 	// Remove func links
-	unlink_func(func, code_size);
+	unlink_func(func);
 
 	free(func);
 }
@@ -180,7 +179,7 @@ static void release(int minNeeded){
 		// Pop the LRU to be freed
 		CacheMetaNode* n = heapPop();
 		// Free the function it contains
-		free_func(n->func, n->addr, n->size);
+		free_func(n->func, n->addr);
 		toFree    -= n->size;
 		cacheSize -= n->size;
 		// And the cache node itself
@@ -212,19 +211,17 @@ void RecompCache_Alloc(unsigned int size, unsigned int address, PowerPC_func* fu
 void RecompCache_Realloc(PowerPC_func* func, unsigned int new_size){
 	// I'm not worrying about maintaining the cache size here for now
 	func->code = realloc(func->code, new_size);
-	unsigned int old_size;
 	int i;
 	for(i=heapSize-1; i>=0; --i){
 		if(func == cacheHeap[i]->func){
-			old_size = cacheHeap[i]->size;
-			cacheSize += new_size - old_size;
+			cacheSize += new_size - cacheHeap[i]->size;
 			cacheHeap[i]->size = new_size;
 			break;
 		}
 	}
 	
 	// Remove any func links since the code has changed
-	unlink_func(func, old_size);
+	unlink_func(func);
 }
 
 void RecompCache_Free(unsigned int addr){
@@ -237,7 +234,7 @@ void RecompCache_Free(unsigned int addr){
 			// Remove from the heap
 			heapSwap(i, --heapSize);
 			// Free n's func
-			free_func(n->func, addr, n->size);
+			free_func(n->func, addr);
 			cacheSize -= n->size;
 			// Free the cache node
 			free(n);
@@ -269,11 +266,11 @@ void RecompCache_Link(PowerPC_func* src_func, PowerPC_instr* src_instr,
 	insert_func(&src_func->links_out, dst_func);
 	
 	// Actually link the funcs
-	GEN_LIS(*(src_instr-10), DYNAREG_FUNC, (unsigned int)dst_func>>16);
-	GEN_ORI(*(src_instr-9), DYNAREG_FUNC,DYNAREG_FUNC, (unsigned int)dst_func);
+	GEN_LIS(*(src_instr-13), DYNAREG_FUNC, (unsigned int)dst_func>>16);
+	GEN_ORI(*(src_instr-12), DYNAREG_FUNC,DYNAREG_FUNC, (unsigned int)dst_func);
 	GEN_B(*src_instr, (PowerPC_instr*)dst_instr-src_instr, 0, 0);
-	//DCFlushRange(src_instr-10, 11*sizeof(PowerPC_instr));
-	//ICInvalidateRange(src_instr-10, 11*sizeof(PowerPC_instr));
+	//DCFlushRange(src_instr-13, 14*sizeof(PowerPC_instr));
+	//ICInvalidateRange(src_instr-13, 14*sizeof(PowerPC_instr));
 	
 	//end_section(LINK_SECTION);
 }
