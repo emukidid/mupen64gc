@@ -203,6 +203,9 @@ PowerPC_func* recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 
 	start_new_block();
 	isJmpDst[src-ppc_block->mips_code] = 1;
+	// If the final instruction is a branch delay slot and is branched to
+	//   we will need a jump pad so that execution will continue after it
+	need_pad |= isJmpDst[src_last-1-ppc_block->mips_code];
 
 	while(has_next_src()){
 		unsigned int offset = src - ppc_block->mips_code;
