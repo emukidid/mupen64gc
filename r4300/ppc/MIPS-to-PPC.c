@@ -3197,10 +3197,10 @@ static void set_rounding(int rounding_mode){
 	set_next_dst(ppc);
 }
 
-static void set_rounding_reg(int rs){
+static void set_rounding_reg(int fs){
 	PowerPC_instr ppc;
 
-	GEN_MTFSF(ppc, 1, rs);
+	GEN_MTFSF(ppc, 1, fs);
 	set_next_dst(ppc);
 }
 
@@ -3543,11 +3543,11 @@ static int CVT_W_FP(MIPS_instr mips, int dbl){
 	genCheckFP();
 
 	// Set rounding mode according to FCR31
-	GEN_LWZ(ppc, 0, 0, DYNAREG_FCR31);
-	set_next_dst(ppc);
-	GEN_RLWINM(ppc, 0, 0, 0, 30, 31);
+	GEN_LFD(ppc, 0, -4, DYNAREG_FCR31);
 	set_next_dst(ppc);
 
+	// FIXME: Here I have the potential to disable IEEE mode
+	//          and enable inexact exceptions
 	set_rounding_reg(0);
 
 	int fd = MIPS_GET_FD(mips);
@@ -3585,6 +3585,7 @@ static int CVT_L_FP(MIPS_instr mips, int dbl){
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	invalidateFPR( MIPS_GET_FS(mips) );
 
+	// FIXME: I'm fairly certain this will always trunc
 	// convert
 	GEN_B(ppc, add_jump(dbl ? &__fixdfdi : &__fixsfdi, 1, 1), 0, 1);
 	set_next_dst(ppc);
