@@ -125,11 +125,11 @@ static void unlink_func(PowerPC_func* func){
 	for(link = func->links_in; link != NULL; link = next_link){
 		next_link = link->next;
 		
-		GEN_ORI(*(link->branch-13), 0, 0, 0);
-		GEN_ORI(*(link->branch-12), 0, 0, 0);
+		GEN_ORI(*(link->branch-16), 0, 0, 0);
+		GEN_ORI(*(link->branch-15), 0, 0, 0);
 		GEN_BLR(*link->branch, 1); // Set the linking branch to blrl
-		DCFlushRange(link->branch-13, 14*sizeof(PowerPC_instr));
-		ICInvalidateRange(link->branch-13, 14*sizeof(PowerPC_instr));
+		DCFlushRange(link->branch-16, 17*sizeof(PowerPC_instr));
+		ICInvalidateRange(link->branch-16, 17*sizeof(PowerPC_instr));
 		
 		remove_func(&link->func->links_out, func);
 		free(link);
@@ -303,11 +303,13 @@ void RecompCache_Link(PowerPC_func* src_func, PowerPC_instr* src_instr,
 	insert_func(&src_func->links_out, dst_func);
 	
 	// Actually link the funcs
-	GEN_LIS(*(src_instr-13), DYNAREG_FUNC, (unsigned int)dst_func>>16);
-	GEN_ORI(*(src_instr-12), DYNAREG_FUNC,DYNAREG_FUNC, (unsigned int)dst_func);
-	GEN_B(*src_instr, dst_instr-src_instr, 0, 0);
-	DCFlushRange(src_instr-13, 14*sizeof(PowerPC_instr));
-	ICInvalidateRange(src_instr-13, 14*sizeof(PowerPC_instr));
+	GEN_LIS(*(src_instr-16), DYNAREG_FUNC, (unsigned int)dst_func>>16);
+	GEN_ORI(*(src_instr-15), DYNAREG_FUNC,DYNAREG_FUNC, (unsigned int)dst_func);
+	GEN_LIS(*(src_instr-3), 12, (unsigned int)dst_instr>>16);
+	GEN_ORI(*(src_instr-2), 12, 12, (unsigned int)dst_instr);
+	GEN_BCTR(*src_instr);
+	DCFlushRange(src_instr-16, 17*sizeof(PowerPC_instr));
+	ICInvalidateRange(src_instr-16, 17*sizeof(PowerPC_instr));
 	
 	//end_section(LINK_SECTION);
 }
