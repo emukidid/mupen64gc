@@ -351,7 +351,7 @@ glN64/F3DDKR.o:			glN64/F3DDKR.cpp
 glN64/F3DWRUS.o:		glN64/F3DWRUS.cpp
 				$(CXX) $(CFLAGS) -D__LINUX__  `sdl-config --cflags` -c -o $@ $<
 
-mupen64_nogui:	$(OBJ) main/main.o main/gui_gtk/config.o
+mupen64_nogui:	$(OBJ) $(OBJ_PPC) main/main.o main/gui_gtk/config.o
 		$(CC) $^ $(LIB_DIR) $(LIB) -Wl -L/usr/X11R6/lib `sdl-config --libs` -lpthread -ldl -o $@
 		#strip --#strip-all $@
 
