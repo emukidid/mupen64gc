@@ -22,8 +22,8 @@ static void genCallInterp(MIPS_instr);
 #define JUMPTO_OFF  1
 #define JUMPTO_ADDR 2
 #define JUMPTO_REG_SIZE  2
-#define JUMPTO_OFF_SIZE  14
-#define JUMPTO_ADDR_SIZE 14
+#define JUMPTO_OFF_SIZE  17
+#define JUMPTO_ADDR_SIZE 17
 static void genJumpTo(unsigned int loc, unsigned int type);
 static void genUpdateCount(int checkCount);
 static void genCheckFP(void);
@@ -4108,6 +4108,12 @@ static void genJumpTo(unsigned int loc, unsigned int type){
 		set_next_dst(ppc);
 		// Store last_addr for linking
 		GEN_STW(ppc, 3, 0, DYNAREG_LADDR);
+		set_next_dst(ppc);
+		// Linking must be performed using ctr: the memory space is too large
+		GEN_ORI(ppc, 0, 0, 0);
+		set_next_dst(ppc);
+		set_next_dst(ppc);
+		GEN_MTCTR(ppc, 12);
 		set_next_dst(ppc);
 	}
 	
