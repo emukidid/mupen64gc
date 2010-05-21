@@ -6,6 +6,43 @@
 #include "ppc/Wrappers.h"
 #include "Recomp-Cache.h"
 
+void DCFlushRange(void* startaddr, unsigned int len){
+	if(len == 0) return;
+	__asm__ volatile (
+		"clrlwi.	5, %0, 27\n" 
+		"beq	1f\n" 
+		"addi	%1, %1, 0x20\n" 
+		"1:\n" 
+		"addi	%1, %1, 0x1f\n" 
+		"srwi	%1, %1, 5\n" 
+		"mtctr	%1\n" 
+		"2:\n" 
+		"dcbf	0, %0\n" 
+		"addi	%0, %0, 0x20\n" 
+		"bdnz	2b\n" 
+		"sync\n"
+		: : "b" (startaddr), "b" (len) : "5", "memory" );
+}
+
+void ICInvalidateRange(void* startaddr, unsigned int len)  {
+	if(len == 0) return;
+	__asm__ volatile (
+		"clrlwi.	5, %0, 27\n" 
+		"beq	1f\n" 
+		"addi	%1, %1, 0x20\n" 
+		"1:\n" 
+		"addi	%1, %1, 0x1f\n" 
+		"srwi	%1, %1, 5\n" 
+		"mtctr	%1\n" 
+		"2:\n" 
+		"icbi	0, %0\n" 
+		"addi	%0, %0, 0x20\n" 
+		"bdnz	2b\n" 
+		"sync\n" 
+		"isync\n"
+		: : "b" (startaddr), "b" (len) : "5", "memory" );
+}
+
 typedef struct _meta_node {
 	unsigned int  addr;
 	PowerPC_func* func;
@@ -91,8 +128,8 @@ static void unlink_func(PowerPC_func* func){
 		GEN_ORI(*(link->branch-13), 0, 0, 0);
 		GEN_ORI(*(link->branch-12), 0, 0, 0);
 		GEN_BLR(*link->branch, 1); // Set the linking branch to blrl
-		//DCFlushRange(link->branch-13, 14*sizeof(PowerPC_instr));
-		//ICInvalidateRange(link->branch-13, 14*sizeof(PowerPC_instr));
+		DCFlushRange(link->branch-13, 14*sizeof(PowerPC_instr));
+		ICInvalidateRange(link->branch-13, 14*sizeof(PowerPC_instr));
 		
 		remove_func(&link->func->links_out, func);
 		free(link);
@@ -268,9 +305,9 @@ void RecompCache_Link(PowerPC_func* src_func, PowerPC_instr* src_instr,
 	// Actually link the funcs
 	GEN_LIS(*(src_instr-13), DYNAREG_FUNC, (unsigned int)dst_func>>16);
 	GEN_ORI(*(src_instr-12), DYNAREG_FUNC,DYNAREG_FUNC, (unsigned int)dst_func);
-	GEN_B(*src_instr, (PowerPC_instr*)dst_instr-src_instr, 0, 0);
-	//DCFlushRange(src_instr-13, 14*sizeof(PowerPC_instr));
-	//ICInvalidateRange(src_instr-13, 14*sizeof(PowerPC_instr));
+	GEN_B(*src_instr, dst_instr-src_instr, 0, 0);
+	DCFlushRange(src_instr-13, 14*sizeof(PowerPC_instr));
+	ICInvalidateRange(src_instr-13, 14*sizeof(PowerPC_instr));
 	
 	//end_section(LINK_SECTION);
 }
