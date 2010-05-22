@@ -107,8 +107,8 @@ PowerPC_func* recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 
 	// Create a PowerPC_func for this function
 	PowerPC_func* func = malloc(sizeof(PowerPC_func));
-	func->start_addr = addr_first&0xffff;
-	func->end_addr = addr_last&0xffff;
+	func->start_addr = addr_first;
+	func->end_addr = addr_last;
 	func->code = NULL;
 	func->holes = NULL;
 	func->links_in = NULL;
@@ -121,11 +121,9 @@ PowerPC_func* recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 	PowerPC_func* handle_overlap(PowerPC_func_node** node, PowerPC_func* func){
 		if(!(*node)) return func;
 		// Check for any potentially overlapping functions to the left or right
-		if((*node)->function->end_addr >= func->start_addr ||
-		   !(*node)->function->end_addr)
+		if((*node)->function->end_addr >= func->start_addr)
 			func = handle_overlap(&(*node)->left, func);
-		if((*node)->function->start_addr < func->end_addr ||
-		   !func->end_addr)
+		if((*node)->function->start_addr < func->end_addr)
 			func = handle_overlap(&(*node)->right, func);
 		// Check for overlap with this function
 		if((*node)->function->start_addr > func->start_addr &&
@@ -148,23 +146,22 @@ PowerPC_func* recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 			freed->func = (*node)->function, freed->next = freed_funcs;
 			freed_funcs = freed;
 			// Free the hole
-			RecompCache_Free(ppc_block->start_address |
-			                 (*node)->function->start_addr);
+			RecompCache_Free((*node)->function->start_addr);
 
 		} else if(func->start_addr > (*node)->function->start_addr &&
 				  func->end_addr == (*node)->function->end_addr){
 			// func is a hole in fn->function
 			PowerPC_func_hole_node* hole = malloc(sizeof(PowerPC_func_hole_node));
-			hole->addr = func->start_addr;
+			hole->addr = func->start_addr&0xffff;
 			hole->next = (*node)->function->holes;
 			(*node)->function->holes = hole;
 			// Free this func since its just a hole now
 			free(func);
 			// Move all our pointers to the outer function
 			func = (*node)->function;
-			addr = ppc_block->start_address + (func->start_addr&0xfff);
-			src_first = ppc_block->mips_code + ((addr&0xfff)>>2);
-			addr_first = ppc_block->start_address + (addr&0xfff);
+			addr_first = func->start_addr;
+			src_first = ppc_block->mips_code + ((addr_first&0xfff)>>2);
+			addr = addr_first;
 			need_pad = pass0(ppc_block);
 			RecompCache_Update(func);
 			// Make sure we don't insert the old func again
@@ -172,17 +169,14 @@ PowerPC_func* recompile_block(PowerPC_block* ppc_block, unsigned int addr){
 			// There cannot be another overlapping function
 			//break;
 
-		} else if((!(*node)->function->end_addr || // Runs to end
-				   func->start_addr < (*node)->function->end_addr) &&
-				  (!func->end_addr || // Function runs to the end of a 0xfxxx
-				   func->end_addr   > (*node)->function->start_addr)){
+		} else if(func->start_addr < (*node)->function->end_addr &&
+				  func->end_addr   > (*node)->function->start_addr){
 			// Add it to the freed_funcs list
 			struct func_list* freed = malloc(sizeof(struct func_list));
 			freed->func = (*node)->function, freed->next = freed_funcs;
 			freed_funcs = freed;
 			// We have some other non-containment overlap
-			RecompCache_Free(ppc_block->start_address |
-							 (*node)->function->start_addr);
+			RecompCache_Free((*node)->function->start_addr);
 		}
 		return func;
 	}
@@ -558,7 +552,7 @@ void invalidate_block(PowerPC_block* ppc_block){
 		if(!node) return NULL;
 		node->left = free_tree(node->left);
 		node->right = free_tree(node->right);
-		RecompCache_Free(ppc_block->start_address | node->function->start_addr);
+		RecompCache_Free(node->function->start_addr);
 		return NULL;
 	}
 	ppc_block->funcs = free_tree(ppc_block->funcs);
