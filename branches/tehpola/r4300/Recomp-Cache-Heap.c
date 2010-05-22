@@ -202,8 +202,7 @@ void RecompCache_Alloc(unsigned int size, unsigned int address, PowerPC_func* fu
 		release(size);
 		code = __lwp_heap_allocate(cache, size);
 	}
-	int num_instrs = ((func->end_addr ? func->end_addr : 0x10000) -
-                      func->start_addr) >> 2;
+	int num_instrs = (func->end_addr - func->start_addr) >> 2;
 	void* code_addr = __lwp_heap_allocate(meta_cache, num_instrs * sizeof(void*));
 	while(!code_addr){
 		release(num_instrs * sizeof(void*));

@@ -232,13 +232,20 @@ void dma_pi_write()
 	       //if(blocks[rdram_address2>>12]->block[(rdram_address2&0xFFF)/4].ops != NOTCOMPILED)
 		 invalid_code_set(rdram_address2>>12, 1);
 #else
+	     PowerPC_func* func;
+	     if(blocks[rdram_address1>>12]){
+	     func = find_func(&blocks[rdram_address1>>12]->funcs, rdram_address1);
          if(!invalid_code_get(rdram_address1>>12))
 	       //if(blocks[rdram_address1>>12]->code_addr[(rdram_address1&0xFFF)/4])
-		 invalid_code_set(rdram_address1>>12, 1);
+        	 if(func) RecompCache_Free(func->start_addr);//invalid_code_set(rdram_address1>>12, 1);
+	     }
 
+	     if(blocks[rdram_address2>>12]){
+         func = find_func(&blocks[rdram_address2>>12]->funcs, rdram_address2);
 	     if(!invalid_code_get(rdram_address2>>12))
 	       //if(blocks[rdram_address2>>12]->code_addr[(rdram_address2&0xFFF)/4])
-		 invalid_code_set(rdram_address2>>12, 1);
+	    	 if(func) RecompCache_Free(func->start_addr);//invalid_code_set(rdram_address2>>12, 1);
+	     }
 #endif
 	  }
      }
