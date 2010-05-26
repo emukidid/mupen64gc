@@ -100,7 +100,7 @@ unsigned int decodeNInterpret();
 
 //#define INTERPRET_COP0
 //#define INTERPRET_MFC0
-#define INTERPRET_MTC0
+//#define INTERPRET_MTC0
 //#define INTERPRET_TLB
 //#define INTERPRET_ERET
 #define INTERPRET_TLBR
@@ -145,10 +145,12 @@ unsigned int decodeNInterpret();
 #define INTERPRET_FP_FLOOR_W
 #define INTERPRET_FP_CEIL_W
 #endif
-//#define INTERPRET_FP_CVT_S
-//#define INTERPRET_FP_CVT_D
-//#define INTERPRET_FP_CVT_W
-//#define INTERPRET_FP_CVT_L
+#if 0
+#define INTERPRET_FP_CVT_S
+#define INTERPRET_FP_CVT_D
+#define INTERPRET_FP_CVT_W
+#define INTERPRET_FP_CVT_L
+#endif
 
 #if 0
 #define INTERPRET_FP_C_F
