@@ -2803,7 +2803,134 @@ static int MTC0(MIPS_instr mips){
 	genCallInterp(mips);
 	return INTERPRETED;
 #else
-	return CONVERT_ERROR;
+	
+	int rt = MIPS_GET_RT(mips), rrt;
+	int rd = MIPS_GET_RD(mips);
+	int tmp;
+	
+	switch(rd){
+	case 0: // Index
+		rrt = mapRegister(rt);
+		// r0 = rt & 0x8000003F
+		GEN_RLWINM(ppc, 0, rrt, 0, 26, 0);
+		set_next_dst(ppc);
+		// reg_cop0[rd] = r0
+		GEN_STW(ppc, 0, rd*4, DYNAREG_COP0);
+		set_next_dst(ppc);
+		return CONVERT_SUCCESS;
+	
+	case 2: // EntryLo0
+	case 3: // EntryLo1
+		rrt = mapRegister(rt);
+		// r0 = rt & 0x3FFFFFFF
+		GEN_RLWINM(ppc, 0, rrt, 0, 2, 31);
+		set_next_dst(ppc);
+		// reg_cop0[rd] = r0
+		GEN_STW(ppc, 0, rd*4, DYNAREG_COP0);
+		set_next_dst(ppc);
+		return CONVERT_SUCCESS;
+	
+	case 4: // Context
+		rrt = mapRegister(rt), tmp = mapRegisterTemp();
+		// tmp = reg_cop0[rd]
+		GEN_LWZ(ppc, tmp, rd*4, DYNAREG_COP0);
+		set_next_dst(ppc);
+		// r0 = rt & 0xFF800000
+		GEN_RLWINM(ppc, 0, rrt, 0, 0, 8);
+		set_next_dst(ppc);
+		// tmp &= 0x007FFFF0
+		GEN_RLWINM(ppc, tmp, tmp, 0, 9, 27);
+		set_next_dst(ppc);
+		// tmp |= r0
+		GEN_OR(ppc, tmp, tmp, 0);
+		set_next_dst(ppc);
+		// reg_cop0[rd] = tmp
+		GEN_STW(ppc, tmp, rd*4, DYNAREG_COP0);
+		set_next_dst(ppc);
+		return CONVERT_SUCCESS;
+	
+	case 5: // PageMask
+		rrt = mapRegister(rt);
+		// r0 = rt & 0x01FFE000
+		GEN_RLWINM(ppc, 0, rrt, 0, 7, 18);
+		set_next_dst(ppc);
+		// reg_cop0[rd] = r0
+		GEN_STW(ppc, 0, rd*4, DYNAREG_COP0);
+		set_next_dst(ppc);
+		return CONVERT_SUCCESS;
+	
+	case 6: // Wired
+		rrt = mapRegister(rt);
+		// r0 = 31
+		GEN_ADDI(ppc, 0, 0, 31);
+		set_next_dst(ppc);
+		// reg_cop0[rd] = rt
+		GEN_STW(ppc, rrt, rd*4, DYNAREG_COP0);
+		set_next_dst(ppc);
+		// reg_cop0[1] = r0
+		GEN_STW(ppc, 0, 1*4, DYNAREG_COP0);
+		set_next_dst(ppc);
+		return CONVERT_SUCCESS;
+	
+	case 10: // EntryHi
+		rrt = mapRegister(rt);
+		// r0 = rt & 0xFFFFE0FF
+		GEN_RLWINM(ppc, 0, rrt, 0, 24, 18);
+		set_next_dst(ppc);
+		// reg_cop0[rd] = r0
+		GEN_STW(ppc, 0, rd*4, DYNAREG_COP0);
+		set_next_dst(ppc);
+		return CONVERT_SUCCESS;
+	
+	case 13: // Cause
+		rrt = mapRegister(rt);
+		// TODO: Ensure that rrt == 0?
+		// reg_cop0[rd] = rt
+		GEN_STW(ppc, rrt, rd*4, DYNAREG_COP0);
+		set_next_dst(ppc);
+		return CONVERT_SUCCESS;
+	
+	case 14: // EPC
+	case 16: // Config
+	case 18: // WatchLo
+	case 19: // WatchHi
+		rrt = mapRegister(rt);
+		// reg_cop0[rd] = rt
+		GEN_STW(ppc, rrt, rd*4, DYNAREG_COP0);
+		set_next_dst(ppc);
+		return CONVERT_SUCCESS;
+	
+	case 28: // TagLo
+		rrt = mapRegister(rt);
+		// r0 = rt & 0x0FFFFFC0
+		GEN_RLWINM(ppc, 0, rrt, 0, 4, 25);
+		set_next_dst(ppc);
+		// reg_cop0[rd] = r0
+		GEN_STW(ppc, 0, rd*4, DYNAREG_COP0);
+		set_next_dst(ppc);
+		return CONVERT_SUCCESS;
+	
+	case 29: // TagHi
+		// reg_cop0[rd] = 0
+		GEN_STW(ppc, DYNAREG_ZERO, rd*4, DYNAREG_COP0);
+		set_next_dst(ppc);
+		return CONVERT_SUCCESS;
+	
+	case 1: // Random
+	case 8: // BadVAddr
+	case 15: // PRevID
+	case 27: // CacheErr
+		// Do nothing
+		return CONVERT_SUCCESS;
+	
+	case 9: // Count
+	case 11: // Compare
+	case 12: // Status
+	default:
+		genCallInterp(mips);
+		return INTERPRETED;
+	}
+	
 #endif
 }
 
