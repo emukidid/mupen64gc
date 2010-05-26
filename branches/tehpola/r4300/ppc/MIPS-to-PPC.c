@@ -3505,7 +3505,7 @@ static int ROUND_W_FP(MIPS_instr mips, int dbl){
 
 	genCheckFP();
 
-	set_rounding(PPC_ROUNDING_NEAREST);
+	set_rounding(PPC_ROUNDING_NEAREST); // TODO: Presume its already set?
 
 	int fd = MIPS_GET_FD(mips);
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
@@ -3585,6 +3585,8 @@ static int CEIL_W_FP(MIPS_instr mips, int dbl){
 	set_next_dst(ppc);
 
 	unmapRegisterTemp(addr);
+	
+	set_rounding(PPC_ROUNDING_NEAREST);
 
 	return CONVERT_SUCCESS;
 #endif
@@ -3617,6 +3619,8 @@ static int FLOOR_W_FP(MIPS_instr mips, int dbl){
 	set_next_dst(ppc);
 
 	unmapRegisterTemp(addr);
+	
+	set_rounding(PPC_ROUNDING_NEAREST);
 
 	return CONVERT_SUCCESS;
 #endif
@@ -3693,6 +3697,8 @@ static int CVT_W_FP(MIPS_instr mips, int dbl){
 	set_next_dst(ppc);
 
 	unmapRegisterTemp(addr);
+	
+	set_rounding(PPC_ROUNDING_NEAREST);
 
 	return CONVERT_SUCCESS;
 #endif
