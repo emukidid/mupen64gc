@@ -21,4 +21,10 @@ void RecompCache_Update(PowerPC_func* func);
 void RecompCache_Link(PowerPC_func* src_func, PowerPC_instr* src_instr,
                       PowerPC_func* dst_func, PowerPC_instr* dst_instr);
 
+// Allocate memory from the meta cache
+//   This will free from both the recomp and meta caches if capacity is hit
+void* MetaCache_Alloc(unsigned int num_bytes);
+// Free data from the meta cache
+void MetaCache_Free(void* ptr);
+
 #endif
