@@ -1,3 +1,14 @@
+/**
+ * glN64_GX - Textures.h
+ * Copyright (C) 2003 Orkin
+ * Copyright (C) 2008, 2009 sepp256 (Port to Wii/Gamecube/PS3)
+ *
+ * glN64 homepage: http://gln64.emulation64.com
+ * Wii64 homepage: http://www.emulatemii.com
+ * email address: sepp256@gmail.com
+ *
+**/
+
 #ifndef TEXTURES_H
 #define TEXTURES_H
 
@@ -78,7 +89,7 @@ extern TextureCache cache;
 # ifdef HW_RVL
 # define GX_TEXTURE_CACHE_SIZE TEXCACHE_SIZE //8MB for Wii
 # else //HW_RVL
-# define GX_TEXTURE_CACHE_SIZE (1.5*1024*1024)
+# define GX_TEXTURE_CACHE_SIZE (2*1024*1024)
 # endif //!HW_RVL
 #endif //__GX__
 

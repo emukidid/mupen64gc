@@ -12,6 +12,15 @@
 #define FATAL_ERROR -3
 #define MAXIMUM_ENTRIES_PER_DIR 2048
 
+#define GC_CPU_VERSION 0x00083214
+#define NO_HW_ACCESS -1000
+#define NO_DISC      -1001
+#define NORMAL 0xA8000000
+#define DVDR   0xD0000000
+#define HW_REG_BASE   0xcd800000
+#define HW_ARMIRQMASK (HW_REG_BASE + 0x03c)
+#define HW_ARMIRQFLAG (HW_REG_BASE + 0x038)
+
 typedef struct
 {
 	char name[128];
@@ -26,6 +35,7 @@ typedef struct
 
 extern file_entries *DVDToc;
 
+int init_dvd();
 void dvd_motor_off();
 unsigned int dvd_get_error(void);
 int dvd_read_directoryentries(uint64_t offset, int size);
@@ -34,8 +44,6 @@ int read_safe(void* dst, uint64_t offset, int len);
 int read_direntry(unsigned char* direntry);
 int read_sector(void* buffer, uint32_t sector);
 int dvd_read(void* dst,unsigned int len, unsigned int offset);
-int is_unicode;
-int files;
 int dvd_read_id();
 
 struct pvd_s

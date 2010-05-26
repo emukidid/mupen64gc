@@ -1,11 +1,13 @@
 /**
- * Wii64 - TLB-Cache.c (Deprecated)
+ * Wii64 - TLB-Cache.c
+ * Copyright (C) 2007, 2008, 2009 emu_kidid
  * Copyright (C) 2007, 2008, 2009 Mike Slegeir
  * 
- * This is how the TLB LUT should be accessed, this way it won't waste RAM
+ * This is how the TLB LUT should be accessed, this way it won't waste RAM, but ARAM
  *
  * Wii64 homepage: http://www.emulatemii.com
  * email address: tehpola@gmail.com
+ * email address: emukidid@gmail.com
  *
  *
  * This program is free software; you can redistribute it and/
@@ -20,81 +22,128 @@
  *
 **/
 
-/* 
-   FIXME: The DMA transfers seem to overflow small buffers
-*/
+#ifdef ARAM_TLBCACHE
 
 #include <ogc/arqueue.h>
+#include <gccore.h>
+#include <stdlib.h>
+#include <malloc.h>
+#include <string.h>
+#include <stdio.h>
 #include "ARAM.h"
 #include "TLB-Cache.h"
+#include "../gui/DEBUG.h"
 
-static int* TLB_LUT_r, * TLB_LUT_w;
-// We must moved 32-byte aligned, 32 byte chunks of the TLB
-static unsigned int value[8] __attribute__((aligned(32)));
-static ARQRequest ARQ_request;
+static ARQRequest ARQ_request_TLB;
+
+#define TLB_W_TYPE                                0
+#define TLB_R_TYPE                                1
+#define TLB_W_CACHE_ADDR                   0x400000
+#define TLB_R_CACHE_ADDR                   0x800000
+#define CACHED_TLB_ENTRIES                     1024
+#define CACHED_TLB_SIZE      CACHED_TLB_ENTRIES * 4
+
+unsigned long tlb_block[2][CACHED_TLB_ENTRIES] __attribute__((aligned(32)));
+static u32    tlb_dirty[2]     = { 0, 0 };
+static u32    tlb_last_addr[2] = { 0, 0 };
+
 
 void TLBCache_init(void){
-	ARQ_Init();
-	// FIXME: I'm going to assume that nothings in the ARAM yet
-	ARAM_block_alloc_contiguous(&TLB_LUT_r, 'T', 4);
-	ARAM_block_alloc_contiguous(&TLB_LUT_w, 'T', 4);
-	
-	// Zero out the LUTs
-	int chunkSize = ARQ_GetChunkSize(), offset = 0;
-	char* zeroes = memalign(32, chunkSize);
-	memset(zeroes, 0, chunkSize);
-	DCFlushRange(zeroes, chunkSize);
-	while(offset < 4 * 1024 * 1024){
-		ARQ_PostRequest(&ARQ_request, 0x0, AR_MRAMTOARAM, ARQ_PRIO_HI,
-		                TLB_LUT_r + offset, zeroes, chunkSize);
-		ARQ_PostRequest(&ARQ_request, 0x0, AR_MRAMTOARAM, ARQ_PRIO_HI,
-		                TLB_LUT_w + offset, zeroes, chunkSize);
-		offset += chunkSize;
+	int i = 0;
+	for(i=0;i<0x100000;i++) {
+  	TLBCache_set_w(i,0);
+  	TLBCache_set_r(i,0);
 	}
-	free(zeroes);
 }
 
 void TLBCache_deinit(void){
-	ARAM_block_free_contiguous(&TLB_LUT_r, 4);
-	ARAM_block_free_contiguous(&TLB_LUT_w, 4);
+	TLBCache_init();
 }
 
-unsigned int inline TLBCache_get_r(unsigned int page){
-	//printf("TLBCache_get_r(%08x)\n", page);
-	DCInvalidateRange(value, 32);
-	ARQ_PostRequest(&ARQ_request, 0x718, AR_ARAMTOMRAM, ARQ_PRIO_LO,
-	                TLB_LUT_r + (page&(~0x7)), value, 32);
-	return value[page&0x7];
+static inline int calc_block_addr(unsigned int page){
+  return ((page - (page % CACHED_TLB_ENTRIES)) * 4);
 }
 
-unsigned int inline TLBCache_get_w(unsigned int page){
-	//printf("TLBCache_get_w(%08x)\n", page);
-	DCInvalidateRange(value, 32);
-	ARQ_PostRequest(&ARQ_request, 0x718, AR_ARAMTOMRAM, ARQ_PRIO_LO,
-	                TLB_LUT_w + (page&(~0x7)), value, 32);
-	return value[page&0x7];
+static inline int calc_index(unsigned int page){
+  return page % CACHED_TLB_ENTRIES;
 }
 
-void inline TLBCache_set_r(unsigned int page, unsigned int val){
-	//printf("TLBCache_set_r(%08x, %08x)\n", page, val);
-	DCInvalidateRange(value, 32);
-	ARQ_PostRequest(&ARQ_request, 0x718, AR_ARAMTOMRAM, ARQ_PRIO_LO,
-	                TLB_LUT_r + (page&(~0x7)), value, 32);
-	value[page&0x7] = val;
-	DCFlushRange(value, 32);
-	ARQ_PostRequest(&ARQ_request, 0x718, AR_MRAMTOARAM, ARQ_PRIO_LO,
-	                TLB_LUT_r + (page&(~0x7)), value, 32);
+static inline void ensure_fetched(int type, int block_addr){
+  if(block_addr != tlb_last_addr[type]){
+    if(tlb_dirty[type])
+      ARAM_WriteTLBBlock(tlb_last_addr[type], type);
+
+    ARAM_ReadTLBBlock(block_addr, type);
+    tlb_last_addr[type] = block_addr;
+    tlb_dirty[type] = 0;
+  }
 }
 
-void inline TLBCache_set_w(unsigned int page, unsigned int val){
-	//printf("TLBCache_set_w(%08x, %08x)\n", page, val);
-	DCInvalidateRange(value, 32);
-	ARQ_PostRequest(&ARQ_request, 0x718, AR_ARAMTOMRAM, ARQ_PRIO_LO,
-	                TLB_LUT_w + (page&(~0x7)), value, 32);
-	value[page&0x7] = val;
-	DCFlushRange(value, 32);
-	ARQ_PostRequest(&ARQ_request, 0x718, AR_MRAMTOARAM, ARQ_PRIO_LO,
-	                TLB_LUT_w + (page&(~0x7)), value, 32);
+static unsigned int TLBCache_get(int type, unsigned int page){
+  ensure_fetched(type, calc_block_addr(page));
+  
+  return tlb_block[type][calc_index(page)];
 }
+
+unsigned int TLBCache_get_r(unsigned int page){
+  return TLBCache_get(TLB_R_TYPE, page);
+}
+
+unsigned int TLBCache_get_w(unsigned int page){
+  return TLBCache_get(TLB_W_TYPE, page);
+}
+
+static inline void TLBCache_set(int type, unsigned int page, unsigned int val){
+  ensure_fetched(type, calc_block_addr(page));
+  
+  tlb_block[type][calc_index(page)] = val;
+  tlb_dirty[type] = 1;
+}
+
+void TLBCache_set_r(unsigned int page, unsigned int val){
+  TLBCache_set(TLB_R_TYPE, page, val);
+}
+
+void TLBCache_set_w(unsigned int page, unsigned int val){
+  TLBCache_set(TLB_W_TYPE, page, val);
+}
+
+void TLBCache_dump_w(gzFile *f) {
+  int i = 0;
+  for(i=0;i<0x100000;i++) {
+    unsigned long val = TLBCache_get_w(i);
+  	gzwrite(f, &val, sizeof(unsigned long));
+	}
+}
+
+void TLBCache_dump_r(gzFile *f) {
+  int i = 0;
+  for(i=0;i<0x100000;i++) {
+    unsigned long val = TLBCache_get_r(i);
+  	gzwrite(f, &val, sizeof(unsigned long));
+	}
+}
+
+//addr == addr of 4kb block of PowerPC_block ptrs to pull out from ARAM
+void ARAM_ReadTLBBlock(u32 addr, int type)
+{
+  int base_addr = (type == TLB_W_TYPE) ? TLB_W_CACHE_ADDR : TLB_R_CACHE_ADDR;
+  int dest_addr = (type == TLB_W_TYPE) ? (int)&tlb_block[TLB_W_TYPE] : (int)&tlb_block[TLB_R_TYPE];
+  ARQ_PostRequest(&ARQ_request_TLB, 0x2EAD, AR_ARAMTOMRAM, ARQ_PRIO_LO,
+			                (int)(base_addr + addr), dest_addr, CACHED_TLB_SIZE);
+	DCInvalidateRange((void*)dest_addr, CACHED_TLB_SIZE);
+}
+
+//addr == addr of 4kb block of PowerPC_block ptrs to pull out from ARAM
+void ARAM_WriteTLBBlock(u32 addr, int type)
+{
+  int base_addr = (type == TLB_W_TYPE) ? TLB_W_CACHE_ADDR : TLB_R_CACHE_ADDR;
+  int dest_addr = (type == TLB_W_TYPE) ? (int)&tlb_block[TLB_W_TYPE] : (int)&tlb_block[TLB_R_TYPE];
+  DCFlushRange((void*)dest_addr, CACHED_TLB_SIZE);
+	ARQ_PostRequest(&ARQ_request_TLB, 0x10AD, AR_MRAMTOARAM, ARQ_PRIO_HI,
+			                (int)(base_addr + addr), dest_addr, CACHED_TLB_SIZE);
+}
+
+#endif
 
 

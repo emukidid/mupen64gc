@@ -1,8 +1,8 @@
 #Makefile MUPEN64 for glN64 + MenuV2 + Wii 
 
-CC		=powerpc-gekko-gcc
-CXX		=powerpc-gekko-g++
-AS		=powerpc-gekko-as
+CC		=powerpc-eabi-gcc
+CXX		=powerpc-eabi-g++
+AS		=powerpc-eabi-as
 
 CFLAGS  = -g -O2 -Wall $(MACHDEP) $(INCLUDE) \
 	  -DCPU_SHUTDOWN -DSPC700_SHUTDOWN -DVAR_CYCLES -DSOUND \
@@ -35,6 +35,7 @@ OBJ		=main/rom_gc.o \
 		menu/LoadRomFrame.o \
 		menu/FileBrowserFrame.o \
 		menu/ConfigureInputFrame.o\
+		menu/ConfigureButtonsFrame.o\
 		menu/ConfigurePaksFrame.o\
 		menu/CurrentRomFrame.o \
 		menu/LoadSaveFrame.o \
@@ -84,6 +85,7 @@ OBJ		=main/rom_gc.o \
 		r4300/cop1_s.o \
 		r4300/cop1_d.o \
 		r4300/recomp.o \
+		r4300/ARAM-blocks.o \
 		gc_memory/pif.o \
 		r4300/bc.o \
 		r4300/cop1_l.o \
@@ -276,7 +278,7 @@ glN64_GX/F3DWRUS.o:		glN64_GX/F3DWRUS.cpp
 
 wii64-glN64.elf:	$(OBJ) $(OBJ_INPUT) $(OBJ_GLN64_GX) $(OBJ_AUDIO) $(OBJ_RSPHLE) $(OBJ_PPC)
 		$(LD) $^ $(LDFLAGS) $(LIBPATHS) $(LIB) -Wl -o $@
-		powerpc-gekko-objcopy -O binary $@ wii64-glN64.dol
+		powerpc-eabi-objcopy -O binary $@ wii64-glN64.dol
 
 install:
 	cp mupen64 "$(PREFIX)bin"

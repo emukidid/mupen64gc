@@ -41,12 +41,13 @@ static void genCallInterp(MIPS_instr);
 #define JUMPTO_OFF  1
 #define JUMPTO_ADDR 2
 #define JUMPTO_REG_SIZE  2
-#define JUMPTO_OFF_SIZE  3
-#define JUMPTO_ADDR_SIZE 3
+#define JUMPTO_OFF_SIZE  11
+#define JUMPTO_ADDR_SIZE 11
 static void genJumpTo(unsigned int loc, unsigned int type);
 static void genUpdateCount(int checkCount);
 static void genCheckFP(void);
 void genCallDynaMem(memType type, int base, short immed);
+void RecompCache_Update(PowerPC_func*);
 static int inline mips_is_jump(MIPS_instr);
 void jump_to(unsigned int);
 void check_interupt();
@@ -178,7 +179,20 @@ static int branch(int offset, condition cond, int link, int likely){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 
+#ifdef COMPARE_CORE
+	GEN_LI(ppc, 4, 0, 1);
+	set_next_dst(ppc);
+	if(likely){
+		GEN_B(ppc, 2, 0, 0);
+		set_next_dst(ppc);
+		GEN_LI(ppc, 4, 0, 0);
+		set_next_dst(ppc);
+
+		set_jump_special(likely_id, delaySlot+2+1);
+	}
+#else
 	if(likely) set_jump_special(likely_id, delaySlot+1);
+#endif
 
 	genUpdateCount(1); // Sets cr2 to (next_interupt ? Count)
 
@@ -305,8 +319,12 @@ static int J(MIPS_instr mips){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 
-	// Sets cr2 to (next_interupt ? Count) if we're not jumping out
-	genUpdateCount(!is_j_out(MIPS_GET_LI(mips), 1));
+#ifdef COMPARE_CORE
+	GEN_LI(ppc, 4, 0, 1);
+	set_next_dst(ppc);
+#endif
+	// Sets cr2 to (next_interupt ? Count)
+	genUpdateCount(1);
 
 #ifdef INTERPRET_J
 	genJumpTo(MIPS_GET_LI(mips), JUMPTO_ADDR);
@@ -362,8 +380,12 @@ static int JAL(MIPS_instr mips){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 
-	// Sets cr2 to (next_interupt ? Count) if we're not jumping out
-	genUpdateCount(!is_j_out(MIPS_GET_LI(mips), 1));
+#ifdef COMPARE_CORE
+	GEN_LI(ppc, 4, 0, 1);
+	set_next_dst(ppc);
+#endif
+	// Sets cr2 to (next_interupt ? Count)
+	genUpdateCount(1);
 
 	// Set LR to next instruction
 	int lr = mapRegisterNew(MIPS_REG_LR);
@@ -1397,19 +1419,67 @@ static int LWC1(MIPS_instr mips){
 
 	flushRegisters();
 	reset_code_addr();
-
+	
 	genCheckFP();
 
 	int rd = mapRegisterTemp(); // r3 = rd
 	int base = mapRegister( MIPS_GET_RS(mips) ); // r4 = addr
+	int addr = mapRegisterTemp(); // r5 = fpr_addr
 
 	invalidateRegisters();
 
-	// load into rt
+#ifdef FASTMEM
+	// If base in physical memory
+#ifdef USE_EXPANSION
+	GEN_LIS(ppc, 0, 0x8080);
+#else
+	GEN_LIS(ppc, 0, 0x8040);
+#endif
+	set_next_dst(ppc);
+	GEN_CMP(ppc, base, 0, 1);
+	set_next_dst(ppc);
+	GEN_BGE(ppc, 1, 7, 0, 0);
+	set_next_dst(ppc);
+
+	// Use rdram
+#ifdef USE_EXPANSION
+	// Mask sp with 0x007FFFFF
+	GEN_RLWINM(ppc, base, base, 0, 9, 31);
+	set_next_dst(ppc);
+#else
+	// Mask sp with 0x003FFFFF
+	GEN_RLWINM(ppc, base, base, 0, 10, 31);
+	set_next_dst(ppc);
+#endif
+	// Add rdram pointer
+	GEN_ADD(ppc, base, DYNAREG_RDRAM, base);
+	set_next_dst(ppc);
+	// Perform the actual load
+	GEN_LWZ(ppc, 3, MIPS_GET_IMMED(mips), base);
+	set_next_dst(ppc);
+	// addr = reg_cop1_simple[frt]
+	GEN_LWZ(ppc, addr, MIPS_GET_RT(mips)*4, DYNAREG_FPR_32);
+	set_next_dst(ppc);
+	// *addr = frs
+	GEN_STW(ppc, 3, 0, addr);
+	set_next_dst(ppc);
+	// Skip over else
+	int not_fastmem_id = add_jump_special(1);
+	GEN_B(ppc, not_fastmem_id, 0, 0);
+	set_next_dst(ppc);
+	PowerPC_instr* preCall = get_curr_dst();
+#endif // FASTMEM
+
+	// load into frt
 	GEN_LI(ppc, 3, 0, MIPS_GET_RT(mips));
 	set_next_dst(ppc);
 
 	genCallDynaMem(MEM_LWC1, base, MIPS_GET_IMMED(mips));
+
+#ifdef FASTMEM
+	int callSize = get_curr_dst() - preCall;
+	set_jump_special(not_fastmem_id, callSize+1);
+#endif
 
 	return CONVERT_SUCCESS;
 #endif
@@ -1424,19 +1494,71 @@ static int LDC1(MIPS_instr mips){
 
 	flushRegisters();
 	reset_code_addr();
-
+	
 	genCheckFP();
 
 	int rd = mapRegisterTemp(); // r3 = rd
 	int base = mapRegister( MIPS_GET_RS(mips) ); // r4 = addr
+	int addr = mapRegisterTemp(); // r5 = fpr_addr
 
 	invalidateRegisters();
 
-	// load into rt
+#ifdef FASTMEM
+	// If base in physical memory
+#ifdef USE_EXPANSION
+	GEN_LIS(ppc, 0, 0x8080);
+#else
+	GEN_LIS(ppc, 0, 0x8040);
+#endif
+	set_next_dst(ppc);
+	GEN_CMP(ppc, base, 0, 1);
+	set_next_dst(ppc);
+	GEN_BGE(ppc, 1, 9, 0, 0);
+	set_next_dst(ppc);
+
+	// Use rdram
+#ifdef USE_EXPANSION
+	// Mask sp with 0x007FFFFF
+	GEN_RLWINM(ppc, base, base, 0, 9, 31);
+	set_next_dst(ppc);
+#else
+	// Mask sp with 0x003FFFFF
+	GEN_RLWINM(ppc, base, base, 0, 10, 31);
+	set_next_dst(ppc);
+#endif
+	// Add rdram pointer
+	GEN_ADD(ppc, base, DYNAREG_RDRAM, base);
+	set_next_dst(ppc);
+	// Perform the actual load
+	GEN_LWZ(ppc, 3, MIPS_GET_IMMED(mips), base);
+	set_next_dst(ppc);
+	GEN_LWZ(ppc, 6, MIPS_GET_IMMED(mips)+4, base);
+	set_next_dst(ppc);
+	// addr = reg_cop1_double[frt]
+	GEN_LWZ(ppc, addr, MIPS_GET_RT(mips)*4, DYNAREG_FPR_64);
+	set_next_dst(ppc);
+	// *addr = frs
+	GEN_STW(ppc, 3, 0, addr);
+	set_next_dst(ppc);
+	GEN_STW(ppc, 6, 4, addr);
+	set_next_dst(ppc);
+	// Skip over else
+	int not_fastmem_id = add_jump_special(1);
+	GEN_B(ppc, not_fastmem_id, 0, 0);
+	set_next_dst(ppc);
+	PowerPC_instr* preCall = get_curr_dst();
+#endif // FASTMEM
+
+	// load into frt
 	GEN_LI(ppc, 3, 0, MIPS_GET_RT(mips));
 	set_next_dst(ppc);
 
 	genCallDynaMem(MEM_LDC1, base, MIPS_GET_IMMED(mips));
+
+#ifdef FASTMEM
+	int callSize = get_curr_dst() - preCall;
+	set_jump_special(not_fastmem_id, callSize+1);
+#endif
 
 	return CONVERT_SUCCESS;
 #endif
@@ -1615,6 +1737,10 @@ static int JR(MIPS_instr mips){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 
+#ifdef COMPARE_CORE
+	GEN_LI(ppc, 4, 0, 1);
+	set_next_dst(ppc);
+#endif
 	genUpdateCount(0);
 
 #ifdef INTERPRET_JR
@@ -1650,6 +1776,10 @@ static int JALR(MIPS_instr mips){
 	check_delaySlot();
 	int delaySlot = get_curr_dst() - preDelay;
 
+#ifdef COMPARE_CORE
+	GEN_LI(ppc, 4, 0, 1);
+	set_next_dst(ppc);
+#endif
 	genUpdateCount(0);
 
 	// Set LR to next instruction
@@ -3046,10 +3176,10 @@ static void set_rounding(int rounding_mode){
 	set_next_dst(ppc);
 }
 
-static void set_rounding_reg(int rs){
+static void set_rounding_reg(int fs){
 	PowerPC_instr ppc;
 
-	GEN_MTFSF(ppc, 1, rs);
+	GEN_MTFSF(ppc, 1, fs);
 	set_next_dst(ppc);
 }
 
@@ -3392,11 +3522,11 @@ static int CVT_W_FP(MIPS_instr mips, int dbl){
 	genCheckFP();
 
 	// Set rounding mode according to FCR31
-	GEN_LWZ(ppc, 0, 0, DYNAREG_FCR31);
-	set_next_dst(ppc);
-	GEN_RLWINM(ppc, 0, 0, 0, 30, 31);
+	GEN_LFD(ppc, 0, -4, DYNAREG_FCR31);
 	set_next_dst(ppc);
 
+	// FIXME: Here I have the potential to disable IEEE mode
+	//          and enable inexact exceptions
 	set_rounding_reg(0);
 
 	int fd = MIPS_GET_FD(mips);
@@ -3434,6 +3564,7 @@ static int CVT_L_FP(MIPS_instr mips, int dbl){
 	int fs = mapFPR( MIPS_GET_FS(mips), dbl );
 	invalidateFPR( MIPS_GET_FS(mips) );
 
+	// FIXME: I'm fairly certain this will always trunc
 	// convert
 	GEN_B(ppc, add_jump(dbl ? &__fixdfdi : &__fixsfdi, 1, 1), 0, 1);
 	set_next_dst(ppc);
@@ -4221,21 +4352,42 @@ static void genJumpTo(unsigned int loc, unsigned int type){
 		loc <<= 2;
 		if(type == JUMPTO_OFF) loc += get_src_pc();
 		else loc |= get_src_pc() & 0xf0000000;
+		// Create space to load destination func*
+		GEN_ORI(ppc, 0, 0, 0);
+		set_next_dst(ppc);
+		set_next_dst(ppc);
+		// Move func* into r3 as argument
+		GEN_ADDI(ppc, 3, DYNAREG_FUNC, 0);
+		set_next_dst(ppc);
+		// Call RecompCache_Update(func)
+		GEN_B(ppc, add_jump(&RecompCache_Update, 1, 1), 0, 1);
+		set_next_dst(ppc);
+		// Restore LR
+		GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
+		set_next_dst(ppc);
+		GEN_MTLR(ppc, 0);
+		set_next_dst(ppc);
 		// Load the address as the return value
 		GEN_LIS(ppc, 3, loc >> 16);
 		set_next_dst(ppc);
 		GEN_ORI(ppc, 3, 3, loc);
 		set_next_dst(ppc);
+		// Since we could be linking, return on interrupt
+		GEN_BLELR(ppc, 2, 0);
+		set_next_dst(ppc);
+		// Store last_addr for linking
+		GEN_STW(ppc, 3, 0, DYNAREG_LADDR);
+		set_next_dst(ppc);
 	}
 
-	GEN_BLR(ppc, 0);
+	GEN_BLR(ppc, (type != JUMPTO_REG));
 	set_next_dst(ppc);
 }
 
 // Updates Count, and sets cr2 to (next_interupt ? Count)
 static void genUpdateCount(int checkCount){
 	PowerPC_instr ppc = NEW_PPC_INSTR();
-#if 1
+#ifndef COMPARE_CORE
 	// Dynarec inlined code equivalent:
 	int tmp = mapRegisterTemp();
 	// lis    tmp, pc >> 16
@@ -4278,16 +4430,13 @@ static void genUpdateCount(int checkCount){
 	// Free tmp register
 	unmapRegisterTemp(tmp);
 #else
-	// Move &dyna_update_count to ctr for call
-	GEN_MTCTR(ppc, DYNAREG_UCOUNT);
-	set_next_dst(ppc);
 	// Load the current PC as the argument
 	GEN_LIS(ppc, 3, (get_src_pc()+4)>>16);
 	set_next_dst(ppc);
 	GEN_ORI(ppc, 3, 3, get_src_pc()+4);
 	set_next_dst(ppc);
 	// Call dyna_update_count
-	GEN_BCTRL(ppc);
+	GEN_B(ppc, add_jump(&dyna_update_count, 1, 1), 0, 1);
 	set_next_dst(ppc);
 	// Load the lr
 	GEN_LWZ(ppc, 0, DYNAOFF_LR, 1);
@@ -4351,9 +4500,6 @@ static void genCheckFP(void){
 void genCallDynaMem(memType type, int base, short immed){
 	PowerPC_instr ppc;
 	// PRE: value to store, or register # to load into should be in r3
-	// mtctr DYNAREG_RWMEM
-	//GEN_MTCTR(ppc, DYNAREG_RWMEM);
-	//set_next_dst(ppc);
 	// Pass PC as arg 4 (upper half)
 	GEN_LIS(ppc, 6, (get_src_pc()+4)>>16);
 	set_next_dst(ppc);
@@ -4370,7 +4516,6 @@ void genCallDynaMem(memType type, int base, short immed){
 	GEN_LI(ppc, 7, 0, isDelaySlot ? 1 : 0);
 	set_next_dst(ppc);
 	// call dyna_mem
-	//GEN_BCTRL(ppc);
 	GEN_B(ppc, add_jump(&dyna_mem, 1, 1), 0, 1);
 	set_next_dst(ppc);
 	// Load old LR

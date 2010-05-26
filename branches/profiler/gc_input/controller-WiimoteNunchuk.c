@@ -1,7 +1,7 @@
 /**
  * Wii64 - controller-WiimoteNunchuk.c
- * Copyright (C) 2007, 2008, 2009 Mike Slegeir
- * Copyright (C) 2007, 2008, 2009 sepp256
+ * Copyright (C) 2007, 2008, 2009, 2010 Mike Slegeir
+ * Copyright (C) 2007, 2008, 2009, 2010 sepp256
  * 
  * Wiimote + Nunchuk input module
  *
@@ -45,7 +45,60 @@ static int getStickValue(joystick_t* j, int axis, int maxAbsValue){
 	return (int)(value * maxAbsValue);
 }
 
-static int _GetKeys(int Control, BUTTONS * Keys )
+enum {
+	NUNCHUK_AS_ANALOG, IR_AS_ANALOG,
+	TILT_AS_ANALOG, WHEEL_AS_ANALOG,
+	NO_ANALOG,
+};
+
+enum {
+	NUNCHUK_L = 0x10 << 16,
+	NUNCHUK_R = 0x20 << 16,
+	NUNCHUK_U = 0x40 << 16,
+	NUNCHUK_D = 0x80 << 16,
+};
+
+#define NUM_WIIMOTE_BUTTONS 12
+static button_t buttons[] = {
+	{  0, ~0,                    "None" },
+	{  1, WPAD_BUTTON_UP,        "D-Up" },
+	{  2, WPAD_BUTTON_LEFT,      "D-Left" },
+	{  3, WPAD_BUTTON_RIGHT,     "D-Right" },
+	{  4, WPAD_BUTTON_DOWN,      "D-Down" },
+	{  5, WPAD_BUTTON_A,         "A" },
+	{  6, WPAD_BUTTON_B,         "B" },
+	{  7, WPAD_BUTTON_PLUS,      "+" },
+	{  8, WPAD_BUTTON_MINUS,     "-" },
+	{  9, WPAD_BUTTON_HOME,      "Home" },
+	{ 10, WPAD_BUTTON_1,         "1" },
+	{ 11, WPAD_BUTTON_2,         "2" },
+	{ 12, WPAD_NUNCHUK_BUTTON_C, "C" },
+	{ 13, WPAD_NUNCHUK_BUTTON_Z, "Z" },
+	{ 14, NUNCHUK_U,             "NC-Up" },
+	{ 15, NUNCHUK_L,             "NC-Left" },
+	{ 16, NUNCHUK_R,             "NC-Right" },
+	{ 17, NUNCHUK_D,             "NC-Down" },
+};
+
+static button_t analog_sources_wmn[] = {
+	{ 0, NUNCHUK_AS_ANALOG,  "Nunchuk" },
+	{ 1, IR_AS_ANALOG,       "IR" },
+};
+
+static button_t analog_sources_wm[] = {
+	{ 0, TILT_AS_ANALOG,     "Tilt" },
+	{ 1, WHEEL_AS_ANALOG,    "Wheel" },
+	{ 2, IR_AS_ANALOG,       "IR" },
+	{ 3, NO_ANALOG,          "None" },
+};
+
+static button_t menu_combos[] = {
+	{ 0, WPAD_BUTTON_1|WPAD_BUTTON_2, "1+2" },
+};
+
+static int _GetKeys(int Control, BUTTONS * Keys, controller_config_t* config,
+                    int (*available)(int),
+                    unsigned int (*getButtons)(WPADData*))
 {
 	if(wpadNeedScan){ WPAD_ScanPads(); wpadNeedScan = 0; }
 	WPADData* wpad = WPAD_Data(Control);
@@ -53,82 +106,234 @@ static int _GetKeys(int Control, BUTTONS * Keys )
 	memset(c, 0, sizeof(BUTTONS));
 
 	// Only use a connected nunchuck controller
-	if(wpad->err == WPAD_ERR_NONE &&
-	   wpad->exp.type == WPAD_EXP_NUNCHUK){
-		controller_WiimoteNunchuk.available[Control] = 1;
-	} else {
-		controller_WiimoteNunchuk.available[Control] = 0;
-		if(wpad->err == WPAD_ERR_NONE &&
-		   wpad->exp.type == WPAD_EXP_CLASSIC){
-			controller_Classic.available[Control] = 1;
-		}
+	if(!available(Control))
 		return 0;
+
+	unsigned int b = getButtons(wpad);
+	inline int isHeld(button_tp button){
+		return (b & button->mask) == button->mask;
 	}
+	
+	c->R_DPAD       = isHeld(config->DR);
+	c->L_DPAD       = isHeld(config->DL);
+	c->D_DPAD       = isHeld(config->DD);
+	c->U_DPAD       = isHeld(config->DU);
+	
+	c->START_BUTTON = isHeld(config->START);
+	c->B_BUTTON     = isHeld(config->B);
+	c->A_BUTTON     = isHeld(config->A);
 
-	int b  = wpad->btns_h;
-	int d2 = b & WPAD_BUTTON_2;
-	c->R_DPAD       = (b & WPAD_BUTTON_RIGHT && d2)  ? 1 : 0;
-	c->L_DPAD       = (b & WPAD_BUTTON_LEFT  && d2)  ? 1 : 0;
-	c->D_DPAD       = (b & WPAD_BUTTON_DOWN  && d2)  ? 1 : 0;
-	c->U_DPAD       = (b & WPAD_BUTTON_UP    && d2)  ? 1 : 0;
-	c->START_BUTTON = (b & WPAD_BUTTON_HOME)         ? 1 : 0;
-	c->B_BUTTON     = (b & (WPAD_BUTTON_MINUS | WPAD_BUTTON_PLUS)) ? 1 : 0;
-	c->A_BUTTON     = (b & WPAD_BUTTON_A)            ? 1 : 0;
+	c->Z_TRIG       = isHeld(config->Z);
+	c->R_TRIG       = isHeld(config->R);
+	c->L_TRIG       = isHeld(config->L);
 
-	c->Z_TRIG       = (b & WPAD_NUNCHUK_BUTTON_Z)    ? 1 : 0;
-	c->R_TRIG       = (b & WPAD_BUTTON_B)            ? 1 : 0;
-	c->L_TRIG       = (b & WPAD_NUNCHUK_BUTTON_C)    ? 1 : 0;
+	c->R_CBUTTON    = isHeld(config->CR);
+	c->L_CBUTTON    = isHeld(config->CL);
+	c->D_CBUTTON    = isHeld(config->CD);
+	c->U_CBUTTON    = isHeld(config->CU);
 
-	c->R_CBUTTON    = (b & WPAD_BUTTON_RIGHT)        ? 1 : 0;
-	c->L_CBUTTON    = (b & WPAD_BUTTON_LEFT)         ? 1 : 0;
-	c->D_CBUTTON    = (b & WPAD_BUTTON_DOWN)         ? 1 : 0;
-	c->U_CBUTTON    = (b & WPAD_BUTTON_UP)           ? 1 : 0;
+	if(config->analog->mask == NUNCHUK_AS_ANALOG){
+		c->X_AXIS = getStickValue(&wpad->exp.nunchuk.js, STICK_X, 127);
+		c->Y_AXIS = getStickValue(&wpad->exp.nunchuk.js, STICK_Y, 127);
+	} else if(config->analog->mask == IR_AS_ANALOG){
+		if(wpad->ir.smooth_valid){
+			c->X_AXIS = ((short)(wpad->ir.sx - 512)) >> 2;
+			c->Y_AXIS = -(signed char)((wpad->ir.sy - 384) / 3);
+		} else {
+			c->X_AXIS = 0;
+			c->Y_AXIS = 0;
+		}
+	} else if(config->analog->mask == TILT_AS_ANALOG){
+		c->X_AXIS = wpad->orient.pitch * 0.71;
+		c->Y_AXIS = wpad->orient.roll * 0.71;
+	} else if(config->analog->mask == WHEEL_AS_ANALOG){
+		c->X_AXIS = wpad->orient.yaw * 0.71;
+		c->Y_AXIS = wpad->orient.roll * 0.71;
+	}
+	if(config->invertedY) c->Y_AXIS = -c->Y_AXIS;
 
-	c->X_AXIS       = getStickValue(&wpad->exp.nunchuk.js, STICK_X, 127);
-	c->Y_AXIS       = getStickValue(&wpad->exp.nunchuk.js, STICK_Y, 127);
-
-	// 1+2 quits to menu
-	return (b & WPAD_BUTTON_1) && (b & WPAD_BUTTON_2);
+	// Return whether the exit button(s) are pressed
+	return isHeld(config->exit);
 }
 
-static void pause(int Control){ }
+static int checkType(int Control, int type){
+	int err;
+	u32 expType;
+	err = WPAD_Probe(Control, &expType);
+
+	if(err != WPAD_ERR_NONE)
+		return -1;
+	
+	switch(expType){
+	case WPAD_EXP_NONE:
+		controller_Wiimote.available[Control] = 1;
+		break;
+	case WPAD_EXP_NUNCHUK:
+		controller_WiimoteNunchuk.available[Control] = 1;
+		break;
+	case WPAD_EXP_CLASSIC:
+		controller_Classic.available[Control] = 1;
+		break;
+	}
+	
+	return expType;
+}
+
+static int availableWM(int Control){
+	if(checkType(Control, WPAD_EXP_NONE) != WPAD_EXP_NONE){
+		controller_Wiimote.available[Control] = 0;
+		return 0;
+	} else {
+		return 1;
+	}
+}
+
+static int availableWMN(int Control){
+	if(checkType(Control, WPAD_EXP_NUNCHUK) != WPAD_EXP_NUNCHUK){
+		controller_WiimoteNunchuk.available[Control] = 0;
+		return 0;
+	} else {
+		return 1;
+	}
+}
+
+static unsigned int getButtonsWM(WPADData* controller){
+	return controller->btns_h;
+}
+
+static unsigned int getButtonsWMN(WPADData* controller){
+	unsigned int b = controller->btns_h;
+	s8 stickX      = getStickValue(&controller->exp.nunchuk.js, STICK_X, 7);
+	s8 stickY      = getStickValue(&controller->exp.nunchuk.js, STICK_Y, 7);
+	
+	if(stickX    < -3) b |= NUNCHUK_L;
+	if(stickX    >  3) b |= NUNCHUK_R;
+	if(stickY    >  3) b |= NUNCHUK_U;
+	if(stickY    < -3) b |= NUNCHUK_D;
+	
+	return b;
+}
+
+static int GetKeysWM(int con, BUTTONS * keys, controller_config_t* cfg){
+	return _GetKeys(con, keys, cfg, availableWM, getButtonsWM);
+}
+
+static int GetKeysWMN(int con, BUTTONS * keys, controller_config_t* cfg){
+	return _GetKeys(con, keys, cfg, availableWMN, getButtonsWMN);
+}
+
+static void pause(int Control){
+	WPAD_Rumble(Control, 0);
+}
 
 static void resume(int Control){ }
 
-static void rumble(int Control, int rumble){ }
+static void rumble(int Control, int rumble){
+	WPAD_Rumble(Control, rumble ? 1 : 0);
+}
 
-static void configure(int Control){
-	// Don't know how this should be integrated
+static void configure(int Control, controller_config_t* config){
+	static s32 analog_fmts[] = {
+		WPAD_DATA_EXPANSION, // Nunchuk
+		WPAD_DATA_IR,        // IR
+		WPAD_DATA_ACCEL,     // Tilt
+		WPAD_DATA_ACCEL,     // Wheel
+		WPAD_DATA_BUTTONS,   // None
+	};
+	WPAD_SetDataFormat(Control, analog_fmts[config->analog->mask]);
 }
 
 static void assign(int p, int v){
 	// TODO: Light up the LEDs appropriately
 }
 
-static void init(void);
+static void refreshAvailableWM(void);
+static void refreshAvailableWMN(void);
 
-controller_t controller_WiimoteNunchuk =
-	{ _GetKeys,
+controller_t controller_Wiimote =
+	{ 'W',
+	  GetKeysWM,
 	  configure,
-	  init,
 	  assign,
 	  pause,
 	  resume,
 	  rumble,
-	  {0, 0, 0, 0}
+	  refreshAvailableWM,
+	  {0, 0, 0, 0},
+	  NUM_WIIMOTE_BUTTONS,
+	  buttons,
+	  sizeof(analog_sources_wm)/sizeof(analog_sources_wm[0]),
+	  analog_sources_wm,
+	  sizeof(menu_combos)/sizeof(menu_combos[0]),
+	  menu_combos,
+	  { .DU    = &buttons[0],  // None
+		.DL    = &buttons[0],  // None
+		.DR    = &buttons[0],  // None
+		.DD    = &buttons[0],  // None
+		.Z     = &buttons[6],  // B
+		.L     = &buttons[8],  // -
+		.R     = &buttons[7],  // +
+		.A     = &buttons[11], // 2
+		.B     = &buttons[10], // 1
+		.START = &buttons[9],  // Home
+		.CU    = &buttons[3],  // D Right
+		.CL    = &buttons[1],  // D Up
+		.CR    = &buttons[4],  // D Down
+		.CD    = &buttons[2],  // D Left
+		.analog    = &analog_sources_wm[0],
+		.exit      = &menu_combos[0],
+		.invertedY = 0
+	  }
+	};
+
+controller_t controller_WiimoteNunchuk =
+	{ 'N',
+	  GetKeysWMN,
+	  configure,
+	  assign,
+	  pause,
+	  resume,
+	  rumble,
+	  refreshAvailableWMN,
+	  {0, 0, 0, 0},
+	  sizeof(buttons)/sizeof(buttons[0]),
+	  buttons,
+	  sizeof(analog_sources_wmn)/sizeof(analog_sources_wmn[0]),
+	  analog_sources_wmn,
+	  sizeof(menu_combos)/sizeof(menu_combos[0]),
+	  menu_combos,
+	  { .DU    = &buttons[0],  // None
+	    .DL    = &buttons[0],  // None
+	    .DR    = &buttons[0],  // None
+	    .DD    = &buttons[0],  // None
+	    .Z     = &buttons[13], // Z
+	    .L     = &buttons[12], // C
+	    .R     = &buttons[6],  // B
+	    .A     = &buttons[5],  // A
+	    .B     = &buttons[7],  // +
+	    .START = &buttons[9],  // Home
+	    .CU    = &buttons[1], // D Up
+	    .CL    = &buttons[2], // D Left
+	    .CR    = &buttons[3], // D Right
+	    .CD    = &buttons[4], // D Down
+	    .analog    = &analog_sources_wmn[0],
+	    .exit      = &menu_combos[0],
+	    .invertedY = 0
+	  }
 	 };
 
-static void init(void){
+static void refreshAvailableWM(void){
 	int i;
 	WPAD_ScanPads();
 	for(i=0; i<4; ++i){
-		WPADData* wpad = WPAD_Data(i);
-		// Only use a connected nunchuk
-		if(wpad->err == WPAD_ERR_NONE &&
-		   wpad->exp.type == WPAD_EXP_NUNCHUK){
-			controller_WiimoteNunchuk.available[i] = 1;
-			WPAD_SetDataFormat(i, WPAD_DATA_EXPANSION);
-		} else
-			controller_WiimoteNunchuk.available[i] = 0;
+		availableWM(i);
+	}
+}
+
+static void refreshAvailableWMN(void){
+	int i;
+	WPAD_ScanPads();
+	for(i=0; i<4; ++i){
+		availableWMN(i);
 	}
 }

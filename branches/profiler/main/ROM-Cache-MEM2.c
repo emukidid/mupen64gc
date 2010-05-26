@@ -69,33 +69,41 @@ extern void pauseAudio(void);
 extern void resumeAudio(void);
 extern BOOL hasLoadedROM;
 
-#ifdef USE_ROM_CACHE_L1
-static u8  L1[256*1024];
-static u32 L1tag;
-#endif
-
 void DUMMY_print(char* string) { }
 void DUMMY_setLoadProg(float percent) { }
 void DUMMY_draw() { }
+
+static void ensure_block(u32 block);
 
 PKZIPHEADER pkzip;
 
 void ROMCache_init(fileBrowser_file* f){
   readBefore = 0; //de-init byteswapping
+  ROMFile = f;
 	ROMSize = f->size;
 	ROMTooBig = ROMSize > ROMCACHE_SIZE;
 
 	romFile_seekFile(f, 0, FILE_BROWSER_SEEK_SET);	// Lets be nice and keep the file at 0.
-#ifdef USE_ROM_CACHE_L1
-	L1tag = -1;
-#endif	
 }
 
 void ROMCache_deinit(){
 	//we don't de-init the romFile here because it takes too much time to fopen/fseek/fread/fclose
 }
 
-void ROMCache_load_block(char* dst, u32 rom_offset){
+void* ROMCache_pointer(u32 rom_offset){
+	if(ROMTooBig){
+		u32 block = rom_offset >> BLOCK_SHIFT;
+		u32 block_offset = rom_offset & BLOCK_MASK;
+		
+		ensure_block(block);
+		
+		return ROMBlocks[block] + block_offset;
+	} else {
+		return ROMCACHE_LO + rom_offset;
+	}
+}
+
+static void ROMCache_load_block(char* dst, u32 rom_offset){
   if((hasLoadedROM) && (!stop))
     pauseAudio();
 	showLoadProgress( 1.0f );
@@ -116,24 +124,28 @@ void ROMCache_load_block(char* dst, u32 rom_offset){
 	  resumeAudio();
 }
 
-void ROMCache_read(u32* dest, u32 offset, u32 length){
+static void ensure_block(u32 block){
+	if(!ROMBlocks[block]){
+		// The block we're trying to read isn't in the cache
+		// Find the Least Recently Used Block
+		int i, max_i = 0, max_lru = 0;
+		for(i=0; i<NUM_BLOCKS; ++i)
+			if(ROMBlocks[i] && ROMBlocksLRU[i] > max_lru)
+				max_i = i, max_lru = ROMBlocksLRU[i];
+		ROMBlocks[block] = ROMBlocks[max_i]; // Take its place
+		ROMCache_load_block(ROMBlocks[block], block << BLOCK_SHIFT);
+		ROMBlocks[max_i] = 0; // Evict the LRU block
+	}
+}
+
+void ROMCache_read(u8* dest, u32 offset, u32 length){
   if(ROMTooBig){
 		u32 block = offset>>BLOCK_SHIFT;
 		u32 length2 = length;
 		u32 offset2 = offset&BLOCK_MASK;
 		
 		while(length2){
-			if(!ROMBlocks[block]){
-  		  // The block we're trying to read isn't in the cache
-				// Find the Least Recently Used Block
-				int i, max_i = 0, max_lru = 0;
-				for(i=0; i<NUM_BLOCKS; ++i)
-					if(ROMBlocks[i] && ROMBlocksLRU[i] > max_lru)
-						max_i = i, max_lru = ROMBlocksLRU[i];
-				ROMBlocks[block] = ROMBlocks[max_i]; // Take its place
-        ROMCache_load_block(ROMBlocks[block], offset&OFFSET_MASK);
-				ROMBlocks[max_i] = 0; // Evict the LRU block
-			}
+			ensure_block(block);
 			
 			// Set length to the length for this block
 			if(length2 > BLOCK_SIZE - offset2)
@@ -149,23 +161,10 @@ void ROMCache_read(u32* dest, u32 offset, u32 length){
 			memcpy(dest, ROMBlocks[block] + offset2, length);
 			
 			// In case the read spans multiple blocks, increment state
-			++block; length2 -= length; offset2 = 0; dest += length/4; offset += length;
+			++block; length2 -= length; offset2 = 0; dest += length; offset += length;
 		}
 	} else {
-#ifdef USE_ROM_CACHE_L1
-		if(offset >> 18 == (offset+length-1) >> 18){
-			// Only worry about using L1 cache if the read falls
-			//   within only one block for the L1 for now
-			if(offset >> 18 != L1tag){
-				memcpy(L1, ROMCACHE_LO + (offset&(~0x3FFFF)), 256*1024);
-				L1tag = offset >> 18;
-			}
-			memcpy(dest, L1 + (offset&0x3FFFF), length);
-		} else
-#endif
-		{
-			memcpy(dest, ROMCACHE_LO + offset, length);
-		}
+		memcpy(dest, ROMCACHE_LO + offset, length);
 	}
 }
 
@@ -178,14 +177,13 @@ int ROMCache_load(fileBrowser_file* f){
 	sprintf(txt, "Loading ROM %s into MEM2",ROMTooBig ? "partially" : "fully");
 	PRINT(txt);
 
-	ROMFile = f;
-	romFile_seekFile(f, 0, FILE_BROWSER_SEEK_SET);
+	romFile_seekFile(ROMFile, 0, FILE_BROWSER_SEEK_SET);
 	
 	u32 offset = 0,loads_til_update = 0;
 	int bytes_read;
 	u32 sizeToLoad = MIN(ROMCACHE_SIZE, ROMSize);
 	while(offset < sizeToLoad){
-		bytes_read = romFile_readFile(f, ROMCACHE_LO + offset, LOAD_SIZE);
+		bytes_read = romFile_readFile(ROMFile, ROMCACHE_LO + offset, LOAD_SIZE);
 		
 		if(bytes_read < 0){		// Read fail!
 
@@ -195,7 +193,10 @@ int ROMCache_load(fileBrowser_file* f){
 		//initialize byteswapping if it isn't already
 		if(!readBefore)
 		{
- 			init_byte_swap(*(unsigned int*)ROMCACHE_LO);
+ 			if(init_byte_swap(*(unsigned int*)ROMCACHE_LO) == BYTE_SWAP_BAD) {
+ 			  romFile_deinit(ROMFile);
+ 			  return -2;
+		  }
  			readBefore = 1;
 		}
 		//byteswap

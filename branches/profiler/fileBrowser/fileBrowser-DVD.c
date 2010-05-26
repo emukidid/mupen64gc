@@ -21,31 +21,31 @@
 **/
 
 
-#include "fileBrowser.h"
-#include <ogc/machine/processor.h>
-#include "../main/gc_dvd.h"
 #include <string.h>
 #include <unistd.h>
 #include <malloc.h>
 #include <ogc/dvd.h>
+#include <ogc/machine/processor.h>
+#include "fileBrowser.h"
+#include "../main/gc_dvd.h"
 #ifdef HW_RVL
 #include <di/di.h>
 #endif
 
-#ifdef HW_DOL
-#define mfpvr()   ({unsigned int rval; \
-      asm volatile("mfpvr %0" : "=r" (rval)); rval;})
-#endif
-
 /* DVD Globals */
-#define GC_CPU_VERSION 0x00083214
-extern int previously_initd;
-int dvdInitialized = 0;
+int dvd_init = 0;
 
 /* Worked out manually from my original Disc */
-#define OOT_OFFSET 0x54FBEEF4ULL
-#define MQ_OFFSET  0x52CCC5FCULL
-#define ZELDA_SIZE 0x2000000
+#define ZELDA_BONUS_ID "D43U01"
+#define ZELDA_CLCTR_ID "PZLP01"
+#define ZELDA_BONUS_OOT 0x54FBEEF4ULL
+#define ZELDA_BONUS_MQ  0x52CCC5FCULL
+#define ZELDA_CLCTR_OOT 0x3B9D1FC0ULL
+#define ZELDA_CLCTR_MM  0x0C4E1FC0ULL
+#define ZELDA_SIZE      0x2000000
+#define ZELDA_OOT_NAME  "Zelda - Ocarina of Time"
+#define ZELDA_MQ_NAME   "Zelda - Ocarina of Time Master Quest"
+#define ZELDA_MM_NAME   "Zelda - Majoras Mask"
 
 fileBrowser_file topLevel_DVD =
 	{ "\\", // file name
@@ -54,55 +54,44 @@ fileBrowser_file topLevel_DVD =
 	  0,         // size
 	  FILE_BROWSER_ATTR_DIR
 	};
-
-void init_dvd()
-{
-#ifdef HW_DOL
-  if(mfpvr()!=GC_CPU_VERSION) //GC mode on Wii, modchip required
-  {
-    DVD_Reset(DVD_RESETHARD);
-    dvd_read_id();
-    if(!dvd_get_error())
-      dvdInitialized=1;
-  }
-  else      //GC, no modchip even required :)
-  {
-    DVD_Reset(DVD_RESETHARD);
-    DVD_Mount ();
-    if(!dvd_get_error())
-      dvdInitialized=1;
-  }
-#endif
-#ifdef HW_RVL
-  //Wiimode stuff is handled by DVDx
-  u32 val;
-  DI_GetCoverRegister(&val);
-  if(val & 0x1) return; //no disc inserted
-	DI_Mount();
-	while(DI_GetStatus() & DVD_INIT) usleep(20000);
-	dvdInitialized=1;
-#endif
-}
  
-	 
 int fileBrowser_DVD_readDir(fileBrowser_file* ffile, fileBrowser_file** dir){	
+  
+  int num_entries = 0, ret = 0;
+  
+  if(dvd_get_error() || !dvd_init) { //if some error
+    ret = init_dvd();
+    if(ret) {    //try init
+      return ret; //fail
+    }
+    dvd_init = 1;
+  } 
 	
-  if(!dvdInitialized)
-    init_dvd();
-  if(!dvdInitialized) return -1;  //fails if No disc
-	
-  int num_entries = 0;
-	
-	if (!memcmp((void*)0x80000000, "D43U01", 6)) { //OoT bonus disc support.
+	if (!memcmp((void*)0x80000000, ZELDA_BONUS_ID, 6)) { //OoT+MQ bonus disc support.
 		num_entries = 2;
 		*dir = malloc( num_entries * sizeof(fileBrowser_file) );
-		strcpy( (*dir)[0].name, "Zelda - Ocarina of Time");
-		(*dir)[0].discoffset = OOT_OFFSET;
+		strcpy( (*dir)[0].name, ZELDA_OOT_NAME);
+		(*dir)[0].discoffset = ZELDA_BONUS_OOT;
 		(*dir)[0].offset = 0;
 		(*dir)[0].size   = ZELDA_SIZE;
 		(*dir)[0].attr	 = 0;
-		strcpy( (*dir)[1].name, "Zelda - Ocarina of Time MQ" );
-		(*dir)[1].discoffset = MQ_OFFSET;
+		strcpy( (*dir)[1].name, ZELDA_MQ_NAME);
+		(*dir)[1].discoffset = ZELDA_BONUS_MQ;
+		(*dir)[1].offset = 0;
+		(*dir)[1].size   = ZELDA_SIZE;
+		(*dir)[1].attr	 = 0;
+		return num_entries;
+	}
+	else if (!memcmp((void*)0x80000000, ZELDA_CLCTR_ID, 6)) { //Zelda Collectors disc support.
+		num_entries = 2;
+		*dir = malloc( num_entries * sizeof(fileBrowser_file) );
+		strcpy( (*dir)[0].name, ZELDA_OOT_NAME);
+		(*dir)[0].discoffset = ZELDA_CLCTR_OOT;
+		(*dir)[0].offset = 0;
+		(*dir)[0].size   = ZELDA_SIZE;
+		(*dir)[0].attr	 = 0;
+		strcpy( (*dir)[1].name, ZELDA_MM_NAME);
+		(*dir)[1].discoffset = ZELDA_CLCTR_MM;
 		(*dir)[1].offset = 0;
 		(*dir)[1].size   = ZELDA_SIZE;
 		(*dir)[1].attr	 = 0;
@@ -113,7 +102,7 @@ int fileBrowser_DVD_readDir(fileBrowser_file* ffile, fileBrowser_file** dir){
 	num_entries = dvd_read_directoryentries(ffile->discoffset,ffile->size);
 	
 	// If it was not successful, just return the error
-	if(num_entries <= 0) return num_entries;
+	if(num_entries <= 0) return FILE_BROWSER_ERROR;
 	
 	// Convert the DVD "file" data to fileBrowser_files
 	*dir = malloc( num_entries * sizeof(fileBrowser_file) );

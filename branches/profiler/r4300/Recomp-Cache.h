@@ -27,7 +27,7 @@
 #ifdef HW_RVL
 #define RECOMP_CACHE_SIZE (8*1024*1024)
 #else
-#define RECOMP_CACHE_SIZE (4*1024*1024)
+#define RECOMP_CACHE_SIZE (7*1024*1024)
 #endif
 
 // Allocate and free memory to be used for recompiled code
@@ -39,5 +39,11 @@ void RecompCache_Free(unsigned int addr);
 // Update the LRU info of the indicated block
 //   (call when the block is accessed)
 void RecompCache_Update(PowerPC_func* func);
+
+// Allocate memory from the meta cache
+//   This will free from both the recomp and meta caches if capacity is hit
+void* MetaCache_Alloc(unsigned int num_bytes);
+// Free data from the meta cache
+void MetaCache_Free(void* ptr);
 
 #endif
