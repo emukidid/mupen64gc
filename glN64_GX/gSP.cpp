@@ -1,3 +1,14 @@
+/**
+ * glN64_GX - gSP.cpp
+ * Copyright (C) 2003 Orkin
+ * Copyright (C) 2008, 2009 sepp256 (Port to Wii/Gamecube/PS3)
+ *
+ * glN64 homepage: http://gln64.emulation64.com
+ * Wii64 homepage: http://www.emulatemii.com
+ * email address: sepp256@gmail.com
+ *
+**/
+
 #ifdef __GX__
 #include <gccore.h>
 #include "../gui/DEBUG.h"
@@ -323,9 +334,9 @@ void gSPMatrix( u32 matrix, u8 param )
 	OGL.GXupdateMtx = true;
 	if (param & G_MTX_PROJECTION)
 	{
-//		if(1)
-		if(!((gSP.matrix.projection[2][3] == -1) && (gSP.matrix.projection[3][3] == 0) ||
-			 (gSP.matrix.projection[2][3] == 0) && (gSP.matrix.projection[3][3] == 1)))
+		if(1)
+//		if(!((gSP.matrix.projection[2][3] == -1) && (gSP.matrix.projection[3][3] == 0) ||
+//			 (gSP.matrix.projection[2][3] == 0) && (gSP.matrix.projection[3][3] == 1)))
 		{
 			OGL.GXuseProj = false;
 			if(gSP.matrix.projection[2][3] != 0)
@@ -1602,7 +1613,7 @@ void gSPInsertMatrix( u32 where, u32 num )
 #ifdef __GX__
 #ifdef SHOW_DEBUG
 	sprintf(txtbuffer,"gSP: gSPInsertMatrix");
-	DEBUG_print(txtbuffer,8);
+	DEBUG_print(txtbuffer,6);
 #endif
 	if(OGL.GXuseProj)
 	{
@@ -1704,7 +1715,7 @@ void gSPFogFactor( s16 fm, s16 fo )
 #ifdef __GX__
 	//Adjust the range from 0.0 to 1.0
 	OGL.GXfogStartZ = -(0.5f * (float)gSP.fog.offset / (float)gSP.fog.multiplier) + 0.5f;
-	OGL.GXfogEndZ = (0.5f * (255.0f - (float)gSP.fog.offset) / (float)gSP.fog.multiplier) + 0.5f;
+	OGL.GXfogEndZ = (0.5f * (256.0f - (float)gSP.fog.offset) / (float)gSP.fog.multiplier) + 0.5f;
 #endif // __GX__
 
 	gSP.changed |= CHANGED_FOGPOSITION;

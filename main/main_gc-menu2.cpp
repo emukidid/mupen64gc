@@ -55,6 +55,7 @@ extern "C" {
 #include "../gc_memory/TLB-Cache.h"
 #include "../gc_memory/tlb.h"
 #include "../gc_memory/pif.h"
+#include "../gc_memory/flashram.h"
 #include "../gc_memory/Saves.h"
 #include "../main/savestates.h"
 #include "ROM-Cache.h"
@@ -123,7 +124,7 @@ char menuActive;
 	   char padAssign[4];
 	   char pakMode[4];
 
-struct {
+static struct {
 	char* key;
 	char* value; // Not a string, but a char pointer
 	char  min, max;
@@ -179,8 +180,13 @@ u16 readWPAD(void);
 int main(int argc, char* argv[]){
 	/* INITIALIZE */
 #ifdef HW_RVL
-  DI_Close();
   DI_Init();    // first
+#endif
+
+#ifdef DEBUGON
+	//DEBUG_Init(GDBSTUB_DEVICE_TCP,GDBSTUB_DEF_TCPPORT); //Default port is 2828
+	DEBUG_Init(GDBSTUB_DEVICE_USB, 1);
+	_break();
 #endif
 
 	Initialise(); // Stock OGC initialization
@@ -193,8 +199,8 @@ int main(int argc, char* argv[]){
 //	menuInit();
 #ifdef DEBUGON
 	//DEBUG_Init(GDBSTUB_DEVICE_TCP,GDBSTUB_DEF_TCPPORT); //Default port is 2828
-	DEBUG_Init(GDBSTUB_DEVICE_USB, 1);
-	_break();
+//	DEBUG_Init(GDBSTUB_DEVICE_USB, 1);
+//	_break();
 #endif
 
 	// Default Settings
@@ -210,7 +216,7 @@ int main(int argc, char* argv[]){
 	saveEnabled      = 0; // Don't save game
 	nativeSaveDevice = 0; // SD
 	saveStateDevice	 = 0; // SD
-	autoSave         = 0; // Don't Auto Save Game
+	autoSave         = 1; // Auto Save Game
 	creditsScrolling = 0; // Normal menu for now
 	dynacore         = 1; // Dynarec
 	screenMode		 = 0; // Stretch FB horizontally
@@ -242,19 +248,19 @@ int main(int argc, char* argv[]){
   if(argv[0][0] == 'u') {  //assume USB
     configFile_file = &saveDir_libfat_USB;
     if(configFile_init(configFile_file)) {                //only if device initialized ok
-      FILE* f = fopen( "usb:/wii64/settings.cfg", "rb" );  //attempt to open file
+      FILE* f = fopen( "usb:/wii64/settings.cfg", "r" );  //attempt to open file
       if(f) {        //open ok, read it
         readConfig(f);
         fclose(f);
       }
     }
   }
-  else /*if((argv[0][0]=='s') || (argv[0][0]=='/'))*/ 
-#endif  
+  else /*if((argv[0][0]=='s') || (argv[0][0]=='/'))*/
+#endif
   { //assume SD
     configFile_file = &saveDir_libfat_Default;
     if(configFile_init(configFile_file)) {                //only if device initialized ok
-      FILE* f = fopen( "sd:/wii64/settings.cfg", "rb" );  //attempt to open file
+      FILE* f = fopen( "sd:/wii64/settings.cfg", "r" );  //attempt to open file
       if(f) {        //open ok, read it
         readConfig(f);
         fclose(f);
@@ -306,7 +312,7 @@ BOOL hasLoadedROM = FALSE;
 char autoSaveLoaded = NATIVESAVEDEVICE_NONE;
 
 int loadROM(fileBrowser_file* rom){
-
+  int ret = 0;
   savestates_job = 0; //clear all pending save states
 	// First, if there's already a loaded ROM
 	if(hasLoadedROM){
@@ -332,6 +338,8 @@ int loadROM(fileBrowser_file* rom){
 #endif
 	}
 	format_mempacks();
+	reset_flashram();
+	init_eeprom();
 	hasLoadedROM = TRUE;
 #ifndef HW_RVL
 	ARAM_manager_init();
@@ -342,9 +350,10 @@ int loadROM(fileBrowser_file* rom){
 	tlb_mem2_init();
 #endif
 	//romFile_init(rom);
-	if(rom_read(rom)){	// Something failed while trying to read the ROM.
+	ret = rom_read(rom);
+	if(ret){	// Something failed while trying to read the ROM.
 		hasLoadedROM = FALSE;
-		return -1;
+		return ret;
 	}
 
 	// Init everything for this ROM
@@ -527,6 +536,9 @@ void ShutdownWii() {
 #endif
 
 static void Initialise (void){
+
+	//Initialize controls once before menu runs
+	control_info_init();
 
 /*  VIDEO_Init();
   PAD_Init();

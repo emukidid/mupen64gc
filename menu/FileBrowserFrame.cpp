@@ -19,6 +19,7 @@
 **/
 
 #include <math.h>
+#include <cstdlib>
 #include "MenuContext.h"
 #include "FileBrowserFrame.h"
 #include "../libgui/Button.h"
@@ -33,6 +34,8 @@ extern "C" {
 #include "../fileBrowser/fileBrowser-DVD.h"
 #include "../fileBrowser/fileBrowser-CARD.h"
 #include "../main/rom.h"
+#include "../main/gc_dvd.h"
+#include "../main/ROM-Cache.h"
 #include "../main/wii64config.h"
 }
 
@@ -143,7 +146,7 @@ static int				max_page;
 static char				feedback_string[36];
 
 void fileBrowserFrame_OpenDirectory(fileBrowser_file* dir);
-void fileBrowserFrame_Error();
+void fileBrowserFrame_Error(fileBrowser_file* dir, int error_code);
 void fileBrowserFrame_FillPage();
 void fileBrowserFrame_LoadFile(int i);
 
@@ -204,6 +207,18 @@ static char* filenameFromAbsPath(char* absPath)
 
 int loadROM(fileBrowser_file*);
 
+static int dir_comparator(const void* _x, const void* _y){
+	const fileBrowser_file* x = (const fileBrowser_file*)_x;
+	const fileBrowser_file* y = (const fileBrowser_file*)_y;
+	int xIsDir = x->attr & FILE_BROWSER_ATTR_DIR;
+	int yIsDir = y->attr & FILE_BROWSER_ATTR_DIR;
+	// Directories go on top, otherwise alphabetical
+	if(xIsDir != yIsDir)
+		return yIsDir - xIsDir;
+	else
+		return stricmp(x->name, y->name);
+}
+
 void fileBrowserFrame_OpenDirectory(fileBrowser_file* dir)
 {
 	// Free the old menu stuff
@@ -215,24 +230,36 @@ void fileBrowserFrame_OpenDirectory(fileBrowser_file* dir)
 	if(num_entries <= 0)
 	{ 
 		if(dir_entries) free(dir_entries); 
-		fileBrowserFrame_Error(); 
+		fileBrowserFrame_Error(dir, num_entries); 
 		return;
 	}
+	
+	// Sort the listing
+	qsort(dir_entries, num_entries, sizeof(fileBrowser_file), dir_comparator);
 
 	current_page = 0;
 	max_page = (int)ceil((float)num_entries/NUM_FILE_SLOTS);
 	fileBrowserFrame_FillPage();
 }
 
-void fileBrowserFrame_Error()
+void fileBrowserFrame_Error(fileBrowser_file* dir, int error_code)
 {
 	//disable all buttons
 	for (int i = 0; i < NUM_FRAME_BUTTONS; i++)
 		FRAME_BUTTONS[i].button->setActive(false);
 	for (int i = 1; i<NUM_FILE_SLOTS; i++)
 		FRAME_BUTTONS[i+2].buttonString = FRAME_STRINGS[2];
+	if(error_code == NO_HW_ACCESS) {
+  	sprintf(feedback_string,"DVDX v2 not found");
+	}
+	else if(error_code == NO_DISC) {
+  	sprintf(feedback_string,"NO Disc Inserted");
+	}
 	//set first entry to read 'error' and return to main menu
-	strcpy(feedback_string,"An error occured");
+	else if(dir->name)
+	  sprintf(feedback_string,"Error opening directory \"%s\"",&dir->name[0]);
+	else
+	  strcpy(feedback_string,"An error occured");
 /*	FRAME_BUTTONS[2].buttonString = feedback_string;
 	FRAME_BUTTONS[2].button->setClicked(Func_ReturnFromFileBrowserFrame);
 	FRAME_BUTTONS[2].button->setActive(true);
@@ -344,7 +371,17 @@ void fileBrowserFrame_LoadFile(int i)
 		}
 		else		// If not.
 		{
-			strcpy(feedback_string,"A read error occured");
+  		switch(ret) {
+    		case ROM_CACHE_ERROR_READ:
+			    strcpy(feedback_string,"A read error occured");
+			    break;
+			  case ROM_CACHE_INVALID_ROM:
+			   strcpy(feedback_string,"Invalid ROM type");
+			    break;
+			  default:
+			    strcpy(feedback_string,"An error has occured");
+			    break;
+		  }
 
 			menu::MessageBox::getInstance().setMessage(feedback_string);
 		}
