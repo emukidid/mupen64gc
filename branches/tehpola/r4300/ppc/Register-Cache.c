@@ -248,6 +248,15 @@ void flushRegister(int reg){
 	regMap[reg].map.hi = regMap[reg].map.lo = -1;
 }
 
+RegMappingType getRegisterMapping(int reg){
+	if(regMap[reg].map.hi >= 0)
+		return MAPPING_64;
+	else if(regMap[reg].map.lo >= 0)
+		return MAPPING_32;
+	else
+		return MAPPING_NONE;
+}
+
 int mapConstantNew(int reg, int isConstant){
 	int mapping = mapRegisterNew(reg); // Get the normal mapping
 	regMap[reg].constant = isConstant; // Set the constant field

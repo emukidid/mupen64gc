@@ -7,6 +7,7 @@
 
 // -- GPRs --
 typedef struct { int hi, lo; } RegMapping;
+typedef enum { MAPPING_NONE, MAPPING_32, MAPPING_64 } RegMappingType;
 // Create a mapping for a 32-bit register (reg) to a HW register (returned)
 // Loading the register's value if the mapping doesn't already exist
 int mapRegister(int reg);
@@ -23,6 +24,9 @@ RegMapping mapRegister64New(int reg);
 void invalidateRegister(int reg);
 // Unmap a register (reg), storing if dirty
 void flushRegister(int reg);
+// Return the type of mapping for a register (reg)
+// Does not alter mappings in any way
+RegMappingType getRegisterMapping(int reg);
 // Constant Propagation
 // Create a mapping for a 32-bit register (reg) to a HW register (returned)
 // The value mapped may have a constant value (isConstant) to be set later
