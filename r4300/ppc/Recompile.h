@@ -29,8 +29,8 @@ typedef struct link_node {
 } PowerPC_func_link_node;
 
 typedef struct func {
-	unsigned short start_addr;
-	unsigned short end_addr;
+	unsigned int start_addr;
+	unsigned int end_addr;
 	PowerPC_instr* code;
 	unsigned int   lru;
 	PowerPC_func_hole_node* holes;
@@ -39,7 +39,7 @@ typedef struct func {
 	PowerPC_instr** code_addr;
 } PowerPC_func;
 
-PowerPC_func* find_func(PowerPC_func_node** root, unsigned short addr);
+PowerPC_func* find_func(PowerPC_func_node** root, unsigned int addr);
 void insert_func(PowerPC_func_node** root, PowerPC_func* func);
 void remove_func(PowerPC_func_node** root, PowerPC_func* func);
 

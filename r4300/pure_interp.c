@@ -45,9 +45,9 @@ extern void update_debugger();
 
 static void invalidate_func(unsigned int addr){
 	PowerPC_block* block = blocks[addr>>12];
-	PowerPC_func* func = find_func(&block->funcs, addr&0xffff);
+	PowerPC_func* func = find_func(&block->funcs, addr);
 	if(func)
-		RecompCache_Free(block->start_address | func->start_addr);
+		RecompCache_Free(func->start_addr);
 }
 
 #define check_memory() \
