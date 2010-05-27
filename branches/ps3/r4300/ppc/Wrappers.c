@@ -117,9 +117,9 @@ void dynarec(unsigned int address){
 			invalidate_block(dst_block);
 		}
 
-		PowerPC_func* func = find_func(&dst_block->funcs, address&0xFFFF);
+		PowerPC_func* func = find_func(&dst_block->funcs, address);
 
-		if(!func || !func->code_addr[((address&0xFFFF)-func->start_addr)>>2]){
+		if(!func || !func->code_addr[(address-func->start_addr)>>2]){
 			printf("code at %08x is not compiled\n", address);
 			start_section(COMPILER_SECTION);
 			func = recompile_block(dst_block, address);
@@ -130,7 +130,7 @@ void dynarec(unsigned int address){
 #endif
 		}
 
-		int index = ((address&0xFFFF) - func->start_addr)>>2;
+		int index = (address - func->start_addr)>>2;
 
 		// Recompute the block offset
 		unsigned int (*code)(void);
@@ -210,9 +210,9 @@ unsigned int dyna_check_cop1_unusable(unsigned int pc, int isDelaySlot){
 
 static void invalidate_func(unsigned int addr){
 	PowerPC_block* block = blocks[addr>>12];
-	PowerPC_func* func = find_func(&block->funcs, addr&0xffff);
+	PowerPC_func* func = find_func(&block->funcs, addr);
 	if(func)
-		RecompCache_Free(block->start_address | func->start_addr);
+		RecompCache_Free(func->start_addr);
 }
 
 #define check_memory() \

@@ -6,12 +6,11 @@
 #include "../r4300.h"
 #include "Recompile.h"
 
-static inline PowerPC_func_node** _find(PowerPC_func_node** node, unsigned short addr){
+static inline PowerPC_func_node** _find(PowerPC_func_node** node, unsigned int addr){
 	while(*node){
 		if(addr < (*node)->function->start_addr)
 			node = &(*node)->left;
-		else if(addr >= (*node)->function->end_addr &&
-				(*node)->function->end_addr != 0)
+		else if(addr >= (*node)->function->end_addr)
 			node = &(*node)->right;
 		else
 			break;
@@ -19,7 +18,7 @@ static inline PowerPC_func_node** _find(PowerPC_func_node** node, unsigned short
 	return node;
 }
 
-PowerPC_func* find_func(PowerPC_func_node** root, unsigned short addr){
+PowerPC_func* find_func(PowerPC_func_node** root, unsigned int addr){
 	start_section(FUNCS_SECTION);
 	PowerPC_func_node* node = *_find(root, addr);
 	end_section(FUNCS_SECTION);
