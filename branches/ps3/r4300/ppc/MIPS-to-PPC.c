@@ -95,6 +95,54 @@ static inline int signExtend(int value, int size){
 	return value;
 }
 
+static void genCmp64(int cr, int _ra, int _rb){
+	PowerPC_instr ppc;
+	
+	if(getRegisterMapping(_ra) == MAPPING_32 ||
+	   getRegisterMapping(_rb) == MAPPING_32){
+		// Here we cheat a little bit: if either of the registers are mapped
+		// as 32-bit, only compare the 32-bit values
+		int ra = mapRegister(_ra), rb = mapRegister(_rb);
+		
+		GEN_CMP(ppc, ra, rb, 4);
+		set_next_dst(ppc);
+	} else {
+		RegMapping ra = mapRegister64(_ra), rb = mapRegister64(_rb);
+		
+		GEN_CMP(ppc, ra.hi, rb.hi, 4);
+		set_next_dst(ppc);
+		// Skip low word comparison if high words are mismatched
+		GEN_BNE(ppc, 4, 2, 0, 0);
+		set_next_dst(ppc);
+		// Compare low words if hi words don't match
+		GEN_CMPL(ppc, ra.lo, rb.lo, 4);
+		set_next_dst(ppc);
+	}
+}
+
+static void genCmpi64(int cr, int _ra, short immed){
+	PowerPC_instr ppc;
+	
+	if(getRegisterMapping(_ra) == MAPPING_32){
+		// If we've mapped this register as 32-bit, don't bother with 64-bit
+		int ra = mapRegister(_ra);
+		
+		GEN_CMPI(ppc, ra, immed, 4);
+		set_next_dst(ppc);
+	} else {
+		RegMapping ra = mapRegister64(_ra);
+		
+		GEN_CMPI(ppc, ra.hi, (immed&0x8000) ? ~0 : 0, 4);
+		set_next_dst(ppc);
+		// Skip low word comparison if high words are mismatched
+		GEN_BNE(ppc, 4, 2, 0, 0);
+		set_next_dst(ppc);
+		// Compare low words if hi words don't match
+		GEN_CMPLI(ppc, ra.lo, immed, 4);
+		set_next_dst(ppc);
+	}
+}
+
 typedef enum { NONE=0, EQ, NE, LT, GT, LE, GE } condition;
 // Branch a certain offset (possibly conditionally, linking, or likely)
 //   offset: N64 instructions from current N64 instruction to branch
@@ -424,13 +472,8 @@ static int BEQ(MIPS_instr mips){
 		return INTERPRETED;
 	}
 	
-	// cmp ra, rb
-	GEN_CMP(ppc,
-	        mapRegister(MIPS_GET_RA(mips)),
-	        mapRegister(MIPS_GET_RB(mips)),
-	        4);
-	set_next_dst(ppc);
-	
+	genCmp64(4, MIPS_GET_RA(mips), MIPS_GET_RB(mips));
+
 	return branch(signExtend(MIPS_GET_IMMED(mips),16), EQ, 0, 0);
 }
 
@@ -442,12 +485,7 @@ static int BNE(MIPS_instr mips){
 		return INTERPRETED;
 	}
 	
-	// cmp ra, rb
-	GEN_CMP(ppc,
-	        mapRegister(MIPS_GET_RA(mips)),
-	        mapRegister(MIPS_GET_RB(mips)),
-	        4);
-	set_next_dst(ppc);
+	genCmp64(4, MIPS_GET_RA(mips), MIPS_GET_RB(mips));
 	
 	return branch(signExtend(MIPS_GET_IMMED(mips),16), NE, 0, 0);
 }
@@ -460,9 +498,7 @@ static int BLEZ(MIPS_instr mips){
 		return INTERPRETED;
 	}
 	
-	// cmpi ra, 0
-	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 4);
-	set_next_dst(ppc);
+	genCmpi64(4, MIPS_GET_RA(mips), 0);
 	
 	return branch(signExtend(MIPS_GET_IMMED(mips),16), LE, 0, 0);
 }
@@ -475,9 +511,7 @@ static int BGTZ(MIPS_instr mips){
 		return INTERPRETED;
 	}
 	
-	// cmpi ra, 0
-	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 4);
-	set_next_dst(ppc);
+	genCmpi64(4, MIPS_GET_RA(mips), 0);
 	
 	return branch(signExtend(MIPS_GET_IMMED(mips),16), GT, 0, 0);
 }
@@ -615,12 +649,7 @@ static int BEQL(MIPS_instr mips){
 		return INTERPRETED;
 	}
 	
-	// cmp ra, rb
-	GEN_CMP(ppc,
-	        mapRegister(MIPS_GET_RA(mips)),
-	        mapRegister(MIPS_GET_RB(mips)),
-	        4);
-	set_next_dst(ppc);
+	genCmp64(4, MIPS_GET_RA(mips), MIPS_GET_RB(mips));
 	
 	return branch(signExtend(MIPS_GET_IMMED(mips),16), EQ, 0, 1);
 }
@@ -633,12 +662,7 @@ static int BNEL(MIPS_instr mips){
 		return INTERPRETED;
 	}
 	
-	// cmp ra, rb
-	GEN_CMP(ppc,
-	        mapRegister(MIPS_GET_RA(mips)),
-	        mapRegister(MIPS_GET_RB(mips)),
-	        4);
-	set_next_dst(ppc);
+	genCmp64(4, MIPS_GET_RA(mips), MIPS_GET_RB(mips));
 	
 	return branch(signExtend(MIPS_GET_IMMED(mips),16), NE, 0, 1);
 }
@@ -651,9 +675,7 @@ static int BLEZL(MIPS_instr mips){
 		return INTERPRETED;
 	}
 	
-	// cmpi ra, 0
-	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 4);
-	set_next_dst(ppc);
+	genCmpi64(4, MIPS_GET_RA(mips), 0);
 	
 	return branch(signExtend(MIPS_GET_IMMED(mips),16), LE, 0, 1);
 }
@@ -666,9 +688,7 @@ static int BGTZL(MIPS_instr mips){
 		return INTERPRETED;
 	}
 	
-	// cmpi ra, 0
-	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 4);
-	set_next_dst(ppc);
+	genCmpi64(4, MIPS_GET_RA(mips), 0);
 	
 	return branch(signExtend(MIPS_GET_IMMED(mips),16), GT, 0, 1);
 }
@@ -2537,9 +2557,7 @@ static int REGIMM(MIPS_instr mips){
 		return INTERPRETED;
 	}
 	
-	// cmpi ra, 0
-	GEN_CMPI(ppc, mapRegister(MIPS_GET_RA(mips)), 0, 4);
-	set_next_dst(ppc);
+	genCmpi64(4, MIPS_GET_RA(mips), 0);
 	
 	return branch(signExtend(MIPS_GET_IMMED(mips),16),
 	              cond ? GE : LT, link, likely);

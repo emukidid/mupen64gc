@@ -148,11 +148,8 @@ int mapRegister(int reg){
 	regMap[reg].lru = nextLRUVal++;
 	// If its already been mapped, just return that value
 	if(regMap[reg].map.lo >= 0){
-		// If the hi value is mapped, free the mapping
-		if(regMap[reg].map.hi >= 0){
-			availableRegs[regMap[reg].map.hi] = 1;
-			regMap[reg].map.hi = -1;
-		}
+		// Note: We don't want to free any 64-bit mapping that may exist
+		//       because this may be a read-after-64-bit-write
 		return regMap[reg].map.lo;
 	}
 	regMap[reg].dirty = 0; // If it hasn't previously been mapped, its clean
@@ -243,6 +240,14 @@ void flushRegister(int reg){
 	regMap[reg].map.hi = regMap[reg].map.lo = -1;
 }
 
+RegMappingType getRegisterMapping(int reg){
+	if(regMap[reg].map.hi >= 0)
+		return MAPPING_64;
+	else if(regMap[reg].map.lo >= 0)
+		return MAPPING_32;
+	else
+		return MAPPING_NONE;
+}
 
 // -- FPR mappings --
 static struct {
